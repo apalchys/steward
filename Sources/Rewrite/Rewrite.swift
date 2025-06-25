@@ -3,9 +3,19 @@ import Cocoa
 import Foundation
 import HotKey
 import AppKit
+import ApplicationServices
 
 // System prompt constant for grammar correction
 let GRAMMAR_CORRECTION_PROMPT = "You are a grammar correction assistant. Correct any grammatical errors in the text and rewrite it clearly and fluently without changing the original meaning or adding commentary. Return only the corrected text, without explanations."
+
+// Function to build the complete prompt with custom rules
+func buildGrammarPrompt(customRules: String) -> String {
+    if customRules.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        return GRAMMAR_CORRECTION_PROMPT
+    } else {
+        return GRAMMAR_CORRECTION_PROMPT + "\n\nAdditional rules to follow:\n" + customRules
+    }
+}
 
 // Extension to load images from bundle
 extension Bundle {
@@ -32,7 +42,8 @@ struct RewriteApp: App {
 
 struct SettingsView: View {
     @State private var apiKey: String = UserDefaults.standard.string(forKey: "openAIApiKey") ?? ""
-    @Environment(\.presentationMode) var presentationMode
+    @State private var customRules: String = UserDefaults.standard.string(forKey: "customGrammarRules") ?? ""
+    @Environment(\.dismiss) private var dismiss
     
     var body: some View {
         TabView {
@@ -62,6 +73,44 @@ struct SettingsView: View {
             .padding(20)
             .tabItem {
                 Label("General", systemImage: "gear")
+            }
+            
+                        // Custom Rules tab
+            VStack(alignment: .leading, spacing: 20) {
+                Text("Custom Grammar Rules")
+                    .font(.headline)
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Define additional rules for grammar correction:")
+                        .font(.subheadline)
+                        .foregroundColor(.primary)
+                    
+                    TextEditor(text: $customRules)
+                        .font(.system(.body, design: .monospaced))
+                        .padding(8)
+                        .background(Color(NSColor.textBackgroundColor))
+                        .cornerRadius(6)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                        )
+                        .frame(height: 80)
+                        .onChange(of: customRules) { newValue in
+                            // Save immediately per macOS HIG
+                            UserDefaults.standard.set(newValue, forKey: "customGrammarRules")
+                        }
+                    
+                    Text("Examples:\n• Use Oxford comma in lists\n• Prefer active voice over passive voice\n• Use \"they\" as singular pronoun\n• Capitalize job titles when preceding names")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.top, 4)
+                }
+                
+                Spacer()
+            }
+            .padding(20)
+            .tabItem {
+                Label("Custom Rules", systemImage: "list.bullet.rectangle")
             }
             
             // About tab
@@ -116,7 +165,7 @@ struct SettingsView: View {
                 Label("About", systemImage: "info.circle")
             }
         }
-        .frame(width: 450, height: 250)
+        .frame(width: 450, height: 300)
     }
 }
 
@@ -203,19 +252,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         }
         modelMenu.addItem(gpt4oItem)
         
-        // GPT-4o mini item
-        let gpt4oMiniItem = NSMenuItem(title: "GPT-4o mini", action: #selector(selectGPT4oMini), keyEquivalent: "")
-        if currentModel == "gpt-4o-mini" {
-            gpt4oMiniItem.state = .on
+        // o3-mini item
+        let o3Item = NSMenuItem(title: "o3-mini", action: #selector(selectO3), keyEquivalent: "")
+        if currentModel == "o3-mini" {
+            o3Item.state = .on
         }
-        modelMenu.addItem(gpt4oMiniItem)
+        modelMenu.addItem(o3Item)
         
-        // GPT-4.5 Preview item
-        let gpt45Item = NSMenuItem(title: "GPT-4.5 (Preview)", action: #selector(selectGPT45Preview), keyEquivalent: "")
-        if currentModel == "gpt-4.5-preview-2025-02-27" {
-            gpt45Item.state = .on
+        // GPT-4.1 item
+        let gpt41Item = NSMenuItem(title: "GPT-4.1", action: #selector(selectGPT41), keyEquivalent: "")
+        if currentModel == "gpt-4.1" {
+            gpt41Item.state = .on
         }
-        modelMenu.addItem(gpt45Item)
+        modelMenu.addItem(gpt41Item)
         
         modelMenuItem.submenu = modelMenu
         
@@ -408,22 +457,26 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         updateStatusItemIcon()
         updateAPIStatusMenuItem()
         
-        // Prepare API request to OpenAI Chat Completions endpoint
-        let apiURL = URL(string: "https://api.openai.com/v1/chat/completions")!
-        var request = URLRequest(url: apiURL)
-        request.httpMethod = "POST"
-        request.addValue("Bearer \(openAIApiKey)", forHTTPHeaderField: "Authorization")
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        // Get custom rules from UserDefaults
+        let customRules = UserDefaults.standard.string(forKey: "customGrammarRules") ?? ""
         
-        // Build request payload with system prompt and user text
-        let requestBody: [String: Any] = [
+        // Build the base request payload that all models share
+        var requestBody: [String: Any] = [
             "model": currentModel,
             "messages": [
-                ["role": "system", "content": GRAMMAR_CORRECTION_PROMPT],
+                ["role": "system", "content": buildGrammarPrompt(customRules: customRules)],
                 ["role": "user", "content": text]
-            ],
-            "temperature": 0.3  // Lower temperature for more consistent grammar corrections
+            ]
         ]
+        
+        // Sampling parameters like `temperature` are **not** supported by OpenAI's
+        // "reasoning" model family (o-series: o1, o3, etc.). Supplying them causes the
+        // API to return HTTP 400 ("Unsupported parameter: 'temperature'").
+        // We therefore add the temperature parameter only for models that are
+        // known to accept it (everything that doesn't start with "o").
+        if !currentModel.lowercased().hasPrefix("o") {
+            requestBody["temperature"] = 0.2 // Lower temperature for deterministic corrections
+        }
         
         guard let httpBody = try? JSONSerialization.data(withJSONObject: requestBody) else {
             apiStatus = .error
@@ -432,6 +485,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
             completion(nil)
             return
         }
+        
+        // Prepare API request to OpenAI Chat Completions endpoint
+        let apiURL = URL(string: "https://api.openai.com/v1/chat/completions")!
+        var request = URLRequest(url: apiURL)
+        request.httpMethod = "POST"
+        request.addValue("Bearer \(openAIApiKey)", forHTTPHeaderField: "Authorization")
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         
         request.httpBody = httpBody
         
@@ -497,14 +557,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         refreshModelMenu()
     }
     
-    @objc private func selectGPT4oMini() {
-        currentModel = "gpt-4o-mini"
+    @objc private func selectO3() {
+        currentModel = "o3-mini"
         UserDefaults.standard.set(currentModel, forKey: "selectedModel")
         refreshModelMenu()
     }
     
-    @objc private func selectGPT45Preview() {
-        currentModel = "gpt-4.5-preview-2025-02-27"
+    @objc private func selectGPT41() {
+        currentModel = "gpt-4.1"
         UserDefaults.standard.set(currentModel, forKey: "selectedModel")
         refreshModelMenu()
     }
@@ -516,8 +576,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         
         for item in modelMenu.items {
             if (item.title == "GPT-4o" && currentModel == "gpt-4o") ||
-               (item.title == "GPT-4o mini" && currentModel == "gpt-4o-mini") ||
-               (item.title == "GPT-4.5 (Preview)" && currentModel == "gpt-4.5-preview-2025-02-27") {
+               (item.title == "o3-mini" && currentModel == "o3-mini") ||
+               (item.title == "GPT-4.1" && currentModel == "gpt-4.1") {
                 item.state = .on
             } else {
                 item.state = .off

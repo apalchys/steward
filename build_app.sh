@@ -35,7 +35,7 @@ cat > Rewrite.app/Contents/Info.plist << EOF
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
-    <string>com.example.Rewrite</string>
+    <string>com.palchys.rewrite</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
