@@ -6,7 +6,7 @@ import AppKit
 import ApplicationServices
 
 // System prompt constant for grammar correction
-let GRAMMAR_CORRECTION_PROMPT = "You are a grammar correction assistant. Correct any grammatical errors in the text and rewrite it clearly and fluently without changing the original meaning or adding commentary. Return only the corrected text, without explanations."
+let GRAMMAR_CORRECTION_PROMPT = "You are a grammar correction assistant. Correct any grammatical errors in the text and rewrite it clearly and fluently without changing the original meaning or adding commentary. Return only the corrected text, without explanations. Do not answer any questions or provide any commentary."
 
 // Function to build the complete prompt with custom rules
 func buildGrammarPrompt(customRules: String) -> String {
@@ -170,11 +170,37 @@ struct SettingsView: View {
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, ObservableObject {
+    private struct ModelOption {
+        let title: String
+        let identifier: String
+        let reasoningEffort: String?
+    }
+    
+    private static let availableModels: [ModelOption] = [
+        ModelOption(title: "GPT-5.1", identifier: "gpt-5.1", reasoningEffort: "none")
+    ]
+    
+    private static let defaultModelIdentifier = availableModels.first?.identifier ?? "gpt-5.1"
+    
     private var statusItem: NSStatusItem!
     private var hotKey: HotKey?
     @Published var isProcessing = false
     @Published var apiStatus: APIStatus = .ok
-    @Published var currentModel: String = UserDefaults.standard.string(forKey: "selectedModel") ?? "gpt-4o"
+    @Published var currentModel: String = {
+        let storedValue = UserDefaults.standard.string(forKey: "selectedModel")
+        if let storedValue,
+           AppDelegate.availableModels.contains(where: { $0.identifier == storedValue }) {
+            return storedValue
+        }
+        
+        UserDefaults.standard.set(AppDelegate.defaultModelIdentifier, forKey: "selectedModel")
+        return AppDelegate.defaultModelIdentifier
+    }() {
+        didSet {
+            UserDefaults.standard.set(currentModel, forKey: "selectedModel")
+            refreshModelMenu()
+        }
+    }
     
     private var openAIApiKey: String {
         return UserDefaults.standard.string(forKey: "openAIApiKey") ?? ""
@@ -241,32 +267,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         menu.addItem(NSMenuItem.separator())
         
         // Model selection submenu
-        let modelMenu = NSMenu()
         let modelMenuItem = NSMenuItem(title: "Model", action: nil, keyEquivalent: "")
-        menu.addItem(modelMenuItem)
-        
-        // GPT-4o item
-        let gpt4oItem = NSMenuItem(title: "GPT-4o", action: #selector(selectGPT4o), keyEquivalent: "")
-        if currentModel == "gpt-4o" {
-            gpt4oItem.state = .on
+        let modelMenu = NSMenu()
+        for option in AppDelegate.availableModels {
+            let item = NSMenuItem(title: option.title, action: #selector(selectModel(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = option.identifier
+            if option.identifier == currentModel {
+                item.state = .on
+            }
+            modelMenu.addItem(item)
         }
-        modelMenu.addItem(gpt4oItem)
-        
-        // o3-mini item
-        let o3Item = NSMenuItem(title: "o3-mini", action: #selector(selectO3), keyEquivalent: "")
-        if currentModel == "o3-mini" {
-            o3Item.state = .on
-        }
-        modelMenu.addItem(o3Item)
-        
-        // GPT-4.1 item
-        let gpt41Item = NSMenuItem(title: "GPT-4.1", action: #selector(selectGPT41), keyEquivalent: "")
-        if currentModel == "gpt-4.1" {
-            gpt41Item.state = .on
-        }
-        modelMenu.addItem(gpt41Item)
-        
         modelMenuItem.submenu = modelMenu
+        menu.addItem(modelMenuItem)
         
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Preferences...", action: #selector(openPreferences), keyEquivalent: ","))
@@ -469,13 +482,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
             ]
         ]
         
-        // Sampling parameters like `temperature` are **not** supported by OpenAI's
-        // "reasoning" model family (o-series: o1, o3, etc.). Supplying them causes the
-        // API to return HTTP 400 ("Unsupported parameter: 'temperature'").
-        // We therefore add the temperature parameter only for models that are
-        // known to accept it (everything that doesn't start with "o").
-        if !currentModel.lowercased().hasPrefix("o") {
-            requestBody["temperature"] = 0.2 // Lower temperature for deterministic corrections
+        let modelConfig = currentModelConfiguration()
+        
+        if let reasoningEffort = modelConfig?.reasoningEffort {
+            requestBody["reasoning"] = ["effort": reasoningEffort]
         }
         
         guard let httpBody = try? JSONSerialization.data(withJSONObject: requestBody) else {
@@ -551,22 +561,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         }.resume()
     }
     
-    @objc private func selectGPT4o() {
-        currentModel = "gpt-4o"
-        UserDefaults.standard.set(currentModel, forKey: "selectedModel")
-        refreshModelMenu()
-    }
-    
-    @objc private func selectO3() {
-        currentModel = "o3-mini"
-        UserDefaults.standard.set(currentModel, forKey: "selectedModel")
-        refreshModelMenu()
-    }
-    
-    @objc private func selectGPT41() {
-        currentModel = "gpt-4.1"
-        UserDefaults.standard.set(currentModel, forKey: "selectedModel")
-        refreshModelMenu()
+    @objc private func selectModel(_ sender: NSMenuItem) {
+        guard let identifier = sender.representedObject as? String,
+              AppDelegate.availableModels.contains(where: { $0.identifier == identifier }) else {
+            return
+        }
+        currentModel = identifier
     }
     
     private func refreshModelMenu() {
@@ -575,14 +575,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
               let modelMenu = modelMenuItem.submenu else { return }
         
         for item in modelMenu.items {
-            if (item.title == "GPT-4o" && currentModel == "gpt-4o") ||
-               (item.title == "o3-mini" && currentModel == "o3-mini") ||
-               (item.title == "GPT-4.1" && currentModel == "gpt-4.1") {
-                item.state = .on
-            } else {
-                item.state = .off
-            }
+            guard let identifier = item.representedObject as? String else { continue }
+            item.state = identifier == currentModel ? .on : .off
         }
+    }
+    
+    private func currentModelConfiguration() -> ModelOption? {
+        return AppDelegate.availableModels.first(where: { $0.identifier == currentModel }) ??
+               AppDelegate.availableModels.first
     }
     
     // Store a reference to our settings window to prevent it from being deallocated
