@@ -485,7 +485,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         let modelConfig = currentModelConfiguration()
         
         if let reasoningEffort = modelConfig?.reasoningEffort {
-            requestBody["reasoning"] = ["effort": reasoningEffort]
+            requestBody["reasoning_effort"] = reasoningEffort
         }
         
         guard let httpBody = try? JSONSerialization.data(withJSONObject: requestBody) else {
