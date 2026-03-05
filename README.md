@@ -1,6 +1,6 @@
 # Rewrite
 
-A macOS application that runs in the background and fixes grammar errors in selected text using OpenAI's API.
+A macOS application that runs in the background and fixes grammar errors in selected text using OpenAI's Responses API.
 
 <img width="234" alt="image" src="https://github.com/user-attachments/assets/621e8498-a324-4397-ba46-504dd5dbe2f0" />
 
@@ -10,9 +10,9 @@ A macOS application that runs in the background and fixes grammar errors in sele
 - Runs as a background application with menu bar icon
 - Activated with hotkey (Command+Shift+F)
 - Automatically captures selected text from any application
-- Fixes grammar using OpenAI's GPT-4o
-- Customizable model selection (GPT-4o, GPT-4o mini, GPT-4.5 Preview)
-- Securely stores your API key in preferences
+- Fixes grammar using OpenAI's GPT-5.4
+- Uses OpenAI's Responses API for grammar corrections
+- Stores your API key locally in app preferences
 - Replaces original text with corrected version
 - Preserves clipboard contents
 
@@ -41,7 +41,7 @@ See BUILD_INSTRUCTIONS.md
 
 ## Requirements
 
-- macOS 12.0 or later
+- macOS 13.0 or later
 - OpenAI API key
 
 ## Dependencies

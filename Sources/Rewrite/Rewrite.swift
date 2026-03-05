@@ -63,7 +63,7 @@ struct SettingsView: View {
                             NotificationCenter.default.post(name: NSNotification.Name("checkAPIStatus"), object: nil)
                         }
                     
-                    Text("Your API key is needed to use the grammar check feature.\nIt is stored securely in your Mac's keychain.")
+                    Text("Your API key is needed to use the grammar check feature.\nIt is stored locally in app preferences on this Mac.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -175,12 +175,56 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         let identifier: String
         let reasoningEffort: String?
     }
+
+    private struct ResponsesRequest: Encodable {
+        struct Reasoning: Encodable {
+            let effort: String
+        }
+
+        let model: String
+        let instructions: String
+        let input: String
+        let reasoning: Reasoning?
+    }
+
+    private struct ResponsesResponse: Decodable {
+        struct OutputItem: Decodable {
+            struct ContentItem: Decodable {
+                let type: String
+                let text: String?
+            }
+
+            let type: String
+            let content: [ContentItem]?
+        }
+
+        let output: [OutputItem]
+
+        var outputText: String? {
+            let text = output
+                .filter { $0.type == "message" }
+                .flatMap { $0.content ?? [] }
+                .filter { $0.type == "output_text" }
+                .compactMap { $0.text }
+                .joined()
+
+            return text.isEmpty ? nil : text
+        }
+    }
+
+    private struct APIErrorResponse: Decodable {
+        struct APIError: Decodable {
+            let message: String
+        }
+
+        let error: APIError
+    }
     
     private static let availableModels: [ModelOption] = [
-        ModelOption(title: "GPT-5.1", identifier: "gpt-5.1", reasoningEffort: "none")
+        ModelOption(title: "GPT-5.4", identifier: "gpt-5.4", reasoningEffort: "none")
     ]
     
-    private static let defaultModelIdentifier = availableModels.first?.identifier ?? "gpt-5.1"
+    private static let defaultModelIdentifier = availableModels.first?.identifier ?? "gpt-5.4"
     
     private var statusItem: NSStatusItem!
     private var hotKey: HotKey?
@@ -298,9 +342,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
             return
         }
         
-        // Make a simple API call to check if the OpenAI API is working
-        // This performs a lightweight request to the models endpoint to validate API key
-        let apiURL = URL(string: "https://api.openai.com/v1/models")!
+        // Make a simple API call to check if the OpenAI API key can access the current model.
+        let encodedModelIdentifier = currentModel.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? currentModel
+        let apiURL = URL(string: "https://api.openai.com/v1/models/\(encodedModelIdentifier)")!
         var request = URLRequest(url: apiURL)
         request.httpMethod = "GET"
         request.addValue("Bearer \(openAIApiKey)", forHTTPHeaderField: "Authorization")
@@ -473,22 +517,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         // Get custom rules from UserDefaults
         let customRules = UserDefaults.standard.string(forKey: "customGrammarRules") ?? ""
         
-        // Build the base request payload that all models share
-        var requestBody: [String: Any] = [
-            "model": currentModel,
-            "messages": [
-                ["role": "system", "content": buildGrammarPrompt(customRules: customRules)],
-                ["role": "user", "content": text]
-            ]
-        ]
-        
         let modelConfig = currentModelConfiguration()
-        
-        if let reasoningEffort = modelConfig?.reasoningEffort {
-            requestBody["reasoning_effort"] = reasoningEffort
-        }
-        
-        guard let httpBody = try? JSONSerialization.data(withJSONObject: requestBody) else {
+
+        let requestBody = ResponsesRequest(
+            model: currentModel,
+            instructions: buildGrammarPrompt(customRules: customRules),
+            input: text,
+            reasoning: modelConfig?.reasoningEffort.map { ResponsesRequest.Reasoning(effort: $0) }
+        )
+
+        guard let httpBody = try? JSONEncoder().encode(requestBody) else {
             apiStatus = .error
             updateStatusItemIcon()
             updateAPIStatusMenuItem()
@@ -496,8 +534,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
             return
         }
         
-        // Prepare API request to OpenAI Chat Completions endpoint
-        let apiURL = URL(string: "https://api.openai.com/v1/chat/completions")!
+        // Prepare API request to OpenAI Responses endpoint
+        let apiURL = URL(string: "https://api.openai.com/v1/responses")!
         var request = URLRequest(url: apiURL)
         request.httpMethod = "POST"
         request.addValue("Bearer \(openAIApiKey)", forHTTPHeaderField: "Authorization")
@@ -518,7 +556,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
                 }
                 
                 if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
-                    print("API Error: HTTP \(httpResponse.statusCode)")
+                    if let errorMessage = self?.apiErrorMessage(from: data) {
+                        print("API Error: HTTP \(httpResponse.statusCode) - \(errorMessage)")
+                    } else {
+                        print("API Error: HTTP \(httpResponse.statusCode)")
+                    }
                     self?.apiStatus = .error
                     self?.updateStatusItemIcon()
                     self?.updateAPIStatusMenuItem()
@@ -534,15 +576,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
                     return
                 }
                 
-                // Parse response to extract corrected text from OpenAI API
+                // Parse response to extract corrected text from OpenAI Responses API
                 do {
-                    if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                       let choices = json["choices"] as? [[String: Any]],
-                       let firstChoice = choices.first,
-                       let message = firstChoice["message"] as? [String: Any],
-                       let correctedText = message["content"] as? String {
-                        
-                        // Will be set to .ok after successful text replacement
+                    let apiResponse = try JSONDecoder().decode(ResponsesResponse.self, from: data)
+
+                    if let correctedText = apiResponse.outputText {
                         completion(correctedText)
                     } else {
                         self?.apiStatus = .error
@@ -583,6 +621,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
     private func currentModelConfiguration() -> ModelOption? {
         return AppDelegate.availableModels.first(where: { $0.identifier == currentModel }) ??
                AppDelegate.availableModels.first
+    }
+
+    private func apiErrorMessage(from data: Data?) -> String? {
+        guard let data else {
+            return nil
+        }
+
+        return try? JSONDecoder().decode(APIErrorResponse.self, from: data).error.message
     }
     
     // Store a reference to our settings window to prevent it from being deallocated

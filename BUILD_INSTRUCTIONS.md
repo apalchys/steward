@@ -26,7 +26,7 @@
 
 The application requires an OpenAI API key to function. Your API key:
 - Is stored locally in UserDefaults
-- Is never transmitted to any server other than OpenAI's API
+- Is only sent to OpenAI's Responses API to process your selected text
 - Can be updated at any time through the Preferences menu
 
 You can obtain an API key by creating an account at https://platform.openai.com/
