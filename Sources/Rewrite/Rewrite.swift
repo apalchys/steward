@@ -17,6 +17,11 @@ func buildGrammarPrompt(customRules: String) -> String {
     }
 }
 
+extension Notification.Name {
+    static let checkOpenAIStatus = Notification.Name("checkOpenAIStatus")
+    static let checkGeminiStatus = Notification.Name("checkGeminiStatus")
+}
+
 // Extension to load images from bundle
 extension Bundle {
     // Helper method to decode images from the bundle with proper error handling
@@ -26,6 +31,95 @@ extension Bundle {
             return Image(nsImage: nsImage)
         }
         return nil
+    }
+}
+
+final class ScreenSelectionWindow: NSWindow {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+}
+
+final class ScreenSelectionOverlayView: NSView {
+    var onSelectionFinished: ((CGRect) -> Void)?
+    var onSelectionCancelled: (() -> Void)?
+
+    private var startPoint: NSPoint?
+    private var currentPoint: NSPoint?
+
+    override var acceptsFirstResponder: Bool { true }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        window?.makeFirstResponder(self)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        startPoint = point
+        currentPoint = point
+        needsDisplay = true
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        currentPoint = convert(event.locationInWindow, from: nil)
+        needsDisplay = true
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        currentPoint = convert(event.locationInWindow, from: nil)
+        needsDisplay = true
+
+        guard let selectionRect = selectionRect?.integral,
+              selectionRect.width > 4,
+              selectionRect.height > 4 else {
+            onSelectionCancelled?()
+            return
+        }
+
+        onSelectionFinished?(selectionRect)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 53 {
+            onSelectionCancelled?()
+            return
+        }
+
+        super.keyDown(with: event)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.clear.setFill()
+        dirtyRect.fill()
+
+        let overlayPath = NSBezierPath(rect: bounds)
+        if let selectionRect {
+            overlayPath.append(NSBezierPath(rect: selectionRect))
+            overlayPath.windingRule = .evenOdd
+        }
+
+        NSColor.black.withAlphaComponent(0.25).setFill()
+        overlayPath.fill()
+
+        if let selectionRect {
+            NSColor.systemBlue.setStroke()
+            let borderPath = NSBezierPath(rect: selectionRect)
+            borderPath.lineWidth = 2
+            borderPath.stroke()
+        }
+    }
+
+    private var selectionRect: CGRect? {
+        guard let startPoint, let currentPoint else {
+            return nil
+        }
+
+        return CGRect(
+            x: min(startPoint.x, currentPoint.x),
+            y: min(startPoint.y, currentPoint.y),
+            width: abs(currentPoint.x - startPoint.x),
+            height: abs(currentPoint.y - startPoint.y)
+        )
     }
 }
 
@@ -42,6 +136,7 @@ struct RewriteApp: App {
 
 struct SettingsView: View {
     @State private var apiKey: String = UserDefaults.standard.string(forKey: "openAIApiKey") ?? ""
+    @State private var geminiAPIKey: String = UserDefaults.standard.string(forKey: "geminiAPIKey") ?? ""
     @State private var customRules: String = UserDefaults.standard.string(forKey: "customGrammarRules") ?? ""
     @Environment(\.dismiss) private var dismiss
     
@@ -49,10 +144,10 @@ struct SettingsView: View {
         TabView {
             // General tab
             VStack(alignment: .leading, spacing: 20) {
-                Text("API Key")
-                    .font(.headline)
-                
                 VStack(alignment: .leading, spacing: 8) {
+                    Text("OpenAI API Key")
+                        .font(.headline)
+                    
                     SecureField("Enter your OpenAI API Key", text: $apiKey)
                         .textFieldStyle(.roundedBorder)
                         .frame(maxWidth: .infinity)
@@ -60,10 +155,27 @@ struct SettingsView: View {
                             // Save immediately per macOS HIG
                             UserDefaults.standard.set(newValue, forKey: "openAIApiKey")
                             // Trigger API status check
-                            NotificationCenter.default.post(name: NSNotification.Name("checkAPIStatus"), object: nil)
+                            NotificationCenter.default.post(name: .checkOpenAIStatus, object: nil)
                         }
                     
                     Text("Your API key is needed to use the grammar check feature.\nIt is stored locally in app preferences on this Mac.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Gemini API Key")
+                        .font(.headline)
+                    
+                    SecureField("Enter your Gemini API Key", text: $geminiAPIKey)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: .infinity)
+                        .onChange(of: geminiAPIKey) { newValue in
+                            UserDefaults.standard.set(newValue, forKey: "geminiAPIKey")
+                            NotificationCenter.default.post(name: .checkGeminiStatus, object: nil)
+                        }
+                    
+                    Text("Your Gemini API key is used for screen text extraction.\nIt is stored locally in app preferences on this Mac.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -152,7 +264,7 @@ struct SettingsView: View {
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                 
-                Text("A simple grammar checking tool for your Mac.\nPress ⌘⇧F to check grammar in any text field.")
+                Text("A simple writing and OCR tool for your Mac.\nPress ⌘⇧F to check grammar or ⌘⇧R to extract text from a screen selection.")
                     .font(.caption)
                     .multilineTextAlignment(.center)
                     .padding(.top, 2)
@@ -165,11 +277,17 @@ struct SettingsView: View {
                 Label("About", systemImage: "info.circle")
             }
         }
-        .frame(width: 450, height: 300)
+        .frame(width: 450, height: 360)
     }
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, ObservableObject {
+    private enum MenuItemTag {
+        static let activityStatus = 1
+        static let openAIStatus = 2
+        static let geminiStatus = 3
+    }
+
     private struct ModelOption {
         let title: String
         let identifier: String
@@ -219,17 +337,103 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
 
         let error: APIError
     }
+
+    private struct GeminiGenerateContentRequest: Encodable {
+        struct Content: Encodable {
+            let parts: [Part]
+        }
+
+        struct Part: Encodable {
+            let text: String?
+            let inlineData: InlineData?
+
+            init(text: String) {
+                self.text = text
+                self.inlineData = nil
+            }
+
+            init(inlineData: InlineData) {
+                self.text = nil
+                self.inlineData = inlineData
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case text
+                case inlineData = "inline_data"
+            }
+        }
+
+        struct InlineData: Encodable {
+            let mimeType: String
+            let data: String
+
+            enum CodingKeys: String, CodingKey {
+                case mimeType = "mime_type"
+                case data
+            }
+        }
+
+        let systemInstruction: Content
+        let contents: [Content]
+
+        enum CodingKeys: String, CodingKey {
+            case systemInstruction = "system_instruction"
+            case contents
+        }
+    }
+
+    private struct GeminiGenerateContentResponse: Decodable {
+        struct Candidate: Decodable {
+            struct Content: Decodable {
+                struct Part: Decodable {
+                    let text: String?
+                }
+
+                let parts: [Part]?
+            }
+
+            let content: Content?
+        }
+
+        let candidates: [Candidate]?
+
+        var outputText: String? {
+            let text = candidates?
+                .compactMap { $0.content?.parts }
+                .flatMap { $0 }
+                .compactMap { $0.text }
+                .joined(separator: "\n")
+
+            guard let text else {
+                return nil
+            }
+
+            let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmedText.isEmpty ? nil : trimmedText
+        }
+    }
     
     private static let availableModels: [ModelOption] = [
         ModelOption(title: "GPT-5.4", identifier: "gpt-5.4", reasoningEffort: "none")
     ]
     
     private static let defaultModelIdentifier = availableModels.first?.identifier ?? "gpt-5.4"
+    private static let geminiModelIdentifier = "gemini-3.1-flash-lite-preview"
+    private static let geminiOCRInstruction = """
+    You are an OCR assistant. Extract all visible text from the provided image and return only the extracted text in Markdown.
+    Preserve headings, paragraphs, lists, tables, and code blocks when they are visually clear.
+    Do not add explanations, summaries, or commentary.
+    """
     
     private var statusItem: NSStatusItem!
-    private var hotKey: HotKey?
+    private var grammarHotKey: HotKey?
+    private var screenOCRHotKey: HotKey?
+    private var selectionWindows: [NSWindow] = []
+    private var isScreenSelectionActive = false
     @Published var isProcessing = false
     @Published var apiStatus: APIStatus = .ok
+    @Published var openAIStatus: APIStatus = .ok
+    @Published var geminiStatus: APIStatus = .ok
     @Published var currentModel: String = {
         let storedValue = UserDefaults.standard.string(forKey: "selectedModel")
         if let storedValue,
@@ -248,6 +452,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
     
     private var openAIApiKey: String {
         return UserDefaults.standard.string(forKey: "openAIApiKey") ?? ""
+    }
+
+    private var geminiAPIKey: String {
+        return UserDefaults.standard.string(forKey: "geminiAPIKey") ?? ""
     }
     
     // Status enum with associated icon images for menu bar states
@@ -277,19 +485,27 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         updateStatusItemIcon()
         
         setupMenu()
-        setupHotKey()
+        setupHotKeys()
         
-        // Register for notification to check API status
+        // Register for notifications to check service status
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(checkAPIStatus),
-            name: NSNotification.Name("checkAPIStatus"),
+            selector: #selector(checkOpenAIStatus),
+            name: .checkOpenAIStatus,
+            object: nil
+        )
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(checkGeminiStatus),
+            name: .checkGeminiStatus,
             object: nil
         )
         
-        // Check API status on launch with a small delay to ensure UI is ready
+        // Check service status on launch with a small delay to ensure UI is ready
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            self?.checkAPIStatus()
+            self?.checkOpenAIStatus()
+            self?.checkGeminiStatus()
         }
     }
     
@@ -303,10 +519,22 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         let menu = NSMenu()
         
         menu.addItem(NSMenuItem(title: "Grammar Check (⌘⇧F)", action: nil, keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Screen Text Capture (⌘⇧R)", action: nil, keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
         
-        let apiStatusItem = NSMenuItem(title: "API Status: OK", action: #selector(checkAPIStatus), keyEquivalent: "")
-        menu.addItem(apiStatusItem)
+        let activityStatusItem = NSMenuItem(title: "Status: Ready", action: nil, keyEquivalent: "")
+        activityStatusItem.tag = MenuItemTag.activityStatus
+        menu.addItem(activityStatusItem)
+
+        let openAIStatusItem = NSMenuItem(title: "OpenAI: Checking...", action: #selector(checkOpenAIStatus), keyEquivalent: "")
+        openAIStatusItem.target = self
+        openAIStatusItem.tag = MenuItemTag.openAIStatus
+        menu.addItem(openAIStatusItem)
+
+        let geminiStatusItem = NSMenuItem(title: "Gemini: Checking...", action: #selector(checkGeminiStatus), keyEquivalent: "")
+        geminiStatusItem.target = self
+        geminiStatusItem.tag = MenuItemTag.geminiStatus
+        menu.addItem(geminiStatusItem)
         
         menu.addItem(NSMenuItem.separator())
         
@@ -331,16 +559,26 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(quitApp), keyEquivalent: "q"))
         
         statusItem.menu = menu
+        updateAPIStatusMenuItem()
+        updateOpenAIStatusMenuItem()
+        updateGeminiStatusMenuItem()
     }
     
-    @objc private func checkAPIStatus() {
+    @objc private func checkOpenAIStatus() {
         // If no API key is set, show error state and return
         guard !openAIApiKey.isEmpty else {
-            apiStatus = .error
+            openAIStatus = .error
+            if !isProcessing {
+                apiStatus = .error
+            }
             updateStatusItemIcon()
             updateAPIStatusMenuItem()
+            updateOpenAIStatusMenuItem()
             return
         }
+
+        openAIStatus = .processing
+        updateOpenAIStatusMenuItem()
         
         // Make a simple API call to check if the OpenAI API key can access the current model.
         let encodedModelIdentifier = currentModel.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? currentModel
@@ -352,12 +590,55 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             DispatchQueue.main.async {
                 if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
-                    self?.apiStatus = .ok
+                    self?.openAIStatus = .ok
+                    if self?.isProcessing == false {
+                        self?.apiStatus = .ok
+                    }
                 } else {
-                    self?.apiStatus = .error
+                    self?.openAIStatus = .error
+                    if self?.isProcessing == false {
+                        self?.apiStatus = .error
+                    }
                 }
                 self?.updateStatusItemIcon()
                 self?.updateAPIStatusMenuItem()
+                self?.updateOpenAIStatusMenuItem()
+            }
+        }.resume()
+    }
+
+    @objc private func checkGeminiStatus() {
+        guard !geminiAPIKey.isEmpty else {
+            geminiStatus = .error
+            updateGeminiStatusMenuItem()
+            return
+        }
+
+        geminiStatus = .processing
+        updateGeminiStatusMenuItem()
+
+        let encodedModelIdentifier = AppDelegate.geminiModelIdentifier.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ??
+            AppDelegate.geminiModelIdentifier
+        var components = URLComponents(string: "https://generativelanguage.googleapis.com/v1beta/models/\(encodedModelIdentifier)")!
+        components.queryItems = [URLQueryItem(name: "key", value: geminiAPIKey)]
+
+        guard let apiURL = components.url else {
+            geminiStatus = .error
+            updateGeminiStatusMenuItem()
+            return
+        }
+
+        var request = URLRequest(url: apiURL)
+        request.httpMethod = "GET"
+
+        URLSession.shared.dataTask(with: request) { [weak self] _, response, _ in
+            DispatchQueue.main.async {
+                if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                    self?.geminiStatus = .ok
+                } else {
+                    self?.geminiStatus = .error
+                }
+                self?.updateGeminiStatusMenuItem()
             }
         }.resume()
     }
@@ -365,34 +646,70 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
     private func updateAPIStatusMenuItem() {
         guard let menu = statusItem.menu else { return }
         
-        // Find the API status menu item (third item, after separator)
-        if let apiStatusItem = menu.items.first(where: { $0.action == #selector(checkAPIStatus) }) {
+        if let apiStatusItem = menu.items.first(where: { $0.tag == MenuItemTag.activityStatus }) {
             switch apiStatus {
             case .ok:
-                apiStatusItem.title = "API Status: OK"
+                apiStatusItem.title = "Status: Ready"
             case .error:
                 if openAIApiKey.isEmpty {
-                    apiStatusItem.title = "API Status: Error - API Key Missing"
+                    apiStatusItem.title = "Status: OpenAI API Key Missing"
+                } else if geminiAPIKey.isEmpty {
+                    apiStatusItem.title = "Status: Gemini API Key Missing"
                 } else {
-                    apiStatusItem.title = "API Status: Error - Click to retry"
+                    apiStatusItem.title = "Status: Error"
                 }
             case .processing:
-                apiStatusItem.title = "API Status: Processing..."
+                apiStatusItem.title = isScreenSelectionActive ? "Status: Select an area..." : "Status: Processing..."
             }
         }
     }
-    
-    private func setupHotKey() {
-        // Set up Command+Shift+F hotkey using HotKey library
-        // This registers a system-wide keyboard shortcut
-        hotKey = HotKey(key: .f, modifiers: [.command, .shift])
-        
-        hotKey?.keyDownHandler = { [weak self] in
-            self?.handleHotKeyPress()
+
+    private func updateOpenAIStatusMenuItem() {
+        guard let menu = statusItem.menu,
+              let openAIStatusItem = menu.items.first(where: { $0.tag == MenuItemTag.openAIStatus }) else {
+            return
+        }
+
+        switch openAIStatus {
+        case .ok:
+            openAIStatusItem.title = "OpenAI: OK"
+        case .error:
+            openAIStatusItem.title = openAIApiKey.isEmpty ? "OpenAI: API Key Missing" : "OpenAI: Error - Click to retry"
+        case .processing:
+            openAIStatusItem.title = "OpenAI: Checking..."
+        }
+    }
+
+    private func updateGeminiStatusMenuItem() {
+        guard let menu = statusItem.menu,
+              let geminiStatusItem = menu.items.first(where: { $0.tag == MenuItemTag.geminiStatus }) else {
+            return
+        }
+
+        switch geminiStatus {
+        case .ok:
+            geminiStatusItem.title = "Gemini: OK"
+        case .error:
+            geminiStatusItem.title = geminiAPIKey.isEmpty ? "Gemini: API Key Missing" : "Gemini: Error - Click to retry"
+        case .processing:
+            geminiStatusItem.title = "Gemini: Checking..."
         }
     }
     
-    private func handleHotKeyPress() {
+    private func setupHotKeys() {
+        // Set up system-wide keyboard shortcuts.
+        grammarHotKey = HotKey(key: .f, modifiers: [.command, .shift])
+        grammarHotKey?.keyDownHandler = { [weak self] in
+            self?.handleGrammarHotKeyPress()
+        }
+
+        screenOCRHotKey = HotKey(key: .r, modifiers: [.command, .shift])
+        screenOCRHotKey?.keyDownHandler = { [weak self] in
+            self?.handleScreenOCRHotKeyPress()
+        }
+    }
+    
+    private func handleGrammarHotKeyPress() {
         guard !isProcessing else { return }
         isProcessing = true
         
@@ -425,6 +742,243 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
             updateStatusItemIcon()
             updateAPIStatusMenuItem()
         }
+    }
+
+    private func handleScreenOCRHotKeyPress() {
+        guard !isProcessing else { return }
+
+        guard !geminiAPIKey.isEmpty else {
+            apiStatus = .error
+            updateStatusItemIcon()
+            updateAPIStatusMenuItem()
+            openPreferences()
+            return
+        }
+
+        guard ensureScreenCaptureAccess() else {
+            apiStatus = .error
+            updateStatusItemIcon()
+            updateAPIStatusMenuItem()
+            return
+        }
+
+        isProcessing = true
+        isScreenSelectionActive = true
+        apiStatus = .processing
+        updateStatusItemIcon()
+        updateAPIStatusMenuItem()
+        beginScreenSelection()
+    }
+
+    private func beginScreenSelection() {
+        selectionWindows.removeAll()
+        NSApp.activate(ignoringOtherApps: true)
+        NSCursor.crosshair.push()
+
+        for screen in NSScreen.screens {
+            let window = ScreenSelectionWindow(
+                contentRect: screen.frame,
+                styleMask: .borderless,
+                backing: .buffered,
+                defer: false,
+                screen: screen
+            )
+            window.backgroundColor = .clear
+            window.isOpaque = false
+            window.hasShadow = false
+            window.level = .screenSaver
+            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+
+            let overlayView = ScreenSelectionOverlayView(frame: CGRect(origin: .zero, size: screen.frame.size))
+            overlayView.onSelectionFinished = { [weak self] localRect in
+                let screenRect = localRect.offsetBy(dx: screen.frame.minX, dy: screen.frame.minY)
+                self?.finishScreenSelection(on: screen, selectionRect: screenRect)
+            }
+            overlayView.onSelectionCancelled = { [weak self] in
+                self?.cancelScreenSelection()
+            }
+
+            window.contentView = overlayView
+            window.makeKeyAndOrderFront(nil)
+            selectionWindows.append(window)
+        }
+    }
+
+    private func finishScreenSelection(on screen: NSScreen, selectionRect: CGRect) {
+        guard isScreenSelectionActive else { return }
+        endScreenSelectionUI()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.extractTextFromSelectedScreenArea(on: screen, selectionRect: selectionRect)
+        }
+    }
+
+    private func cancelScreenSelection() {
+        guard isScreenSelectionActive else { return }
+        endScreenSelectionUI()
+        isProcessing = false
+        apiStatus = .ok
+        updateStatusItemIcon()
+        updateAPIStatusMenuItem()
+    }
+
+    private func endScreenSelectionUI() {
+        isScreenSelectionActive = false
+
+        selectionWindows.forEach { $0.close() }
+        selectionWindows.removeAll()
+
+        NSCursor.pop()
+    }
+
+    private func ensureScreenCaptureAccess() -> Bool {
+        if CGPreflightScreenCaptureAccess() {
+            return true
+        }
+
+        return CGRequestScreenCaptureAccess()
+    }
+
+    private func extractTextFromSelectedScreenArea(on screen: NSScreen, selectionRect: CGRect) {
+        guard let imageData = captureSelectionImageData(on: screen, selectionRect: selectionRect) else {
+            apiStatus = .error
+            isProcessing = false
+            updateStatusItemIcon()
+            updateAPIStatusMenuItem()
+            return
+        }
+
+        geminiStatus = .processing
+        updateGeminiStatusMenuItem()
+
+        extractTextFromGemini(imageData: imageData, mimeType: "image/png") { [weak self] extractedText in
+            guard let self else { return }
+
+            if let extractedText {
+                self.copyTextToClipboard(extractedText)
+                self.apiStatus = .ok
+                self.geminiStatus = .ok
+            } else {
+                self.apiStatus = .error
+                self.geminiStatus = .error
+            }
+
+            self.isProcessing = false
+            self.updateStatusItemIcon()
+            self.updateAPIStatusMenuItem()
+            self.updateGeminiStatusMenuItem()
+        }
+    }
+
+    private func captureSelectionImageData(on screen: NSScreen, selectionRect: CGRect) -> Data? {
+        guard let displayID = displayID(for: screen),
+              let displayImage = CGDisplayCreateImage(displayID) else {
+            return nil
+        }
+
+        let screenFrame = screen.frame
+        let relativeRect = CGRect(
+            x: selectionRect.minX - screenFrame.minX,
+            y: screenFrame.maxY - selectionRect.maxY,
+            width: selectionRect.width,
+            height: selectionRect.height
+        )
+
+        let scaleX = CGFloat(displayImage.width) / screenFrame.width
+        let scaleY = CGFloat(displayImage.height) / screenFrame.height
+        let cropRect = CGRect(
+            x: relativeRect.minX * scaleX,
+            y: relativeRect.minY * scaleY,
+            width: relativeRect.width * scaleX,
+            height: relativeRect.height * scaleY
+        ).integral
+        let fullImageRect = CGRect(x: 0, y: 0, width: displayImage.width, height: displayImage.height)
+        let clippedCropRect = cropRect.intersection(fullImageRect)
+
+        guard !clippedCropRect.isNull,
+              clippedCropRect.width > 0,
+              clippedCropRect.height > 0,
+              let croppedImage = displayImage.cropping(to: clippedCropRect) else {
+            return nil
+        }
+
+        let bitmapRepresentation = NSBitmapImageRep(cgImage: croppedImage)
+        return bitmapRepresentation.representation(using: .png, properties: [:])
+    }
+
+    private func extractTextFromGemini(imageData: Data, mimeType: String, completion: @escaping (String?) -> Void) {
+        let requestBody = GeminiGenerateContentRequest(
+            systemInstruction: .init(parts: [.init(text: AppDelegate.geminiOCRInstruction)]),
+            contents: [
+                .init(parts: [
+                    .init(text: "Extract all visible text from this screenshot selection and return Markdown only."),
+                    .init(inlineData: .init(mimeType: mimeType, data: imageData.base64EncodedString()))
+                ])
+            ]
+        )
+
+        guard let httpBody = try? JSONEncoder().encode(requestBody) else {
+            completion(nil)
+            return
+        }
+
+        let encodedModelIdentifier = AppDelegate.geminiModelIdentifier.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ??
+            AppDelegate.geminiModelIdentifier
+        var components = URLComponents(
+            string: "https://generativelanguage.googleapis.com/v1beta/models/\(encodedModelIdentifier):generateContent"
+        )!
+        components.queryItems = [URLQueryItem(name: "key", value: geminiAPIKey)]
+
+        guard let apiURL = components.url else {
+            completion(nil)
+            return
+        }
+
+        var request = URLRequest(url: apiURL)
+        request.httpMethod = "POST"
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = httpBody
+
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    print("Gemini API Error: \(error.localizedDescription)")
+                    completion(nil)
+                    return
+                }
+
+                if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
+                    if let errorMessage = self?.apiErrorMessage(from: data) {
+                        print("Gemini API Error: HTTP \(httpResponse.statusCode) - \(errorMessage)")
+                    } else {
+                        print("Gemini API Error: HTTP \(httpResponse.statusCode)")
+                    }
+                    completion(nil)
+                    return
+                }
+
+                guard let data else {
+                    completion(nil)
+                    return
+                }
+
+                do {
+                    let apiResponse = try JSONDecoder().decode(GeminiGenerateContentResponse.self, from: data)
+                    completion(apiResponse.outputText)
+                } catch {
+                    print("Gemini JSON Error: \(error.localizedDescription)")
+                    completion(nil)
+                }
+            }
+        }.resume()
+    }
+
+    private func displayID(for screen: NSScreen) -> CGDirectDisplayID? {
+        guard let screenNumber = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else {
+            return nil
+        }
+
+        return CGDirectDisplayID(screenNumber.uint32Value)
     }
     
     private func getSelectedText() -> String? {
@@ -491,6 +1045,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
             }
         }
     }
+
+    private func copyTextToClipboard(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
     
     private func fixGrammar(text: String, completion: @escaping (String?) -> Void) {
         guard !text.isEmpty else {
@@ -504,12 +1063,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
             updateStatusItemIcon()
             updateAPIStatusMenuItem()
             // Open preferences window to prompt user to enter API key
-            NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+            openPreferences()
             completion(nil)
             return
         }
         
-        // Already set to processing in handleHotKeyPress, but ensure consistency
+        // Already set to processing in handleGrammarHotKeyPress, but ensure consistency
         apiStatus = .processing
         updateStatusItemIcon()
         updateAPIStatusMenuItem()
