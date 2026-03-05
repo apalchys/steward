@@ -7,8 +7,6 @@ import ApplicationServices
 
 // System prompt constant for grammar correction
 let GRAMMAR_CORRECTION_PROMPT = "You are a grammar correction assistant. Correct any grammatical errors in the text and rewrite it clearly and fluently without changing the original meaning or adding commentary. Return only the corrected text, without explanations. Do not answer any questions or provide any commentary."
-let DEFAULT_OPENAI_MODEL_ID = "gpt-5.4"
-let DEFAULT_GEMINI_MODEL_ID = "gemini-3.1-flash-lite-preview"
 
 // Function to build the complete prompt with custom rules
 func buildGrammarPrompt(customRules: String) -> String {
@@ -154,9 +152,9 @@ struct RewriteApp: App {
 
 struct SettingsView: View {
     @State private var apiKey: String = UserDefaults.standard.string(forKey: "openAIApiKey") ?? ""
-    @State private var openAIModelID: String = preferenceValue(forKey: "openAIModelID", defaultValue: DEFAULT_OPENAI_MODEL_ID)
+    @State private var openAIModelID: String = preferenceValue(forKey: "openAIModelID", defaultValue: OpenAIClient.defaultModelID)
     @State private var geminiAPIKey: String = UserDefaults.standard.string(forKey: "geminiAPIKey") ?? ""
-    @State private var geminiModelID: String = preferenceValue(forKey: "geminiModelID", defaultValue: DEFAULT_GEMINI_MODEL_ID)
+    @State private var geminiModelID: String = preferenceValue(forKey: "geminiModelID", defaultValue: GeminiClient.defaultModelID)
     @State private var customRules: String = UserDefaults.standard.string(forKey: "customGrammarRules") ?? ""
     
     var body: some View {
@@ -178,16 +176,16 @@ struct SettingsView: View {
                                 NotificationCenter.default.post(name: .checkOpenAIStatus, object: nil)
                             }
 
-                        TextField(DEFAULT_OPENAI_MODEL_ID, text: $openAIModelID)
+                        TextField(OpenAIClient.defaultModelID, text: $openAIModelID)
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 180)
                             .onChange(of: openAIModelID) { newValue in
-                                savePreferenceValue(newValue, forKey: "openAIModelID", defaultValue: DEFAULT_OPENAI_MODEL_ID)
+                                savePreferenceValue(newValue, forKey: "openAIModelID", defaultValue: OpenAIClient.defaultModelID)
                                 NotificationCenter.default.post(name: .checkOpenAIStatus, object: nil)
                             }
                     }
                     
-                    Text("Your API key is needed to use the grammar check feature.\nModel ID defaults to \(DEFAULT_OPENAI_MODEL_ID) when left empty.")
+                    Text("Your API key is needed to use the grammar check feature.\nModel ID defaults to \(OpenAIClient.defaultModelID) when left empty.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -205,16 +203,16 @@ struct SettingsView: View {
                                 NotificationCenter.default.post(name: .checkGeminiStatus, object: nil)
                             }
 
-                        TextField(DEFAULT_GEMINI_MODEL_ID, text: $geminiModelID)
+                        TextField(GeminiClient.defaultModelID, text: $geminiModelID)
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 220)
                             .onChange(of: geminiModelID) { newValue in
-                                savePreferenceValue(newValue, forKey: "geminiModelID", defaultValue: DEFAULT_GEMINI_MODEL_ID)
+                                savePreferenceValue(newValue, forKey: "geminiModelID", defaultValue: GeminiClient.defaultModelID)
                                 NotificationCenter.default.post(name: .checkGeminiStatus, object: nil)
                             }
                     }
                     
-                    Text("Your Gemini API key is used for screen text extraction.\nModel ID defaults to \(DEFAULT_GEMINI_MODEL_ID) when left empty.")
+                    Text("Your Gemini API key is used for screen text extraction.\nModel ID defaults to \(GeminiClient.defaultModelID) when left empty.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -326,133 +324,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         static let openAIStatus = 2
         static let geminiStatus = 3
     }
-
-    private struct ResponsesRequest: Encodable {
-        struct Reasoning: Encodable {
-            let effort: String
-        }
-
-        let model: String
-        let instructions: String
-        let input: String
-        let reasoning: Reasoning?
-    }
-
-    private struct ResponsesResponse: Decodable {
-        struct OutputItem: Decodable {
-            struct ContentItem: Decodable {
-                let type: String
-                let text: String?
-            }
-
-            let type: String
-            let content: [ContentItem]?
-        }
-
-        let output: [OutputItem]
-
-        var outputText: String? {
-            let text = output
-                .filter { $0.type == "message" }
-                .flatMap { $0.content ?? [] }
-                .filter { $0.type == "output_text" }
-                .compactMap { $0.text }
-                .joined()
-
-            return text.isEmpty ? nil : text
-        }
-    }
-
-    private struct APIErrorResponse: Decodable {
-        struct APIError: Decodable {
-            let message: String
-        }
-
-        let error: APIError
-    }
-
-    private struct GeminiGenerateContentRequest: Encodable {
-        struct Content: Encodable {
-            let parts: [Part]
-        }
-
-        struct Part: Encodable {
-            let text: String?
-            let inlineData: InlineData?
-
-            init(text: String) {
-                self.text = text
-                self.inlineData = nil
-            }
-
-            init(inlineData: InlineData) {
-                self.text = nil
-                self.inlineData = inlineData
-            }
-
-            enum CodingKeys: String, CodingKey {
-                case text
-                case inlineData = "inline_data"
-            }
-        }
-
-        struct InlineData: Encodable {
-            let mimeType: String
-            let data: String
-
-            enum CodingKeys: String, CodingKey {
-                case mimeType = "mime_type"
-                case data
-            }
-        }
-
-        let systemInstruction: Content
-        let contents: [Content]
-
-        enum CodingKeys: String, CodingKey {
-            case systemInstruction = "system_instruction"
-            case contents
-        }
-    }
-
-    private struct GeminiGenerateContentResponse: Decodable {
-        struct Candidate: Decodable {
-            struct Content: Decodable {
-                struct Part: Decodable {
-                    let text: String?
-                }
-
-                let parts: [Part]?
-            }
-
-            let content: Content?
-        }
-
-        let candidates: [Candidate]?
-
-        var outputText: String? {
-            let text = candidates?
-                .compactMap { $0.content?.parts }
-                .flatMap { $0 }
-                .compactMap { $0.text }
-                .joined(separator: "\n")
-
-            guard let text else {
-                return nil
-            }
-
-            let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmedText.isEmpty ? nil : trimmedText
-        }
-    }
-
-    private static let geminiOCRInstruction = """
-    You are an OCR assistant. Extract all visible text from the provided image and return only the extracted text in Markdown.
-    Preserve headings, paragraphs, lists, tables, and code blocks when they are visually clear.
-    Do not add explanations, summaries, or commentary.
-    """
     
     private var statusItem: NSStatusItem!
+    private let openAIClient = OpenAIClient()
+    private let geminiClient = GeminiClient()
     private var grammarHotKey: HotKey?
     private var screenOCRHotKey: HotKey?
     private var selectionWindows: [NSWindow] = []
@@ -467,11 +342,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
     }
 
     private var openAIModelID: String {
-        return preferenceValue(forKey: "openAIModelID", defaultValue: DEFAULT_OPENAI_MODEL_ID)
-    }
-
-    private var openAIReasoningEffort: String? {
-        return openAIModelID.lowercased().hasPrefix("gpt-5") ? "none" : nil
+        return preferenceValue(forKey: "openAIModelID", defaultValue: OpenAIClient.defaultModelID)
     }
 
     private var geminiAPIKey: String {
@@ -479,7 +350,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
     }
 
     private var geminiModelID: String {
-        return preferenceValue(forKey: "geminiModelID", defaultValue: DEFAULT_GEMINI_MODEL_ID)
+        return preferenceValue(forKey: "geminiModelID", defaultValue: GeminiClient.defaultModelID)
     }
     
     // Status enum with associated icon images for menu bar states
@@ -586,32 +457,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
 
         openAIStatus = .processing
         updateOpenAIStatusMenuItem()
-        
-        // Make a simple API call to check if the OpenAI API key can access the current model.
-        let encodedModelIdentifier = openAIModelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? openAIModelID
-        let apiURL = URL(string: "https://api.openai.com/v1/models/\(encodedModelIdentifier)")!
-        var request = URLRequest(url: apiURL)
-        request.httpMethod = "GET"
-        request.addValue("Bearer \(openAIApiKey)", forHTTPHeaderField: "Authorization")
-        
-        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            DispatchQueue.main.async {
-                if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
-                    self?.openAIStatus = .ok
-                    if self?.isProcessing == false {
-                        self?.apiStatus = .ok
-                    }
-                } else {
-                    self?.openAIStatus = .error
-                    if self?.isProcessing == false {
-                        self?.apiStatus = .error
-                    }
-                }
-                self?.updateStatusItemIcon()
-                self?.updateAPIStatusMenuItem()
-                self?.updateOpenAIStatusMenuItem()
+
+        openAIClient.checkAccess(apiKey: openAIApiKey, modelID: openAIModelID) { [weak self] hasAccess in
+            guard let self else { return }
+
+            self.openAIStatus = hasAccess ? .ok : .error
+            if !self.isProcessing {
+                self.apiStatus = hasAccess ? .ok : .error
             }
-        }.resume()
+
+            self.updateStatusItemIcon()
+            self.updateAPIStatusMenuItem()
+            self.updateOpenAIStatusMenuItem()
+        }
     }
 
     @objc private func checkGeminiStatus() {
@@ -624,29 +482,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         geminiStatus = .processing
         updateGeminiStatusMenuItem()
 
-        let encodedModelIdentifier = geminiModelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? geminiModelID
-        var components = URLComponents(string: "https://generativelanguage.googleapis.com/v1beta/models/\(encodedModelIdentifier)")!
-        components.queryItems = [URLQueryItem(name: "key", value: geminiAPIKey)]
-
-        guard let apiURL = components.url else {
-            geminiStatus = .error
-            updateGeminiStatusMenuItem()
-            return
+        geminiClient.checkAccess(apiKey: geminiAPIKey, modelID: geminiModelID) { [weak self] hasAccess in
+            guard let self else { return }
+            self.geminiStatus = hasAccess ? .ok : .error
+            self.updateGeminiStatusMenuItem()
         }
-
-        var request = URLRequest(url: apiURL)
-        request.httpMethod = "GET"
-
-        URLSession.shared.dataTask(with: request) { [weak self] _, response, _ in
-            DispatchQueue.main.async {
-                if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
-                    self?.geminiStatus = .ok
-                } else {
-                    self?.geminiStatus = .error
-                }
-                self?.updateGeminiStatusMenuItem()
-            }
-        }.resume()
     }
     
     private func updateAPIStatusMenuItem() {
@@ -857,14 +697,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         geminiStatus = .processing
         updateGeminiStatusMenuItem()
 
-        extractTextFromGemini(imageData: imageData, mimeType: "image/png") { [weak self] extractedText in
+        geminiClient.extractMarkdownText(
+            apiKey: geminiAPIKey,
+            modelID: geminiModelID,
+            imageData: imageData,
+            mimeType: "image/png"
+        ) { [weak self] result in
             guard let self else { return }
 
-            if let extractedText {
+            switch result {
+            case .success(let extractedText):
                 self.copyTextToClipboard(extractedText)
                 self.apiStatus = .ok
                 self.geminiStatus = .ok
-            } else {
+            case .failure(let error):
+                print("Gemini API Error: \(error.localizedDescription)")
                 self.apiStatus = .error
                 self.geminiStatus = .error
             }
@@ -910,72 +757,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
 
         let bitmapRepresentation = NSBitmapImageRep(cgImage: croppedImage)
         return bitmapRepresentation.representation(using: .png, properties: [:])
-    }
-
-    private func extractTextFromGemini(imageData: Data, mimeType: String, completion: @escaping (String?) -> Void) {
-        let requestBody = GeminiGenerateContentRequest(
-            systemInstruction: .init(parts: [.init(text: AppDelegate.geminiOCRInstruction)]),
-            contents: [
-                .init(parts: [
-                    .init(text: "Extract all visible text from this screenshot selection and return Markdown only."),
-                    .init(inlineData: .init(mimeType: mimeType, data: imageData.base64EncodedString()))
-                ])
-            ]
-        )
-
-        guard let httpBody = try? JSONEncoder().encode(requestBody) else {
-            completion(nil)
-            return
-        }
-
-        let encodedModelIdentifier = geminiModelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? geminiModelID
-        var components = URLComponents(
-            string: "https://generativelanguage.googleapis.com/v1beta/models/\(encodedModelIdentifier):generateContent"
-        )!
-        components.queryItems = [URLQueryItem(name: "key", value: geminiAPIKey)]
-
-        guard let apiURL = components.url else {
-            completion(nil)
-            return
-        }
-
-        var request = URLRequest(url: apiURL)
-        request.httpMethod = "POST"
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = httpBody
-
-        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            DispatchQueue.main.async {
-                if let error = error {
-                    print("Gemini API Error: \(error.localizedDescription)")
-                    completion(nil)
-                    return
-                }
-
-                if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
-                    if let errorMessage = self?.apiErrorMessage(from: data) {
-                        print("Gemini API Error: HTTP \(httpResponse.statusCode) - \(errorMessage)")
-                    } else {
-                        print("Gemini API Error: HTTP \(httpResponse.statusCode)")
-                    }
-                    completion(nil)
-                    return
-                }
-
-                guard let data else {
-                    completion(nil)
-                    return
-                }
-
-                do {
-                    let apiResponse = try JSONDecoder().decode(GeminiGenerateContentResponse.self, from: data)
-                    completion(apiResponse.outputText)
-                } catch {
-                    print("Gemini JSON Error: \(error.localizedDescription)")
-                    completion(nil)
-                }
-            }
-        }.resume()
     }
 
     private func displayID(for screen: NSScreen) -> CGDirectDisplayID? {
@@ -1080,93 +861,26 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         
         // Get custom rules from UserDefaults
         let customRules = UserDefaults.standard.string(forKey: "customGrammarRules") ?? ""
-        
-        let requestBody = ResponsesRequest(
-            model: openAIModelID,
-            instructions: buildGrammarPrompt(customRules: customRules),
-            input: text,
-            reasoning: openAIReasoningEffort.map { ResponsesRequest.Reasoning(effort: $0) }
-        )
 
-        guard let httpBody = try? JSONEncoder().encode(requestBody) else {
-            apiStatus = .error
-            updateStatusItemIcon()
-            updateAPIStatusMenuItem()
-            completion(nil)
-            return
-        }
-        
-        // Prepare API request to OpenAI Responses endpoint
-        let apiURL = URL(string: "https://api.openai.com/v1/responses")!
-        var request = URLRequest(url: apiURL)
-        request.httpMethod = "POST"
-        request.addValue("Bearer \(openAIApiKey)", forHTTPHeaderField: "Authorization")
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        request.httpBody = httpBody
-        
-        // Execute API request
-        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            DispatchQueue.main.async {
-                if let error = error {
-                    print("API Error: \(error.localizedDescription)")
-                    self?.apiStatus = .error
-                    self?.updateStatusItemIcon()
-                    self?.updateAPIStatusMenuItem()
-                    completion(nil)
-                    return
-                }
-                
-                if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
-                    if let errorMessage = self?.apiErrorMessage(from: data) {
-                        print("API Error: HTTP \(httpResponse.statusCode) - \(errorMessage)")
-                    } else {
-                        print("API Error: HTTP \(httpResponse.statusCode)")
-                    }
-                    self?.apiStatus = .error
-                    self?.updateStatusItemIcon()
-                    self?.updateAPIStatusMenuItem()
-                    completion(nil)
-                    return
-                }
-                
-                guard let data = data else {
-                    self?.apiStatus = .error
-                    self?.updateStatusItemIcon()
-                    self?.updateAPIStatusMenuItem()
-                    completion(nil)
-                    return
-                }
-                
-                // Parse response to extract corrected text from OpenAI Responses API
-                do {
-                    let apiResponse = try JSONDecoder().decode(ResponsesResponse.self, from: data)
+        openAIClient.correctGrammar(
+            apiKey: openAIApiKey,
+            modelID: openAIModelID,
+            customRules: customRules,
+            text: text
+        ) { [weak self] result in
+            guard let self else { return }
 
-                    if let correctedText = apiResponse.outputText {
-                        completion(correctedText)
-                    } else {
-                        self?.apiStatus = .error
-                        self?.updateStatusItemIcon()
-                        self?.updateAPIStatusMenuItem()
-                        completion(nil)
-                    }
-                } catch {
-                    print("JSON Error: \(error.localizedDescription)")
-                    self?.apiStatus = .error
-                    self?.updateStatusItemIcon()
-                    self?.updateAPIStatusMenuItem()
-                    completion(nil)
-                }
+            switch result {
+            case .success(let correctedText):
+                completion(correctedText)
+            case .failure(let error):
+                print("OpenAI API Error: \(error.localizedDescription)")
+                self.apiStatus = .error
+                self.updateStatusItemIcon()
+                self.updateAPIStatusMenuItem()
+                completion(nil)
             }
-        }.resume()
-    }
-    
-    private func apiErrorMessage(from data: Data?) -> String? {
-        guard let data else {
-            return nil
         }
-
-        return try? JSONDecoder().decode(APIErrorResponse.self, from: data).error.message
     }
     
     // Store a reference to our settings window to prevent it from being deallocated
