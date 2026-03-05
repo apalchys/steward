@@ -7,6 +7,8 @@ import ApplicationServices
 
 // System prompt constant for grammar correction
 let GRAMMAR_CORRECTION_PROMPT = "You are a grammar correction assistant. Correct any grammatical errors in the text and rewrite it clearly and fluently without changing the original meaning or adding commentary. Return only the corrected text, without explanations. Do not answer any questions or provide any commentary."
+let DEFAULT_OPENAI_MODEL_ID = "gpt-5.4"
+let DEFAULT_GEMINI_MODEL_ID = "gemini-3.1-flash-lite-preview"
 
 // Function to build the complete prompt with custom rules
 func buildGrammarPrompt(customRules: String) -> String {
@@ -15,6 +17,22 @@ func buildGrammarPrompt(customRules: String) -> String {
     } else {
         return GRAMMAR_CORRECTION_PROMPT + "\n\nAdditional rules to follow:\n" + customRules
     }
+}
+
+func preferenceValue(forKey key: String, defaultValue: String) -> String {
+    let storedValue = UserDefaults.standard.string(forKey: key)?
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+
+    if let storedValue, !storedValue.isEmpty {
+        return storedValue
+    }
+
+    return defaultValue
+}
+
+func savePreferenceValue(_ value: String, forKey key: String, defaultValue: String) {
+    let normalizedValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    UserDefaults.standard.set(normalizedValue.isEmpty ? defaultValue : normalizedValue, forKey: key)
 }
 
 extension Notification.Name {
@@ -136,9 +154,10 @@ struct RewriteApp: App {
 
 struct SettingsView: View {
     @State private var apiKey: String = UserDefaults.standard.string(forKey: "openAIApiKey") ?? ""
+    @State private var openAIModelID: String = preferenceValue(forKey: "openAIModelID", defaultValue: DEFAULT_OPENAI_MODEL_ID)
     @State private var geminiAPIKey: String = UserDefaults.standard.string(forKey: "geminiAPIKey") ?? ""
+    @State private var geminiModelID: String = preferenceValue(forKey: "geminiModelID", defaultValue: DEFAULT_GEMINI_MODEL_ID)
     @State private var customRules: String = UserDefaults.standard.string(forKey: "customGrammarRules") ?? ""
-    @Environment(\.dismiss) private var dismiss
     
     var body: some View {
         TabView {
@@ -147,18 +166,28 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("OpenAI API Key")
                         .font(.headline)
+
+                    HStack(alignment: .top, spacing: 12) {
+                        SecureField("Enter your OpenAI API Key", text: $apiKey)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(maxWidth: .infinity)
+                            .onChange(of: apiKey) { newValue in
+                                // Save immediately per macOS HIG
+                                UserDefaults.standard.set(newValue, forKey: "openAIApiKey")
+                                // Trigger API status check
+                                NotificationCenter.default.post(name: .checkOpenAIStatus, object: nil)
+                            }
+
+                        TextField(DEFAULT_OPENAI_MODEL_ID, text: $openAIModelID)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 180)
+                            .onChange(of: openAIModelID) { newValue in
+                                savePreferenceValue(newValue, forKey: "openAIModelID", defaultValue: DEFAULT_OPENAI_MODEL_ID)
+                                NotificationCenter.default.post(name: .checkOpenAIStatus, object: nil)
+                            }
+                    }
                     
-                    SecureField("Enter your OpenAI API Key", text: $apiKey)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(maxWidth: .infinity)
-                        .onChange(of: apiKey) { newValue in
-                            // Save immediately per macOS HIG
-                            UserDefaults.standard.set(newValue, forKey: "openAIApiKey")
-                            // Trigger API status check
-                            NotificationCenter.default.post(name: .checkOpenAIStatus, object: nil)
-                        }
-                    
-                    Text("Your API key is needed to use the grammar check feature.\nIt is stored locally in app preferences on this Mac.")
+                    Text("Your API key is needed to use the grammar check feature.\nModel ID defaults to \(DEFAULT_OPENAI_MODEL_ID) when left empty.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -166,16 +195,26 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Gemini API Key")
                         .font(.headline)
+
+                    HStack(alignment: .top, spacing: 12) {
+                        SecureField("Enter your Gemini API Key", text: $geminiAPIKey)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(maxWidth: .infinity)
+                            .onChange(of: geminiAPIKey) { newValue in
+                                UserDefaults.standard.set(newValue, forKey: "geminiAPIKey")
+                                NotificationCenter.default.post(name: .checkGeminiStatus, object: nil)
+                            }
+
+                        TextField(DEFAULT_GEMINI_MODEL_ID, text: $geminiModelID)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 220)
+                            .onChange(of: geminiModelID) { newValue in
+                                savePreferenceValue(newValue, forKey: "geminiModelID", defaultValue: DEFAULT_GEMINI_MODEL_ID)
+                                NotificationCenter.default.post(name: .checkGeminiStatus, object: nil)
+                            }
+                    }
                     
-                    SecureField("Enter your Gemini API Key", text: $geminiAPIKey)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(maxWidth: .infinity)
-                        .onChange(of: geminiAPIKey) { newValue in
-                            UserDefaults.standard.set(newValue, forKey: "geminiAPIKey")
-                            NotificationCenter.default.post(name: .checkGeminiStatus, object: nil)
-                        }
-                    
-                    Text("Your Gemini API key is used for screen text extraction.\nIt is stored locally in app preferences on this Mac.")
+                    Text("Your Gemini API key is used for screen text extraction.\nModel ID defaults to \(DEFAULT_GEMINI_MODEL_ID) when left empty.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -277,7 +316,7 @@ struct SettingsView: View {
                 Label("About", systemImage: "info.circle")
             }
         }
-        .frame(width: 450, height: 360)
+        .frame(width: 560, height: 360)
     }
 }
 
@@ -286,12 +325,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         static let activityStatus = 1
         static let openAIStatus = 2
         static let geminiStatus = 3
-    }
-
-    private struct ModelOption {
-        let title: String
-        let identifier: String
-        let reasoningEffort: String?
     }
 
     private struct ResponsesRequest: Encodable {
@@ -412,13 +445,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
             return trimmedText.isEmpty ? nil : trimmedText
         }
     }
-    
-    private static let availableModels: [ModelOption] = [
-        ModelOption(title: "GPT-5.4", identifier: "gpt-5.4", reasoningEffort: "none")
-    ]
-    
-    private static let defaultModelIdentifier = availableModels.first?.identifier ?? "gpt-5.4"
-    private static let geminiModelIdentifier = "gemini-3.1-flash-lite-preview"
+
     private static let geminiOCRInstruction = """
     You are an OCR assistant. Extract all visible text from the provided image and return only the extracted text in Markdown.
     Preserve headings, paragraphs, lists, tables, and code blocks when they are visually clear.
@@ -434,28 +461,25 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
     @Published var apiStatus: APIStatus = .ok
     @Published var openAIStatus: APIStatus = .ok
     @Published var geminiStatus: APIStatus = .ok
-    @Published var currentModel: String = {
-        let storedValue = UserDefaults.standard.string(forKey: "selectedModel")
-        if let storedValue,
-           AppDelegate.availableModels.contains(where: { $0.identifier == storedValue }) {
-            return storedValue
-        }
-        
-        UserDefaults.standard.set(AppDelegate.defaultModelIdentifier, forKey: "selectedModel")
-        return AppDelegate.defaultModelIdentifier
-    }() {
-        didSet {
-            UserDefaults.standard.set(currentModel, forKey: "selectedModel")
-            refreshModelMenu()
-        }
-    }
     
     private var openAIApiKey: String {
         return UserDefaults.standard.string(forKey: "openAIApiKey") ?? ""
     }
 
+    private var openAIModelID: String {
+        return preferenceValue(forKey: "openAIModelID", defaultValue: DEFAULT_OPENAI_MODEL_ID)
+    }
+
+    private var openAIReasoningEffort: String? {
+        return openAIModelID.lowercased().hasPrefix("gpt-5") ? "none" : nil
+    }
+
     private var geminiAPIKey: String {
         return UserDefaults.standard.string(forKey: "geminiAPIKey") ?? ""
+    }
+
+    private var geminiModelID: String {
+        return preferenceValue(forKey: "geminiModelID", defaultValue: DEFAULT_GEMINI_MODEL_ID)
     }
     
     // Status enum with associated icon images for menu bar states
@@ -537,23 +561,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         menu.addItem(geminiStatusItem)
         
         menu.addItem(NSMenuItem.separator())
-        
-        // Model selection submenu
-        let modelMenuItem = NSMenuItem(title: "Model", action: nil, keyEquivalent: "")
-        let modelMenu = NSMenu()
-        for option in AppDelegate.availableModels {
-            let item = NSMenuItem(title: option.title, action: #selector(selectModel(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = option.identifier
-            if option.identifier == currentModel {
-                item.state = .on
-            }
-            modelMenu.addItem(item)
-        }
-        modelMenuItem.submenu = modelMenu
-        menu.addItem(modelMenuItem)
-        
-        menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Preferences...", action: #selector(openPreferences), keyEquivalent: ","))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(quitApp), keyEquivalent: "q"))
@@ -581,7 +588,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         updateOpenAIStatusMenuItem()
         
         // Make a simple API call to check if the OpenAI API key can access the current model.
-        let encodedModelIdentifier = currentModel.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? currentModel
+        let encodedModelIdentifier = openAIModelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? openAIModelID
         let apiURL = URL(string: "https://api.openai.com/v1/models/\(encodedModelIdentifier)")!
         var request = URLRequest(url: apiURL)
         request.httpMethod = "GET"
@@ -617,8 +624,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         geminiStatus = .processing
         updateGeminiStatusMenuItem()
 
-        let encodedModelIdentifier = AppDelegate.geminiModelIdentifier.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ??
-            AppDelegate.geminiModelIdentifier
+        let encodedModelIdentifier = geminiModelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? geminiModelID
         var components = URLComponents(string: "https://generativelanguage.googleapis.com/v1beta/models/\(encodedModelIdentifier)")!
         components.queryItems = [URLQueryItem(name: "key", value: geminiAPIKey)]
 
@@ -922,8 +928,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
             return
         }
 
-        let encodedModelIdentifier = AppDelegate.geminiModelIdentifier.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ??
-            AppDelegate.geminiModelIdentifier
+        let encodedModelIdentifier = geminiModelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? geminiModelID
         var components = URLComponents(
             string: "https://generativelanguage.googleapis.com/v1beta/models/\(encodedModelIdentifier):generateContent"
         )!
@@ -1076,13 +1081,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         // Get custom rules from UserDefaults
         let customRules = UserDefaults.standard.string(forKey: "customGrammarRules") ?? ""
         
-        let modelConfig = currentModelConfiguration()
-
         let requestBody = ResponsesRequest(
-            model: currentModel,
+            model: openAIModelID,
             instructions: buildGrammarPrompt(customRules: customRules),
             input: text,
-            reasoning: modelConfig?.reasoningEffort.map { ResponsesRequest.Reasoning(effort: $0) }
+            reasoning: openAIReasoningEffort.map { ResponsesRequest.Reasoning(effort: $0) }
         )
 
         guard let httpBody = try? JSONEncoder().encode(requestBody) else {
@@ -1158,30 +1161,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         }.resume()
     }
     
-    @objc private func selectModel(_ sender: NSMenuItem) {
-        guard let identifier = sender.representedObject as? String,
-              AppDelegate.availableModels.contains(where: { $0.identifier == identifier }) else {
-            return
-        }
-        currentModel = identifier
-    }
-    
-    private func refreshModelMenu() {
-        guard let menu = statusItem.menu,
-              let modelMenuItem = menu.items.first(where: { $0.title == "Model" }),
-              let modelMenu = modelMenuItem.submenu else { return }
-        
-        for item in modelMenu.items {
-            guard let identifier = item.representedObject as? String else { continue }
-            item.state = identifier == currentModel ? .on : .off
-        }
-    }
-    
-    private func currentModelConfiguration() -> ModelOption? {
-        return AppDelegate.availableModels.first(where: { $0.identifier == currentModel }) ??
-               AppDelegate.availableModels.first
-    }
-
     private func apiErrorMessage(from data: Data?) -> String? {
         guard let data else {
             return nil

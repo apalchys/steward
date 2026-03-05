@@ -22,14 +22,15 @@
 4. Set up your API keys:
    - Click on the app icon in the menu bar
    - Select "Preferences..." (or press Command+,)
-   - Enter your OpenAI API key for grammar correction
-   - Enter your Gemini API key for screen text extraction
+   - Enter your OpenAI API key and optional model ID for grammar correction
+   - Enter your Gemini API key and optional model ID for screen text extraction
+   - Leaving model IDs empty falls back to `gpt-5.4` and `gemini-3.1-flash-lite-preview`
 5. To fix grammar, select text in any application and press `Command+Shift+F`
 6. To extract screen text, press `Command+Shift+R`, drag to select an area, and wait for the Markdown text to land in your clipboard
 
 ## API Key Information
 
-The application requires an OpenAI API key for grammar correction and a Gemini API key for screen OCR. Your API keys:
+The application requires an OpenAI API key for grammar correction and a Gemini API key for screen OCR. Your API keys and model IDs:
 - Are stored locally in UserDefaults
 - Are only sent to the corresponding model provider when that feature runs
 - Can be updated at any time through the Preferences menu

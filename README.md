@@ -14,7 +14,7 @@ A macOS application that runs in the background and fixes grammar errors in sele
 - Uses OpenAI's Responses API for grammar corrections
 - Lets you select a screen region and extract its text as Markdown with Gemini 3.1 Flash-Lite Preview
 - Copies extracted screen text directly to the clipboard
-- Stores your API keys locally in app preferences
+- Stores your API keys and model IDs locally in app preferences
 - Replaces original text with corrected version
 - Preserves clipboard contents during grammar correction
 
@@ -35,8 +35,9 @@ See BUILD_INSTRUCTIONS.md
 5. Set up your API keys:
    - Click on the app icon in the menu bar
    - Select "Preferences..." (or press Command+,)
-   - Enter your OpenAI API key for grammar correction
-   - Enter your Gemini API key for screen text extraction
+   - Enter your OpenAI API key and optional model ID for grammar correction
+   - Enter your Gemini API key and optional model ID for screen text extraction
+   - Leaving model IDs empty falls back to `gpt-5.4` and `gemini-3.1-flash-lite-preview`
 
 ## Usage
 
