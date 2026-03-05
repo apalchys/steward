@@ -61,15 +61,45 @@ final class ScreenSelectionOverlayView: NSView {
 
     private var startPoint: NSPoint?
     private var currentPoint: NSPoint?
+    private var cursorTrackingArea: NSTrackingArea?
 
     override var acceptsFirstResponder: Bool { true }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         window?.makeFirstResponder(self)
+        window?.invalidateCursorRects(for: self)
+        NSCursor.crosshair.set()
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+
+        if let cursorTrackingArea {
+            removeTrackingArea(cursorTrackingArea)
+        }
+
+        let trackingArea = NSTrackingArea(
+            rect: bounds,
+            options: [.activeAlways, .cursorUpdate, .enabledDuringMouseDrag, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(trackingArea)
+        cursorTrackingArea = trackingArea
+    }
+
+    override func resetCursorRects() {
+        discardCursorRects()
+        addCursorRect(bounds, cursor: .crosshair)
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        NSCursor.crosshair.set()
     }
 
     override func mouseDown(with event: NSEvent) {
+        NSCursor.crosshair.set()
         let point = convert(event.locationInWindow, from: nil)
         startPoint = point
         currentPoint = point
@@ -77,11 +107,13 @@ final class ScreenSelectionOverlayView: NSView {
     }
 
     override func mouseDragged(with event: NSEvent) {
+        NSCursor.crosshair.set()
         currentPoint = convert(event.locationInWindow, from: nil)
         needsDisplay = true
     }
 
     override func mouseUp(with event: NSEvent) {
+        NSCursor.crosshair.set()
         currentPoint = convert(event.locationInWindow, from: nil)
         needsDisplay = true
 
