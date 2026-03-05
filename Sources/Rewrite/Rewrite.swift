@@ -332,6 +332,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
     private var screenOCRHotKey: HotKey?
     private var selectionWindows: [NSWindow] = []
     private var isScreenSelectionActive = false
+    private var lastOperationFailed = false
     @Published var isProcessing = false
     @Published var apiStatus: APIStatus = .ok
     @Published var openAIStatus: APIStatus = .ok
@@ -409,6 +410,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
             button.image = apiStatus.statusImage
         }
     }
+
+    private func refreshOverallStatus() {
+        if isProcessing {
+            apiStatus = .processing
+        } else if lastOperationFailed || openAIStatus == .error || geminiStatus == .error {
+            apiStatus = .error
+        } else if openAIStatus == .processing || geminiStatus == .processing {
+            apiStatus = .processing
+        } else {
+            apiStatus = .ok
+        }
+    }
+
+    private func refreshStatusUI() {
+        refreshOverallStatus()
+        updateStatusItemIcon()
+        updateAPIStatusMenuItem()
+    }
     
     private func setupMenu() {
         let menu = NSMenu()
@@ -437,7 +456,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(quitApp), keyEquivalent: "q"))
         
         statusItem.menu = menu
-        updateAPIStatusMenuItem()
+        refreshStatusUI()
         updateOpenAIStatusMenuItem()
         updateGeminiStatusMenuItem()
     }
@@ -446,28 +465,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         // If no API key is set, show error state and return
         guard !openAIApiKey.isEmpty else {
             openAIStatus = .error
-            if !isProcessing {
-                apiStatus = .error
-            }
-            updateStatusItemIcon()
-            updateAPIStatusMenuItem()
+            refreshStatusUI()
             updateOpenAIStatusMenuItem()
             return
         }
 
         openAIStatus = .processing
+        refreshStatusUI()
         updateOpenAIStatusMenuItem()
 
         openAIClient.checkAccess(apiKey: openAIApiKey, modelID: openAIModelID) { [weak self] hasAccess in
             guard let self else { return }
 
             self.openAIStatus = hasAccess ? .ok : .error
-            if !self.isProcessing {
-                self.apiStatus = hasAccess ? .ok : .error
-            }
-
-            self.updateStatusItemIcon()
-            self.updateAPIStatusMenuItem()
+            self.refreshStatusUI()
             self.updateOpenAIStatusMenuItem()
         }
     }
@@ -475,16 +486,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
     @objc private func checkGeminiStatus() {
         guard !geminiAPIKey.isEmpty else {
             geminiStatus = .error
+            refreshStatusUI()
             updateGeminiStatusMenuItem()
             return
         }
 
         geminiStatus = .processing
+        refreshStatusUI()
         updateGeminiStatusMenuItem()
 
         geminiClient.checkAccess(apiKey: geminiAPIKey, modelID: geminiModelID) { [weak self] hasAccess in
             guard let self else { return }
             self.geminiStatus = hasAccess ? .ok : .error
+            self.refreshStatusUI()
             self.updateGeminiStatusMenuItem()
         }
     }
@@ -497,15 +511,27 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
             case .ok:
                 apiStatusItem.title = "Status: Ready"
             case .error:
-                if openAIApiKey.isEmpty {
+                if lastOperationFailed {
+                    apiStatusItem.title = "Status: Last operation failed"
+                } else if openAIStatus == .error && openAIApiKey.isEmpty {
                     apiStatusItem.title = "Status: OpenAI API Key Missing"
-                } else if geminiAPIKey.isEmpty {
+                } else if geminiStatus == .error && geminiAPIKey.isEmpty {
                     apiStatusItem.title = "Status: Gemini API Key Missing"
+                } else if openAIStatus == .error && geminiStatus != .error {
+                    apiStatusItem.title = "Status: OpenAI Error"
+                } else if geminiStatus == .error && openAIStatus != .error {
+                    apiStatusItem.title = "Status: Gemini Error"
                 } else {
                     apiStatusItem.title = "Status: Error"
                 }
             case .processing:
-                apiStatusItem.title = isScreenSelectionActive ? "Status: Select an area..." : "Status: Processing..."
+                if isScreenSelectionActive {
+                    apiStatusItem.title = "Status: Select an area..."
+                } else if isProcessing {
+                    apiStatusItem.title = "Status: Processing..."
+                } else {
+                    apiStatusItem.title = "Status: Checking services..."
+                }
             }
         }
     }
@@ -557,12 +583,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
     
     private func handleGrammarHotKeyPress() {
         guard !isProcessing else { return }
+        lastOperationFailed = false
         isProcessing = true
         
         // Update UI to show processing state
-        apiStatus = .processing
-        updateStatusItemIcon()
-        updateAPIStatusMenuItem()
+        refreshStatusUI()
         
         // Get selected text
         if let selectedText = getSelectedText() {
@@ -574,19 +599,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
                     self.replaceSelectedText(with: correctedText)
                     
                     // Update UI to show success state
-                    self.apiStatus = .ok
+                    self.lastOperationFailed = false
+                    self.openAIStatus = .ok
                 }
                 // Note: If correctedText is nil, fixGrammar already set apiStatus to .error
                 
                 self.isProcessing = false
-                self.updateStatusItemIcon()
-                self.updateAPIStatusMenuItem()
+                self.refreshStatusUI()
+                self.updateOpenAIStatusMenuItem()
             }
         } else {
             isProcessing = false
-            apiStatus = .ok
-            updateStatusItemIcon()
-            updateAPIStatusMenuItem()
+            refreshStatusUI()
         }
     }
 
@@ -594,25 +618,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         guard !isProcessing else { return }
 
         guard !geminiAPIKey.isEmpty else {
-            apiStatus = .error
-            updateStatusItemIcon()
-            updateAPIStatusMenuItem()
+            geminiStatus = .error
+            refreshStatusUI()
+            updateGeminiStatusMenuItem()
             openPreferences()
             return
         }
 
         guard ensureScreenCaptureAccess() else {
-            apiStatus = .error
-            updateStatusItemIcon()
-            updateAPIStatusMenuItem()
+            lastOperationFailed = true
+            refreshStatusUI()
             return
         }
 
+        lastOperationFailed = false
         isProcessing = true
         isScreenSelectionActive = true
-        apiStatus = .processing
-        updateStatusItemIcon()
-        updateAPIStatusMenuItem()
+        refreshStatusUI()
         beginScreenSelection()
     }
 
@@ -662,19 +684,33 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
     private func cancelScreenSelection() {
         guard isScreenSelectionActive else { return }
         endScreenSelectionUI()
+        lastOperationFailed = false
         isProcessing = false
-        apiStatus = .ok
-        updateStatusItemIcon()
-        updateAPIStatusMenuItem()
+        refreshStatusUI()
     }
 
     private func endScreenSelectionUI() {
         isScreenSelectionActive = false
-
-        selectionWindows.forEach { $0.close() }
+        let windowsToClose = selectionWindows
         selectionWindows.removeAll()
 
         NSCursor.pop()
+
+        windowsToClose.forEach { window in
+            window.ignoresMouseEvents = true
+            if let overlayView = window.contentView as? ScreenSelectionOverlayView {
+                overlayView.onSelectionFinished = nil
+                overlayView.onSelectionCancelled = nil
+            }
+            window.orderOut(nil)
+        }
+
+        DispatchQueue.main.async {
+            windowsToClose.forEach { window in
+                window.contentView = nil
+                window.close()
+            }
+        }
     }
 
     private func ensureScreenCaptureAccess() -> Bool {
@@ -687,14 +723,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
 
     private func extractTextFromSelectedScreenArea(on screen: NSScreen, selectionRect: CGRect) {
         guard let imageData = captureSelectionImageData(on: screen, selectionRect: selectionRect) else {
-            apiStatus = .error
+            lastOperationFailed = true
             isProcessing = false
-            updateStatusItemIcon()
-            updateAPIStatusMenuItem()
+            refreshStatusUI()
             return
         }
 
         geminiStatus = .processing
+        refreshStatusUI()
         updateGeminiStatusMenuItem()
 
         geminiClient.extractMarkdownText(
@@ -708,17 +744,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
             switch result {
             case .success(let extractedText):
                 self.copyTextToClipboard(extractedText)
-                self.apiStatus = .ok
+                self.lastOperationFailed = false
                 self.geminiStatus = .ok
             case .failure(let error):
                 print("Gemini API Error: \(error.localizedDescription)")
-                self.apiStatus = .error
+                self.lastOperationFailed = true
                 self.geminiStatus = .error
             }
 
             self.isProcessing = false
-            self.updateStatusItemIcon()
-            self.updateAPIStatusMenuItem()
+            self.refreshStatusUI()
             self.updateGeminiStatusMenuItem()
         }
     }
@@ -845,9 +880,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         
         // Check if API key is set
         guard !openAIApiKey.isEmpty else {
-            apiStatus = .error
-            updateStatusItemIcon()
-            updateAPIStatusMenuItem()
+            openAIStatus = .error
+            lastOperationFailed = true
+            refreshStatusUI()
+            updateOpenAIStatusMenuItem()
             // Open preferences window to prompt user to enter API key
             openPreferences()
             completion(nil)
@@ -855,9 +891,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         }
         
         // Already set to processing in handleGrammarHotKeyPress, but ensure consistency
-        apiStatus = .processing
-        updateStatusItemIcon()
-        updateAPIStatusMenuItem()
+        refreshStatusUI()
         
         // Get custom rules from UserDefaults
         let customRules = UserDefaults.standard.string(forKey: "customGrammarRules") ?? ""
@@ -875,9 +909,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
                 completion(correctedText)
             case .failure(let error):
                 print("OpenAI API Error: \(error.localizedDescription)")
-                self.apiStatus = .error
-                self.updateStatusItemIcon()
-                self.updateAPIStatusMenuItem()
+                self.lastOperationFailed = true
+                self.openAIStatus = .error
+                self.refreshStatusUI()
+                self.updateOpenAIStatusMenuItem()
                 completion(nil)
             }
         }

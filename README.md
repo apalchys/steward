@@ -1,6 +1,6 @@
 # Rewrite
 
-A macOS application that runs in the background and fixes grammar errors in selected text using OpenAI's Responses API.
+A macOS menu bar application for grammar correction and screen OCR using OpenAI's Responses API and Gemini.
 
 <img width="234" alt="image" src="https://github.com/user-attachments/assets/621e8498-a324-4397-ba46-504dd5dbe2f0" />
 
@@ -10,9 +10,9 @@ A macOS application that runs in the background and fixes grammar errors in sele
 - Runs as a background application with menu bar icon
 - Activated with hotkeys for grammar (`Command+Shift+F`) and screen OCR (`Command+Shift+R`)
 - Automatically captures selected text from any application
-- Fixes grammar using OpenAI's GPT-5.4
+- Fixes grammar with OpenAI's Responses API and defaults to `gpt-5.4`
 - Uses OpenAI's Responses API for grammar corrections
-- Lets you select a screen region and extract its text as Markdown with Gemini 3.1 Flash-Lite Preview
+- Lets you select a screen region and extract its text as Markdown with Gemini, defaulting to `gemini-3.1-flash-lite-preview`
 - Copies extracted screen text directly to the clipboard
 - Stores your API keys and model IDs locally in app preferences
 - Replaces original text with corrected version
