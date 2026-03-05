@@ -61,40 +61,12 @@ final class ScreenSelectionOverlayView: NSView {
 
     private var startPoint: NSPoint?
     private var currentPoint: NSPoint?
-    private var cursorTrackingArea: NSTrackingArea?
 
     override var acceptsFirstResponder: Bool { true }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         window?.makeFirstResponder(self)
-        window?.invalidateCursorRects(for: self)
-        NSCursor.crosshair.set()
-    }
-
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-
-        if let cursorTrackingArea {
-            removeTrackingArea(cursorTrackingArea)
-        }
-
-        let trackingArea = NSTrackingArea(
-            rect: bounds,
-            options: [.activeAlways, .cursorUpdate, .enabledDuringMouseDrag, .inVisibleRect],
-            owner: self,
-            userInfo: nil
-        )
-        addTrackingArea(trackingArea)
-        cursorTrackingArea = trackingArea
-    }
-
-    override func resetCursorRects() {
-        discardCursorRects()
-        addCursorRect(bounds, cursor: .crosshair)
-    }
-
-    override func cursorUpdate(with event: NSEvent) {
         NSCursor.crosshair.set()
     }
 
@@ -168,6 +140,12 @@ final class ScreenSelectionOverlayView: NSView {
             width: abs(currentPoint.x - startPoint.x),
             height: abs(currentPoint.y - startPoint.y)
         )
+    }
+
+    func resetSelection() {
+        startPoint = nil
+        currentPoint = nil
+        needsDisplay = true
     }
 }
 
@@ -671,25 +649,33 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
     }
 
     private func beginScreenSelection() {
-        selectionWindows.removeAll()
         NSApp.activate(ignoringOtherApps: true)
         NSCursor.crosshair.push()
 
-        for screen in NSScreen.screens {
+        let screens = NSScreen.screens
+
+        while selectionWindows.count < screens.count {
             let window = ScreenSelectionWindow(
-                contentRect: screen.frame,
+                contentRect: .zero,
                 styleMask: .borderless,
                 backing: .buffered,
-                defer: false,
-                screen: screen
+                defer: false
             )
             window.backgroundColor = .clear
             window.isOpaque = false
             window.hasShadow = false
             window.level = .screenSaver
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+            window.contentView = ScreenSelectionOverlayView(frame: .zero)
+            selectionWindows.append(window)
+        }
 
-            let overlayView = ScreenSelectionOverlayView(frame: CGRect(origin: .zero, size: screen.frame.size))
+        for (index, screen) in screens.enumerated() {
+            let window = selectionWindows[index]
+            let overlayView = window.contentView as? ScreenSelectionOverlayView ?? ScreenSelectionOverlayView(frame: .zero)
+
+            overlayView.frame = CGRect(origin: .zero, size: screen.frame.size)
+            overlayView.resetSelection()
             overlayView.onSelectionFinished = { [weak self] localRect in
                 let screenRect = localRect.offsetBy(dx: screen.frame.minX, dy: screen.frame.minY)
                 self?.finishScreenSelection(on: screen, selectionRect: screenRect)
@@ -698,9 +684,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
                 self?.cancelScreenSelection()
             }
 
-            window.contentView = overlayView
+            if window.contentView !== overlayView {
+                window.contentView = overlayView
+            }
+
+            window.setFrame(screen.frame, display: false)
+            window.ignoresMouseEvents = false
             window.makeKeyAndOrderFront(nil)
-            selectionWindows.append(window)
+        }
+
+        if selectionWindows.count > screens.count {
+            for index in screens.count..<selectionWindows.count {
+                let window = selectionWindows[index]
+                window.ignoresMouseEvents = true
+                window.orderOut(nil)
+            }
         }
     }
 
@@ -723,25 +721,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
 
     private func endScreenSelectionUI() {
         isScreenSelectionActive = false
-        let windowsToClose = selectionWindows
-        selectionWindows.removeAll()
 
         NSCursor.pop()
 
-        windowsToClose.forEach { window in
+        selectionWindows.forEach { window in
             window.ignoresMouseEvents = true
             if let overlayView = window.contentView as? ScreenSelectionOverlayView {
                 overlayView.onSelectionFinished = nil
                 overlayView.onSelectionCancelled = nil
+                overlayView.resetSelection()
             }
             window.orderOut(nil)
-        }
-
-        DispatchQueue.main.async {
-            windowsToClose.forEach { window in
-                window.contentView = nil
-                window.close()
-            }
         }
     }
 
