@@ -5,25 +5,25 @@ set -e
 
 # Clean up any previous app bundle
 echo "Removing previous app bundle if it exists..."
-rm -rf Rewrite.app
+rm -rf Steward.app
 
-echo "Building Rewrite app in release configuration..."
+echo "Building Steward app in release configuration..."
 swift build -c release
 
 # Create app bundle structure
 echo "Creating app bundle structure..."
-mkdir -p Rewrite.app/Contents/{MacOS,Resources,Frameworks}
+mkdir -p Steward.app/Contents/{MacOS,Resources,Frameworks}
 
 # Copy binary
 echo "Copying executable..."
-cp -f .build/release/Rewrite Rewrite.app/Contents/MacOS/
+cp -f .build/release/Steward Steward.app/Contents/MacOS/
 
 # Set executable permissions
-chmod +x Rewrite.app/Contents/MacOS/Rewrite
+chmod +x Steward.app/Contents/MacOS/Steward
 
 # Create Info.plist
 echo "Creating Info.plist..."
-cat > Rewrite.app/Contents/Info.plist << EOF
+cat > Steward.app/Contents/Info.plist << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -31,15 +31,15 @@ cat > Rewrite.app/Contents/Info.plist << EOF
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleExecutable</key>
-    <string>Rewrite</string>
+    <string>Steward</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
-    <string>com.palchys.rewrite</string>
+    <string>com.apalchys.steward</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>Rewrite</string>
+    <string>Steward</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -64,18 +64,18 @@ EOF
 
 # Copy app icon if it exists
 echo "Copying app icon..."
-mkdir -p Rewrite.app/Contents/Resources
+mkdir -p Steward.app/Contents/Resources
 if [ -f "AppIcon.icns" ]; then
-  cp -f AppIcon.icns Rewrite.app/Contents/Resources/
+  cp -f AppIcon.icns Steward.app/Contents/Resources/
   echo "✅ Found and copied app icon"
 else
   echo "⚠️ No AppIcon.icns found. Create one using ./create_icon.sh your_image.png"
-  touch Rewrite.app/Contents/Resources/AppIcon.icns
+  touch Steward.app/Contents/Resources/AppIcon.icns
 fi
 
 # Add PkgInfo file
 echo "Creating PkgInfo file..."
-echo "APPL????" > Rewrite.app/Contents/PkgInfo
+echo "APPL????" > Steward.app/Contents/PkgInfo
 
 # Copy any dependencies if needed
 echo "Looking for dependencies..."
@@ -85,22 +85,22 @@ echo "Looking for dependencies..."
 
 # Self-sign the app for development
 echo "Self-signing the app..."
-codesign --force --deep --sign - Rewrite.app
+codesign --force --deep --sign - Steward.app
 
 # Remove quarantine attributes
 echo "Removing quarantine attributes..."
-xattr -cr Rewrite.app
+xattr -cr Steward.app
 
-echo "App bundle created at: $(pwd)/Rewrite.app"
+echo "App bundle created at: $(pwd)/Steward.app"
 echo ""
 echo "To run the app, try:"
-echo "open Rewrite.app"
+echo "open Steward.app"
 echo ""
 echo "If running from Terminal:"
-echo "open Rewrite.app/Contents/MacOS/Rewrite"
+echo "open Steward.app/Contents/MacOS/Steward"
 echo ""
 echo "To create a distributable package:"
-echo "zip -r Rewrite.app.zip Rewrite.app"
+echo "zip -r Steward.app.zip Steward.app"
 echo ""
 echo "For proper distribution, sign the app with:"
-echo "codesign --force --deep --sign \"Developer ID Application: YOUR_NAME\" Rewrite.app"
+echo "codesign --force --deep --sign \"Developer ID Application: YOUR_NAME\" Steward.app"

@@ -150,7 +150,7 @@ final class ScreenSelectionOverlayView: NSView {
 }
 
 @main
-struct RewriteApp: App {
+struct StewardApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     
     var body: some Scene {
@@ -303,7 +303,7 @@ struct SettingsView: View {
                         .foregroundColor(.accentColor)
                 }
                 
-                Text("Rewrite")
+                Text("Steward")
                     .font(.largeTitle)
                     .bold()
                 
@@ -373,7 +373,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         var statusImage: NSImage? {
             switch self {
             case .ok:
-                return NSImage(systemSymbolName: "pencil.and.outline", accessibilityDescription: "Rewrite")
+                return NSImage(systemSymbolName: "pencil.and.outline", accessibilityDescription: "Steward")
             case .error:
                 return NSImage(systemSymbolName: "exclamationmark.triangle", accessibilityDescription: "API Error")
             case .processing:

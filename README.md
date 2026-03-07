@@ -1,4 +1,4 @@
-# Rewrite
+# Steward
 
 A macOS menu bar application for grammar correction and screen OCR using OpenAI's Responses API and Gemini.
 
@@ -28,10 +28,10 @@ See BUILD_INSTRUCTIONS.md
 2. The app will appear in your menu bar with a pencil icon
 3. The first time you use it, you'll need to grant accessibility permissions:
    - Go to System Preferences > Security & Privacy > Privacy > Accessibility
-   - Add and enable the Rewrite application
+   - Add and enable the Steward application
 4. If you want to use screen OCR, grant Screen Recording permission:
    - Go to System Settings > Privacy & Security > Screen Recording
-   - Add and enable the Rewrite application
+   - Add and enable the Steward application
 5. Set up your API keys:
    - Click on the app icon in the menu bar
    - Select "Preferences..." (or press Command+,)

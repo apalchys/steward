@@ -2,19 +2,19 @@
 import PackageDescription
 
 let package = Package(
-    name: "Rewrite",
+    name: "Steward",
     platforms: [
         .macOS(.v13)
     ],
     products: [
-        .executable(name: "Rewrite", targets: ["Rewrite"])
+        .executable(name: "Steward", targets: ["Steward"])
     ],
     dependencies: [
         .package(url: "https://github.com/soffes/HotKey", from: "0.1.3")
     ],
     targets: [
         .executableTarget(
-            name: "Rewrite",
+            name: "Steward",
             dependencies: ["HotKey"]
         )
     ]
