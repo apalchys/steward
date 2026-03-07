@@ -2,7 +2,6 @@ import Defaults
 import Foundation
 import OSLog
 import StewardCore
-import Valet
 
 private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.steward", category: "settings")
 
@@ -25,6 +24,9 @@ struct LLMProviderProfile: Equatable {
 }
 
 struct LLMSettings: Equatable {
+    static let grammarProvider = LLMProviderID.openAI
+    static let screenshotProvider = LLMProviderID.gemini
+
     var providerProfiles: [LLMProviderID: LLMProviderProfile]
     var grammarProviderID: LLMProviderID
     var screenshotProviderID: LLMProviderID
@@ -35,12 +37,19 @@ struct LLMSettings: Equatable {
     static func empty() -> LLMSettings {
         LLMSettings(
             providerProfiles: [:],
-            grammarProviderID: .openAI,
-            screenshotProviderID: .gemini,
+            grammarProviderID: grammarProvider,
+            screenshotProviderID: screenshotProvider,
             grammarCustomInstructions: "",
             screenshotCustomInstructions: "",
             clipboardHistory: .default
         )
+    }
+
+    func normalizedProviders() -> LLMSettings {
+        var copy = self
+        copy.grammarProviderID = Self.grammarProvider
+        copy.screenshotProviderID = Self.screenshotProvider
+        return copy
     }
 
     func profile(for providerID: LLMProviderID) -> LLMProviderProfile {
@@ -79,50 +88,28 @@ protocol LLMSecretsStoring {
     func setAPIKey(_ apiKey: String, for providerID: LLMProviderID)
 }
 
-final class ValetLLMSecretsStore: LLMSecretsStoring {
-    private enum Keys {
-        static func apiKey(for providerID: LLMProviderID) -> String {
-            "llmProvider_\(providerID.rawValue)_apiKey"
-        }
-    }
+final class UserDefaultsLLMSecretsStore: LLMSecretsStoring {
+    private let userDefaults: UserDefaults
 
-    private let valet: Valet
-
-    init(valet: Valet = ValetLLMSecretsStore.makeDefaultValet()) {
-        self.valet = valet
+    init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
     }
 
     func apiKey(for providerID: LLMProviderID) -> String {
-        (try? valet.string(forKey: Keys.apiKey(for: providerID))) ?? ""
+        (userDefaults.string(forKey: key(for: providerID)) ?? "").trimmed
     }
 
     func setAPIKey(_ apiKey: String, for providerID: LLMProviderID) {
-        let normalizedValue = apiKey.trimmed
-        let key = Keys.apiKey(for: providerID)
-
-        do {
-            if normalizedValue.isEmpty {
-                try valet.removeObject(forKey: key)
-            } else {
-                try valet.setString(normalizedValue, forKey: key)
-            }
-        } catch {
-            logger.error("ValetLLMSecretsStore write failed for \(providerID.rawValue): \(error)")
+        let normalized = apiKey.trimmed
+        if normalized.isEmpty {
+            userDefaults.removeObject(forKey: key(for: providerID))
+        } else {
+            userDefaults.set(normalized, forKey: key(for: providerID))
         }
     }
 
-    private static func makeDefaultValet() -> Valet {
-        if let bundleIdentifier = Bundle.main.bundleIdentifier,
-            let identifier = Identifier(nonEmpty: "\(bundleIdentifier)_llm")
-        {
-            return Valet.valet(with: identifier, accessibility: .whenUnlocked)
-        }
-
-        guard let fallbackIdentifier = Identifier(nonEmpty: "Steward_llm") else {
-            preconditionFailure("Could not build Valet identifier for LLM secrets")
-        }
-
-        return Valet.valet(with: fallbackIdentifier, accessibility: .whenUnlocked)
+    private func key(for providerID: LLMProviderID) -> String {
+        "llmProvider_\(providerID.rawValue)_apiKey"
     }
 }
 
@@ -187,7 +174,7 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
 
     init(
         userDefaults: UserDefaults = .standard,
-        secretsStore: any LLMSecretsStoring = ValetLLMSecretsStore()
+        secretsStore: any LLMSecretsStoring = UserDefaultsLLMSecretsStore()
     ) {
         self.keys = Keys(userDefaults: userDefaults)
         self.secretsStore = secretsStore
@@ -206,19 +193,10 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
             )
         }
 
-        let grammarProviderID = validatedProviderID(
-            rawValue: Defaults[keys.grammarProviderID],
-            fallback: .openAI
-        )
-        let screenshotProviderID = validatedProviderID(
-            rawValue: Defaults[keys.screenshotProviderID],
-            fallback: .gemini
-        )
-
         return LLMSettings(
             providerProfiles: profiles,
-            grammarProviderID: grammarProviderID,
-            screenshotProviderID: screenshotProviderID,
+            grammarProviderID: LLMSettings.grammarProvider,
+            screenshotProviderID: LLMSettings.screenshotProvider,
             grammarCustomInstructions: Defaults[keys.customGrammarInstructions],
             screenshotCustomInstructions: Defaults[keys.customScreenshotInstructions],
             clipboardHistory: ClipboardHistorySettings(
@@ -226,11 +204,14 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
                 maxStoredRecords: Defaults[keys.clipboardHistoryMaxStoredRecords]
             )
         )
+        .normalizedProviders()
     }
 
     func saveSettings(_ settings: LLMSettings) {
+        let normalizedSettings = settings.normalizedProviders()
+
         for providerID in Self.supportedProviders {
-            let profile = settings.profile(for: providerID)
+            let profile = normalizedSettings.profile(for: providerID)
 
             secretsStore.setAPIKey(profile.apiKey, for: providerID)
 
@@ -239,22 +220,11 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
                 normalizedModelID.isEmpty ? providerID.defaultModelID : normalizedModelID
         }
 
-        Defaults[keys.grammarProviderID] = settings.grammarProviderID.rawValue
-        Defaults[keys.screenshotProviderID] = settings.screenshotProviderID.rawValue
-        Defaults[keys.customGrammarInstructions] = settings.grammarCustomInstructions
-        Defaults[keys.customScreenshotInstructions] = settings.screenshotCustomInstructions
-        Defaults[keys.clipboardHistoryEnabled] = settings.clipboardHistory.isEnabled
-        Defaults[keys.clipboardHistoryMaxStoredRecords] = settings.clipboardHistory.maxStoredRecords
-    }
-
-    private func validatedProviderID(rawValue: String, fallback: LLMProviderID) -> LLMProviderID {
-        guard
-            let providerID = LLMProviderID(rawValue: rawValue),
-            Self.supportedProviders.contains(providerID)
-        else {
-            return fallback
-        }
-
-        return providerID
+        Defaults[keys.grammarProviderID] = LLMSettings.grammarProvider.rawValue
+        Defaults[keys.screenshotProviderID] = LLMSettings.screenshotProvider.rawValue
+        Defaults[keys.customGrammarInstructions] = normalizedSettings.grammarCustomInstructions
+        Defaults[keys.customScreenshotInstructions] = normalizedSettings.screenshotCustomInstructions
+        Defaults[keys.clipboardHistoryEnabled] = normalizedSettings.clipboardHistory.isEnabled
+        Defaults[keys.clipboardHistoryMaxStoredRecords] = normalizedSettings.clipboardHistory.maxStoredRecords
     }
 }

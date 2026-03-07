@@ -22,8 +22,9 @@
 4. Set up your API keys:
    - Click on the app icon in the menu bar
    - Select "Preferences..."
-   - In each feature tab, choose either OpenAI or Gemini
-   - Enter the API key and optional model ID for the provider selected on that tab
+   - Enter your OpenAI API key in the Grammar tab
+   - Enter your Gemini API key in the Screenshot tab
+   - Enter an optional model ID in each tab if you want to override the default
    - Clipboard history is optional and can be enabled in the History tab
    - Leaving model IDs empty falls back to `gpt-5.4` for OpenAI and `gemini-3.1-flash-lite-preview` for Gemini
 5. To fix grammar, select text in any application and press `Command+Shift+F`
@@ -31,9 +32,9 @@
 
 ## API Key Information
 
-The application requires at least one provider API key. Grammar correction and screen OCR can each use either OpenAI or Gemini. Your API keys and model IDs:
-- API keys are stored securely in macOS Keychain via Valet
-- Non-secret settings like model IDs and provider selection are stored locally in UserDefaults
+The application requires an OpenAI API key for grammar correction and a Gemini API key for screen OCR. Your API keys and model IDs:
+- API keys are stored securely in the macOS Keychain
+- Non-secret settings like model IDs and custom instructions are stored locally in UserDefaults
 - Are only sent to the corresponding model provider when that feature runs
 - Can be updated at any time through the Preferences menu
 

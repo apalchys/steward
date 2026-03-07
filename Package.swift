@@ -13,7 +13,6 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/soffes/HotKey", from: "0.1.3"),
         .package(url: "https://github.com/sindresorhus/Defaults", from: "9.0.0"),
-        .package(url: "https://github.com/square/Valet", from: "5.0.0"),
     ],
     targets: [
         .target(
@@ -26,7 +25,6 @@ let package = Package(
                 "HotKey",
                 "StewardCore",
                 "Defaults",
-                "Valet",
             ]
         ),
         .testTarget(

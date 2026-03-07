@@ -88,7 +88,7 @@ final class ScreenOCRCoordinator: ScreenOCRCoordinating {
 
         let settings = settingsStore.loadSettings()
         let request = LLMRequest(
-            providerID: settings.screenshotProviderID,
+            providerID: LLMSettings.screenshotProvider,
             task: .screenOCR(
                 imageData: imageData,
                 mimeType: "image/png",

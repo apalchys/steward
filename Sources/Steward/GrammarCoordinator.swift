@@ -24,7 +24,7 @@ final class GrammarCoordinator: GrammarCoordinating {
 
         let settings = settingsStore.loadSettings()
         let request = LLMRequest(
-            providerID: settings.grammarProviderID,
+            providerID: LLMSettings.grammarProvider,
             task: .grammarCorrection(text: selectedText, customInstructions: settings.grammarCustomInstructions)
         )
 

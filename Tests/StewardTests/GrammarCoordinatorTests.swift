@@ -8,7 +8,6 @@ final class GrammarCoordinatorTests: XCTestCase {
         let router = FakeRouter(result: .success(.text("corrected")))
         let textInteraction = FakeTextInteraction(selectedText: "bad")
         var settings = LLMSettings.empty()
-        settings.grammarProviderID = .gemini
         settings.grammarCustomInstructions = "Use concise language"
         settings.providerProfiles[.openAI] = LLMProviderProfile(
             apiKey: "key",
@@ -31,7 +30,7 @@ final class GrammarCoordinatorTests: XCTestCase {
             return
         }
 
-        XCTAssertEqual(request.providerID, .gemini)
+        XCTAssertEqual(request.providerID, .openAI)
         XCTAssertEqual(text, "bad")
         XCTAssertEqual(customInstructions, "Use concise language")
     }

@@ -52,7 +52,7 @@ struct StewardApp: App {
         }
         .menuBarExtraStyle(.menu)
 
-        Window("History", id: "history") {
+        Window("Clipboard History", id: "history") {
             ClipboardHistoryView(store: appState.clipboardHistoryStore)
         }
         .defaultSize(width: 860, height: 520)
@@ -70,6 +70,7 @@ struct StewardApp: App {
 
 private struct AppMenuView: View {
     @EnvironmentObject private var appState: AppState
+    @Environment(\.openSettings) private var openSettings
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -127,14 +128,18 @@ private struct AppMenuView: View {
 
             Divider()
 
-            Button("History") {
+            Button("Clipboard History") {
                 openWindow(id: "history")
                 NSApp.activate(ignoringOtherApps: true)
             }
 
-            SettingsLink {
-                Text("Preferences...")
+            Button("Preferences...") {
+                Task { @MainActor in
+                    openSettings()
+                    NSApp.activate(ignoringOtherApps: true)
+                }
             }
+            .keyboardShortcut(",", modifiers: [.command])
 
             Divider()
 

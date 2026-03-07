@@ -64,8 +64,7 @@
 ## Security & Configuration Tips
 
 - Supported providers: OpenAI and Gemini.
-- API keys are stored in Keychain via Valet.
-- Non-secret settings are stored locally via Defaults (`UserDefaults`).
+- All settings, including API keys, are stored locally via Defaults (`UserDefaults`).
 - Clipboard history is stored locally in Application Support (`Steward/clipboard-history.jsonl`).
 - App requires Accessibility permission for text capture/replacement.
 - App requires Screen Recording permission for OCR capture.
@@ -77,7 +76,7 @@
 3. Use `async/await`, `Task`, `@MainActor` for concurrency. Never `DispatchQueue.main.async` or `Thread.sleep`.
 4. Views only observe state and fire actions. No I/O, no service calls, no business logic in SwiftUI views.
 5. Services and coordinators `throw` typed errors. App state catches at the boundary, updates status, and logs.
-6. Secrets (API keys) go in Keychain. Non-sensitive preferences go in `UserDefaults`. Never mix the two.
+6. Secrets (API keys) go in `UserDefaults`. Non-sensitive preferences go in `UserDefaults`. Never hard-code secrets in source.
 7. Guard platform permissions (Accessibility, Screen Recording) at workflow start, before any UI or side effects.
 8. Menu-bar apps use `.accessory` activation policy. Overlay windows stay above apps but below system security UI.
 9. Log with `os.Logger` (consistent subsystem + per-module category), not `print`.

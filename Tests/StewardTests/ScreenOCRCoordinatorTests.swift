@@ -69,7 +69,6 @@ final class ScreenOCRCoordinatorTests: XCTestCase {
         let selectionPresenter = FakeSelectionPresenter(mode: .finish(screen: screen, rect: CGRect(x: 10, y: 10, width: 120, height: 80)))
 
         var settings = LLMSettings.empty()
-        settings.screenshotProviderID = .openAI
         settings.providerProfiles[.gemini] = LLMProviderProfile(apiKey: "key", modelID: "model")
         settings.screenshotCustomInstructions = "Keep table structure."
         let settingsStore = CoordinatorSettingsStore(settings: settings)
@@ -94,7 +93,7 @@ final class ScreenOCRCoordinatorTests: XCTestCase {
             XCTFail("Expected OCR task")
             return
         }
-        XCTAssertEqual(request.providerID, .openAI)
+        XCTAssertEqual(request.providerID, .gemini)
         XCTAssertEqual(customInstructions, "Keep table structure.")
         XCTAssertTrue(selectionPresenter.didBeginSelection)
         XCTAssertTrue(selectionPresenter.didEndSelection)

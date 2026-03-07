@@ -1,4 +1,5 @@
 {
+  "originHash" : "df041d3f0d3f5f81b8ff573fe4df976c16c77b3731a31a6849918c2b0b3a630e",
   "pins" : [
     {
       "identity" : "defaults",
@@ -26,16 +27,7 @@
         "revision" : "4799286537280063c85a32f09884cfbca301b1a1",
         "version" : "602.0.0"
       }
-    },
-    {
-      "identity" : "valet",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/square/Valet",
-      "state" : {
-        "revision" : "246baf6be3f9e3ff116dc05251a08f69dd7c7b9d",
-        "version" : "5.1.0"
-      }
     }
   ],
-  "version" : 2
+  "version" : 3
 }

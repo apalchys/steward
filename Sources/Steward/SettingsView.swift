@@ -9,6 +9,14 @@ struct SettingsView: View {
     private let settingsStore: any AppSettingsProviding
     private let onSettingsChanged: (() -> Void)?
 
+    private var grammarProviderID: LLMProviderID {
+        LLMSettings.grammarProvider
+    }
+
+    private var screenshotProviderID: LLMProviderID {
+        LLMSettings.screenshotProvider
+    }
+
     init(
         settingsStore: any AppSettingsProviding = UserDefaultsLLMSettingsStore(),
         clipboardHistoryStore: ClipboardHistoryStore = ClipboardHistoryStore(autoLoad: false),
@@ -34,7 +42,7 @@ struct SettingsView: View {
 
             historyTab
                 .tabItem {
-                    Label("History", systemImage: "clipboard")
+                    Label("Clipboard History", systemImage: "clipboard")
                 }
 
             aboutTab
@@ -47,8 +55,7 @@ struct SettingsView: View {
             settings = settingsStore.loadSettings()
         }
         .onChange(of: settings) { _, newSettings in
-            settingsStore.saveSettings(newSettings)
-            onSettingsChanged?()
+            persistSettings(newSettings)
         }
         .alert("Clear clipboard history?", isPresented: $showClearHistoryConfirmation) {
             Button("Clear History", role: .destructive) {
@@ -66,22 +73,23 @@ struct SettingsView: View {
                 Text("Grammar")
                     .font(.headline)
 
-                Picker("Provider", selection: $settings.grammarProviderID) {
-                    ForEach(LLMProviderID.allCases) { providerID in
-                        Text(providerID.displayName).tag(providerID)
-                    }
-                }
-                .pickerStyle(.segmented)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Provider")
+                        .font(.subheadline)
 
-                SecureField(
-                    "\(settings.grammarProviderID.displayName) API Key",
-                    text: profileBinding(for: settings.grammarProviderID, keyPath: \.apiKey)
+                    Text(grammarProviderID.displayName)
+                        .foregroundColor(.secondary)
+                }
+
+                ContinuousSecureField(
+                    placeholder: "\(grammarProviderID.displayName) API Key",
+                    text: profileBinding(for: grammarProviderID, keyPath: \.apiKey)
                 )
-                .textFieldStyle(.roundedBorder)
+                .frame(height: 22)
 
                 TextField(
-                    "Model (default: \(settings.grammarProviderID.defaultModelID))",
-                    text: profileBinding(for: settings.grammarProviderID, keyPath: \.modelID)
+                    "Model (default: \(grammarProviderID.defaultModelID))",
+                    text: profileBinding(for: grammarProviderID, keyPath: \.modelID)
                 )
                 .textFieldStyle(.roundedBorder)
 
@@ -113,22 +121,23 @@ struct SettingsView: View {
                 Text("Screenshot to Markdown")
                     .font(.headline)
 
-                Picker("Provider", selection: $settings.screenshotProviderID) {
-                    ForEach(LLMProviderID.allCases) { providerID in
-                        Text(providerID.displayName).tag(providerID)
-                    }
-                }
-                .pickerStyle(.segmented)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Provider")
+                        .font(.subheadline)
 
-                SecureField(
-                    "\(settings.screenshotProviderID.displayName) API Key",
-                    text: profileBinding(for: settings.screenshotProviderID, keyPath: \.apiKey)
+                    Text(screenshotProviderID.displayName)
+                        .foregroundColor(.secondary)
+                }
+
+                ContinuousSecureField(
+                    placeholder: "\(screenshotProviderID.displayName) API Key",
+                    text: profileBinding(for: screenshotProviderID, keyPath: \.apiKey)
                 )
-                .textFieldStyle(.roundedBorder)
+                .frame(height: 22)
 
                 TextField(
-                    "Model (default: \(settings.screenshotProviderID.defaultModelID))",
-                    text: profileBinding(for: settings.screenshotProviderID, keyPath: \.modelID)
+                    "Model (default: \(screenshotProviderID.defaultModelID))",
+                    text: profileBinding(for: screenshotProviderID, keyPath: \.modelID)
                 )
                 .textFieldStyle(.roundedBorder)
 
@@ -257,7 +266,13 @@ struct SettingsView: View {
                 var profile = settings.profile(for: providerID)
                 profile[keyPath: keyPath] = newValue
                 settings.providerProfiles[providerID] = profile
+                persistSettings(settings)
             }
         )
+    }
+
+    private func persistSettings(_ settings: LLMSettings) {
+        settingsStore.saveSettings(settings)
+        onSettingsChanged?()
     }
 }

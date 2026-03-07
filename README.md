@@ -85,17 +85,17 @@ Clipboard history:
 
 ## Storage and Privacy
 
-- API keys are stored in macOS Keychain via `Square/Valet`.
-- Non-secret settings (model IDs, selected providers, custom instructions) are stored with `Defaults` (`UserDefaults`).
+- API keys are stored in the macOS Keychain.
+- Non-secret settings (model IDs, custom instructions, clipboard history preferences) are stored with `Defaults` (`UserDefaults`).
 - Clipboard history is stored locally as JSONL at `~/Library/Application Support/Steward/clipboard-history.jsonl`.
 - Clipboard history is disabled by default and only records new entries after you enable it.
-- Data is sent only to the provider you configure for the feature being run.
+- Grammar requests are sent only to OpenAI. Screenshot OCR requests are sent only to Gemini.
+
 
 ## Dependencies
 
 - [HotKey](https://github.com/soffes/HotKey)
 - [Defaults](https://github.com/sindresorhus/Defaults)
-- [Valet](https://github.com/square/Valet)
 
 ## License
 

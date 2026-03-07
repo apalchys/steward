@@ -104,7 +104,7 @@ echo "Looking for dependencies..."
 
 # Self-sign the app for development
 echo "Self-signing the app..."
-codesign --force --deep --sign - Steward.app
+codesign --force --deep --sign "${CODESIGN_IDENTITY:--}" Steward.app
 
 # Remove quarantine attributes
 echo "Removing quarantine attributes..."

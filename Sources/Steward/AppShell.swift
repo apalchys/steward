@@ -368,13 +368,11 @@ final class AppState: ObservableObject {
     }
 
     private func providerID(for feature: FeatureKind) -> LLMProviderID {
-        let settings = settingsStore.loadSettings()
-
         switch feature {
         case .grammar:
-            return settings.grammarProviderID
+            return LLMSettings.grammarProvider
         case .ocr:
-            return settings.screenshotProviderID
+            return LLMSettings.screenshotProvider
         }
     }
 
