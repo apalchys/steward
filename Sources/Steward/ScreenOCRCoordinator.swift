@@ -17,12 +17,6 @@ final class ScreenOCRCoordinator: ScreenOCRCoordinating {
     private let selectionPresenter: ScreenSelectionPresenting
     private let settingsStore: AppSettingsProviding
 
-    // Temporary storage for the selection result, used to bridge the
-    // @MainActor selection presenter callback into structured concurrency
-    // without sending non-Sendable NSScreen across isolation boundaries.
-    private var pendingSelectionScreen: NSScreen?
-    private var pendingSelectionRect: CGRect?
-
     init(
         router: LLMRouting,
         textInteraction: TextInteractionPerforming,
@@ -44,13 +38,18 @@ final class ScreenOCRCoordinator: ScreenOCRCoordinating {
 
         onSelectionActivityChanged?(true)
 
+        // Local mutable state to bridge the callback-based selection presenter
+        // into structured concurrency without instance-level mutable properties.
+        // Both the callback and continuation run on @MainActor, so access is safe.
+        var selectionScreen: NSScreen?
+        var selectionRect: CGRect?
+
         do {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                 selectionPresenter.beginSelection(
-                    onSelectionFinished: { [weak self] screen, selectionRect in
-                        guard let self else { return }
-                        self.pendingSelectionScreen = screen
-                        self.pendingSelectionRect = selectionRect
+                    onSelectionFinished: { screen, rect in
+                        selectionScreen = screen
+                        selectionRect = rect
                         continuation.resume()
                     },
                     onSelectionCancelled: {
@@ -67,11 +66,9 @@ final class ScreenOCRCoordinator: ScreenOCRCoordinating {
         await selectionPresenter.endSelection()
         onSelectionActivityChanged?(false)
 
-        guard let screen = pendingSelectionScreen, let selectionRect = pendingSelectionRect else {
+        guard let screen = selectionScreen, let rect = selectionRect else {
             throw ScreenOCRCoordinatorError.couldNotCaptureImage
         }
-        pendingSelectionScreen = nil
-        pendingSelectionRect = nil
 
         // Extract NSScreen properties into a Sendable struct on @MainActor
         // before crossing into the async capture method.
@@ -81,7 +78,7 @@ final class ScreenOCRCoordinator: ScreenOCRCoordinating {
 
         guard
             let imageData = await captureService.captureSelectionImageData(
-                request: captureRequest, selectionRect: selectionRect)
+                request: captureRequest, selectionRect: rect)
         else {
             throw ScreenOCRCoordinatorError.couldNotCaptureImage
         }
