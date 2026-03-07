@@ -32,7 +32,7 @@ final class LLMProviderAdapterTests: XCTestCase {
 
         let result = try await provider.perform(
             task: .grammarCorrection(text: "bad text", customInstructions: ""),
-            configuration: LLMProviderConfiguration(apiKey: "sk-test", modelID: "gpt-5.4", baseURL: nil)
+            configuration: LLMProviderConfiguration(apiKey: "sk-test", modelID: "gpt-5.4")
         )
 
         XCTAssertEqual(result.textValue, "good text")
@@ -65,8 +65,7 @@ final class LLMProviderAdapterTests: XCTestCase {
             ),
             configuration: LLMProviderConfiguration(
                 apiKey: "test-key",
-                modelID: GeminiClient.defaultModelID,
-                baseURL: nil
+                modelID: GeminiClient.defaultModelID
             )
         )
 
@@ -104,7 +103,7 @@ final class LLMProviderAdapterTests: XCTestCase {
                 mimeType: "image/png",
                 customInstructions: "Keep layout."
             ),
-            configuration: LLMProviderConfiguration(apiKey: "sk-test", modelID: "gpt-5.4", baseURL: nil)
+            configuration: LLMProviderConfiguration(apiKey: "sk-test", modelID: "gpt-5.4")
         )
 
         XCTAssertEqual(result.textValue, "Extracted")
@@ -139,8 +138,7 @@ final class LLMProviderAdapterTests: XCTestCase {
             task: .grammarCorrection(text: "bad text", customInstructions: "Be concise"),
             configuration: LLMProviderConfiguration(
                 apiKey: "test-key",
-                modelID: GeminiClient.defaultModelID,
-                baseURL: nil
+                modelID: GeminiClient.defaultModelID
             )
         )
 

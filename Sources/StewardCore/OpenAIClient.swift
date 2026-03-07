@@ -3,12 +3,12 @@ import Foundation
 public struct OpenAIClient: Sendable {
     public static let defaultModelID = "gpt-5.4"
     private let session: URLSession
-    private let apiBaseURL: String
     private static let ocrInstruction = """
         You are an OCR assistant. Extract all visible text from the provided image and return only the extracted text in Markdown.
         Preserve headings, paragraphs, lists, tables, and code blocks when they are visually clear.
         Do not add explanations, summaries, or commentary.
         """
+    private static let responsesURL = URL(string: "https://api.openai.com/v1/responses")!
 
     private struct ResponsesRequest: Encodable {
         struct Reasoning: Encodable {
@@ -92,7 +92,6 @@ public struct OpenAIClient: Sendable {
     }
 
     private enum ClientError: LocalizedError {
-        case invalidURL
         case encodingFailed
         case requestFailed(String)
         case emptyResponse
@@ -100,8 +99,6 @@ public struct OpenAIClient: Sendable {
 
         var errorDescription: String? {
             switch self {
-            case .invalidURL:
-                return "OpenAI request URL is invalid."
             case .encodingFailed:
                 return "Failed to encode the OpenAI request."
             case .requestFailed(let message):
@@ -114,30 +111,37 @@ public struct OpenAIClient: Sendable {
         }
     }
 
-    public init(
-        session: URLSession = .shared,
-        apiBaseURL: String = "https://api.openai.com"
-    ) {
+    public init(session: URLSession = .shared) {
         self.session = session
-        self.apiBaseURL = apiBaseURL
     }
 
     public func checkAccess(apiKey: String, modelID: String) async -> Bool {
+        await checkAccessStatus(apiKey: apiKey, modelID: modelID).hasAccess
+    }
+
+    public func checkAccessStatus(apiKey: String, modelID: String) async -> LLMHealthCheckResult {
         let encodedModelID = modelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? modelID
 
-        guard let apiURL = makeURL(path: "/v1/models/\(encodedModelID)") else {
-            return false
+        guard let apiURL = URL(string: "https://api.openai.com/v1/models/\(encodedModelID)") else {
+            return LLMHealthCheckResult(status: .unknown, message: "OpenAI model identifier is invalid.")
         }
 
         var request = URLRequest(url: apiURL)
         request.httpMethod = "GET"
         request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
 
-        guard let (_, response) = try? await session.data(for: request) else {
-            return false
-        }
+        do {
+            let (_, response) = try await performDataRequest(request)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                return LLMHealthCheckResult(status: .unknown, message: "OpenAI returned an unexpected response.")
+            }
 
-        return (response as? HTTPURLResponse)?.statusCode == 200
+            return healthCheckResult(for: httpResponse.statusCode)
+        } catch let error as URLError {
+            return LLMHealthCheckResult(status: .networkIssue, message: networkErrorMessage(for: error))
+        } catch {
+            return LLMHealthCheckResult(status: .unknown, message: error.localizedDescription)
+        }
     }
 
     public func correctGrammar(
@@ -157,17 +161,13 @@ public struct OpenAIClient: Sendable {
             throw ClientError.encodingFailed
         }
 
-        guard let apiURL = makeURL(path: "/v1/responses") else {
-            throw ClientError.invalidURL
-        }
-
-        var request = URLRequest(url: apiURL)
+        var request = URLRequest(url: Self.responsesURL)
         request.httpMethod = "POST"
         request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = httpBody
 
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await performDataRequest(request)
 
         if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
             let message = errorMessage(from: data) ?? "OpenAI request failed with HTTP \(httpResponse.statusCode)."
@@ -214,17 +214,13 @@ public struct OpenAIClient: Sendable {
             throw ClientError.encodingFailed
         }
 
-        guard let apiURL = makeURL(path: "/v1/responses") else {
-            throw ClientError.invalidURL
-        }
-
-        var request = URLRequest(url: apiURL)
+        var request = URLRequest(url: Self.responsesURL)
         request.httpMethod = "POST"
         request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = httpBody
 
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await performDataRequest(request)
 
         if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
             let message = errorMessage(from: data) ?? "OpenAI request failed with HTTP \(httpResponse.statusCode)."
@@ -244,31 +240,83 @@ public struct OpenAIClient: Sendable {
         return extractedText
     }
 
-    private var normalizedBaseURL: String {
-        apiBaseURL.hasSuffix("/") ? String(apiBaseURL.dropLast()) : apiBaseURL
-    }
-
-    private func makeURL(path: String) -> URL? {
-        guard let baseURL = validatedBaseURL() else {
-            return nil
-        }
-
-        return URL(string: path, relativeTo: baseURL)?.absoluteURL
-    }
-
-    private func validatedBaseURL() -> URL? {
-        guard let baseURL = URL(string: normalizedBaseURL),
-            let scheme = baseURL.scheme, !scheme.isEmpty,
-            let host = baseURL.host, !host.isEmpty
-        else {
-            return nil
-        }
-
-        return baseURL
-    }
-
     private func reasoningEffort(for modelID: String) -> String? {
         return modelID.lowercased().hasPrefix("gpt-5") ? "none" : nil
+    }
+
+    private func performDataRequest(_ request: URLRequest) async throws -> (Data, URLResponse) {
+        var attempt = 0
+        var retryDelayMilliseconds = 200
+
+        while true {
+            do {
+                let response = try await session.data(for: request)
+                if let httpResponse = response.1 as? HTTPURLResponse,
+                    shouldRetry(statusCode: httpResponse.statusCode),
+                    attempt < 2
+                {
+                    attempt += 1
+                    try? await Task.sleep(for: .milliseconds(retryDelayMilliseconds))
+                    retryDelayMilliseconds *= 2
+                    continue
+                }
+
+                return response
+            } catch let error as URLError {
+                guard shouldRetry(error: error), attempt < 2 else {
+                    throw error
+                }
+
+                attempt += 1
+                try? await Task.sleep(for: .milliseconds(retryDelayMilliseconds))
+                retryDelayMilliseconds *= 2
+            }
+        }
+    }
+
+    private func healthCheckResult(for statusCode: Int) -> LLMHealthCheckResult {
+        switch statusCode {
+        case 200:
+            return LLMHealthCheckResult(status: .available, message: "OpenAI is configured.")
+        case 401, 403:
+            return LLMHealthCheckResult(status: .invalidCredentials, message: "OpenAI API key is invalid.")
+        case 404:
+            return LLMHealthCheckResult(status: .invalidModel, message: "OpenAI model was not found.")
+        case 429:
+            return LLMHealthCheckResult(status: .rateLimited, message: "OpenAI is rate limiting requests.")
+        case 500, 502, 503, 504:
+            return LLMHealthCheckResult(status: .serviceIssue, message: "OpenAI is temporarily unavailable.")
+        default:
+            return LLMHealthCheckResult(
+                status: .unknown,
+                message: "OpenAI access check failed with HTTP \(statusCode)."
+            )
+        }
+    }
+
+    private func shouldRetry(statusCode: Int) -> Bool {
+        [429, 500, 502, 503, 504].contains(statusCode)
+    }
+
+    private func shouldRetry(error: URLError) -> Bool {
+        switch error.code {
+        case .timedOut, .networkConnectionLost, .notConnectedToInternet, .cannotConnectToHost, .cannotFindHost,
+            .dnsLookupFailed:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func networkErrorMessage(for error: URLError) -> String {
+        switch error.code {
+        case .notConnectedToInternet:
+            return "No internet connection."
+        case .timedOut:
+            return "OpenAI request timed out."
+        default:
+            return "OpenAI could not be reached."
+        }
     }
 
     private func errorMessage(from data: Data?) -> String? {

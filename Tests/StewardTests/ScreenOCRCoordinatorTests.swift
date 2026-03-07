@@ -70,7 +70,7 @@ final class ScreenOCRCoordinatorTests: XCTestCase {
 
         var settings = LLMSettings.empty()
         settings.screenshotProviderID = .openAI
-        settings.providerProfiles[.gemini] = LLMProviderProfile(apiKey: "key", modelID: "model", baseURL: "")
+        settings.providerProfiles[.gemini] = LLMProviderProfile(apiKey: "key", modelID: "model")
         let settingsStore = CoordinatorSettingsStore(
             settings: settings,
             customInstructions: "",
@@ -173,7 +173,7 @@ private final class ScreenFakeRouter: LLMRouting, @unchecked Sendable {
     }
 
     func checkAccess(for providerID: LLMProviderID) async throws -> LLMProviderHealth {
-        LLMProviderHealth(providerID: providerID, hasAccess: true)
+        LLMProviderHealth(providerID: providerID, state: .available, message: "Ready")
     }
 }
 

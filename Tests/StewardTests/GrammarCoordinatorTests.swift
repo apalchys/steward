@@ -13,8 +13,7 @@ final class GrammarCoordinatorTests: XCTestCase {
                 settings.grammarProviderID = .gemini
                 settings.providerProfiles[.openAI] = LLMProviderProfile(
                     apiKey: "key",
-                    modelID: "model",
-                    baseURL: ""
+                    modelID: "model"
                 )
                 return settings
             }(),
@@ -100,7 +99,7 @@ private final class FakeRouter: LLMRouting, @unchecked Sendable {
     }
 
     func checkAccess(for providerID: LLMProviderID) async throws -> LLMProviderHealth {
-        LLMProviderHealth(providerID: providerID, hasAccess: true)
+        LLMProviderHealth(providerID: providerID, state: .available, message: "Ready")
     }
 }
 

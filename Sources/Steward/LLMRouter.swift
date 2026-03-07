@@ -5,7 +5,7 @@ protocol LLMProvider: Sendable {
     var id: LLMProviderID { get }
     var capabilities: Set<LLMCapability> { get }
 
-    func checkAccess(configuration: LLMProviderConfiguration) async -> Bool
+    func checkAccess(configuration: LLMProviderConfiguration) async -> LLMProviderHealth
     func perform(task: LLMTask, configuration: LLMProviderConfiguration) async throws -> LLMResult
 }
 
@@ -48,10 +48,15 @@ final class LLMRouter: LLMRouting, @unchecked Sendable {
         let settings = settingsStore.loadSettings()
 
         let provider = try providerForID(providerID)
-        let configuration = try configuration(for: providerID, from: settings)
+        guard let configuration = settings.configuration(for: providerID) else {
+            return LLMProviderHealth(
+                providerID: providerID,
+                state: .notConfigured,
+                message: "Provider \(providerID.displayName) is missing API key or model ID in Preferences."
+            )
+        }
 
-        let hasAccess = await provider.checkAccess(configuration: configuration)
-        return LLMProviderHealth(providerID: providerID, hasAccess: hasAccess)
+        return await provider.checkAccess(configuration: configuration)
     }
 
     private func providerForID(_ providerID: LLMProviderID) throws -> LLMProvider {
@@ -83,8 +88,8 @@ struct OpenAILLMProvider: LLMProvider {
         self.client = client
     }
 
-    func checkAccess(configuration: LLMProviderConfiguration) async -> Bool {
-        await client.checkAccess(apiKey: configuration.apiKey, modelID: configuration.modelID)
+    func checkAccess(configuration: LLMProviderConfiguration) async -> LLMProviderHealth {
+        health(from: await client.checkAccessStatus(apiKey: configuration.apiKey, modelID: configuration.modelID))
     }
 
     func perform(task: LLMTask, configuration: LLMProviderConfiguration) async throws -> LLMResult {
@@ -108,6 +113,33 @@ struct OpenAILLMProvider: LLMProvider {
             return .text(extractedText)
         }
     }
+
+    private func health(from result: LLMHealthCheckResult) -> LLMProviderHealth {
+        LLMProviderHealth(
+            providerID: id,
+            state: mapHealthState(result.status),
+            message: result.message
+        )
+    }
+
+    private func mapHealthState(_ status: LLMHealthCheckStatus) -> LLMProviderHealthState {
+        switch status {
+        case .available:
+            return .available
+        case .invalidCredentials:
+            return .invalidCredentials
+        case .invalidModel:
+            return .invalidModel
+        case .networkIssue:
+            return .networkIssue
+        case .rateLimited:
+            return .rateLimited
+        case .serviceIssue:
+            return .serviceIssue
+        case .unknown:
+            return .unknown
+        }
+    }
 }
 
 struct GeminiLLMProvider: LLMProvider {
@@ -120,8 +152,8 @@ struct GeminiLLMProvider: LLMProvider {
         self.client = client
     }
 
-    func checkAccess(configuration: LLMProviderConfiguration) async -> Bool {
-        await client.checkAccess(apiKey: configuration.apiKey, modelID: configuration.modelID)
+    func checkAccess(configuration: LLMProviderConfiguration) async -> LLMProviderHealth {
+        health(from: await client.checkAccessStatus(apiKey: configuration.apiKey, modelID: configuration.modelID))
     }
 
     func perform(task: LLMTask, configuration: LLMProviderConfiguration) async throws -> LLMResult {
@@ -143,6 +175,33 @@ struct GeminiLLMProvider: LLMProvider {
                 text: text
             )
             return .text(correctedText)
+        }
+    }
+
+    private func health(from result: LLMHealthCheckResult) -> LLMProviderHealth {
+        LLMProviderHealth(
+            providerID: id,
+            state: mapHealthState(result.status),
+            message: result.message
+        )
+    }
+
+    private func mapHealthState(_ status: LLMHealthCheckStatus) -> LLMProviderHealthState {
+        switch status {
+        case .available:
+            return .available
+        case .invalidCredentials:
+            return .invalidCredentials
+        case .invalidModel:
+            return .invalidModel
+        case .networkIssue:
+            return .networkIssue
+        case .rateLimited:
+            return .rateLimited
+        case .serviceIssue:
+            return .serviceIssue
+        case .unknown:
+            return .unknown
         }
     }
 }

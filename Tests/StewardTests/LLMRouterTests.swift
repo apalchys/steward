@@ -107,13 +107,34 @@ final class LLMRouterTests: XCTestCase {
         let settingsStore = FakeSettingsStore(settings: makeSettings(configured: [.openAI, .gemini]))
         let router = makeRouter(
             settingsStore: settingsStore,
-            providers: [FakeProvider(id: .openAI, capabilities: [.textCorrection], checkAccessResult: true)]
+            providers: [
+                FakeProvider(
+                    id: .openAI,
+                    capabilities: [.textCorrection],
+                    checkAccessResult: LLMProviderHealth(
+                        providerID: .openAI,
+                        state: .available,
+                        message: "Ready"
+                    )
+                )
+            ]
         )
 
         let health = try await router.checkAccess(for: .openAI)
 
         XCTAssertEqual(health.providerID, .openAI)
+        XCTAssertEqual(health.state, .available)
         XCTAssertTrue(health.hasAccess)
+    }
+
+    func testCheckAccessReturnsNotConfiguredDiagnostic() async throws {
+        let settingsStore = FakeSettingsStore(settings: makeSettings(configured: []))
+        let router = makeRouter(settingsStore: settingsStore)
+
+        let health = try await router.checkAccess(for: .openAI)
+
+        XCTAssertEqual(health.providerID, .openAI)
+        XCTAssertEqual(health.state, .notConfigured)
     }
 
     private func makeRouter(
@@ -135,8 +156,7 @@ final class LLMRouterTests: XCTestCase {
         for providerID in configured {
             settings.providerProfiles[providerID] = LLMProviderProfile(
                 apiKey: "key-\(providerID.rawValue)",
-                modelID: "model-\(providerID.rawValue)",
-                baseURL: ""
+                modelID: "model-\(providerID.rawValue)"
             )
         }
 
@@ -180,22 +200,23 @@ private final class FakeSettingsStore: LLMSettingsProviding {
 private struct FakeProvider: LLMProvider, @unchecked Sendable {
     let id: LLMProviderID
     let capabilities: Set<LLMCapability>
-    let checkAccessResult: Bool
+    let checkAccessResult: LLMProviderHealth
     let performHandler: (@Sendable (LLMTask, LLMProviderConfiguration) async throws -> LLMResult)?
 
     init(
         id: LLMProviderID,
         capabilities: Set<LLMCapability>,
-        checkAccessResult: Bool = true,
+        checkAccessResult: LLMProviderHealth? = nil,
         performHandler: (@Sendable (LLMTask, LLMProviderConfiguration) async throws -> LLMResult)? = nil
     ) {
         self.id = id
         self.capabilities = capabilities
         self.checkAccessResult = checkAccessResult
+            ?? LLMProviderHealth(providerID: id, state: .available, message: "Ready")
         self.performHandler = performHandler
     }
 
-    func checkAccess(configuration: LLMProviderConfiguration) async -> Bool {
+    func checkAccess(configuration: LLMProviderConfiguration) async -> LLMProviderHealth {
         checkAccessResult
     }
 

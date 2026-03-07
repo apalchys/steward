@@ -73,16 +73,31 @@ enum LLMResult {
 struct LLMProviderConfiguration: Equatable {
     let apiKey: String
     let modelID: String
-    let baseURL: String?
 
     var isConfigured: Bool {
         !apiKey.trimmed.isEmpty && !modelID.trimmed.isEmpty
     }
 }
 
+enum LLMProviderHealthState: Equatable {
+    case available
+    case notConfigured
+    case invalidCredentials
+    case invalidModel
+    case networkIssue
+    case rateLimited
+    case serviceIssue
+    case unknown
+}
+
 struct LLMProviderHealth {
     let providerID: LLMProviderID
-    let hasAccess: Bool
+    let state: LLMProviderHealthState
+    let message: String
+
+    var hasAccess: Bool {
+        state == .available
+    }
 }
 
 enum LLMRouterError: LocalizedError {

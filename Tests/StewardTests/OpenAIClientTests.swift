@@ -24,11 +24,16 @@ final class OpenAIClientTests: XCTestCase {
         XCTAssertTrue(hasAccess)
     }
 
-    func testCheckAccessReturnsFalseForInvalidBaseURL() async {
-        let client = makeClient(baseURL: "://invalid-url")
-        let hasAccess = await client.checkAccess(apiKey: "sk-test", modelID: "gpt-5.4")
+    func testCheckAccessStatusReturnsInvalidCredentials() async {
+        URLProtocolStub.configure(handler: { request in
+            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 401, httpVersion: nil, headerFields: nil)!
+            return (response, nil)
+        })
 
-        XCTAssertFalse(hasAccess)
+        let client = makeClient()
+        let result = await client.checkAccessStatus(apiKey: "sk-test", modelID: "gpt-5.4")
+
+        XCTAssertEqual(result.status, .invalidCredentials)
     }
 
     func testCorrectGrammarSuccessReturnsCorrectedTextAndSendsReasoningForGPT5() async throws {
@@ -181,18 +186,6 @@ final class OpenAIClientTests: XCTestCase {
         }
     }
 
-    func testCorrectGrammarReturnsInvalidURLErrorWhenBaseURLIsInvalid() async {
-        let client = makeClient(baseURL: "://invalid-url")
-        await assertThrowsErrorMessage("OpenAI request URL is invalid.") {
-            try await client.correctGrammar(
-                apiKey: "sk-test",
-                modelID: "gpt-5.4",
-                customInstructions: "",
-                text: "text"
-            )
-        }
-    }
-
     func testExtractMarkdownTextSuccessReturnsExtractedTextAndSendsImageInput() async throws {
         let imageData = Data("image-bytes".utf8)
 
@@ -232,21 +225,8 @@ final class OpenAIClientTests: XCTestCase {
         XCTAssertEqual(extractedText, "Extracted text")
     }
 
-    func testExtractMarkdownTextReturnsInvalidURLErrorWhenBaseURLIsInvalid() async {
-        let client = makeClient(baseURL: "://invalid-url")
-        await assertThrowsErrorMessage("OpenAI request URL is invalid.") {
-            try await client.extractMarkdownText(
-                apiKey: "sk-test",
-                modelID: "gpt-5.4",
-                imageData: Data("image".utf8),
-                mimeType: "image/png",
-                customInstructions: ""
-            )
-        }
-    }
-
-    private func makeClient(baseURL: String = "https://api.openai.com") -> OpenAIClient {
-        OpenAIClient(session: URLProtocolStub.makeSession(), apiBaseURL: baseURL)
+    private func makeClient() -> OpenAIClient {
+        OpenAIClient(session: URLProtocolStub.makeSession())
     }
 
     private func assertThrowsErrorMessage(

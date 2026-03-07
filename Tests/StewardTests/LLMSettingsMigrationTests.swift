@@ -17,13 +17,11 @@ final class LLMSettingsMigrationTests: XCTestCase {
         var settings = LLMSettings.empty()
         settings.providerProfiles[.openAI] = LLMProviderProfile(
             apiKey: "openai-key",
-            modelID: "gpt-5.4",
-            baseURL: ""
+            modelID: "gpt-5.4"
         )
         settings.providerProfiles[.gemini] = LLMProviderProfile(
             apiKey: "gemini-key",
-            modelID: "gemini-3.1-flash-lite-preview",
-            baseURL: ""
+            modelID: "gemini-3.1-flash-lite-preview"
         )
         settings.grammarProviderID = .gemini
         settings.screenshotProviderID = .openAI

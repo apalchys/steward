@@ -58,6 +58,10 @@ final class AppState: ObservableObject {
     private var grammarHotKey: HotKey?
     private var screenOCRHotKey: HotKey?
     private var hasStarted = false
+    private var initialHealthCheckTask: Task<Void, Never>?
+    private var settingsHealthDebounceTask: Task<Void, Never>?
+    private var grammarHealthCheckTask: Task<Void, Never>?
+    private var ocrHealthCheckTask: Task<Void, Never>?
 
     private var isProcessing = false
     private var isScreenSelectionActive = false
@@ -144,9 +148,9 @@ final class AppState: ObservableObject {
             }
         }
 
-        Task { [weak self] in
+        initialHealthCheckTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(500))
-            guard let self else {
+            guard let self, !Task.isCancelled else {
                 return
             }
 
@@ -168,14 +172,22 @@ final class AppState: ObservableObject {
         grammarStatus = .processing(providerID: providerID)
         refreshStatusUI()
 
-        Task {
+        grammarHealthCheckTask?.cancel()
+        grammarHealthCheckTask = Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+
             do {
-                let health = try await llmRouter.checkAccess(for: providerID)
-                self.grammarStatus =
-                    health.hasAccess
-                    ? .ok(providerID: health.providerID)
-                    : .error(providerID: health.providerID, message: "Access check failed")
+                let health = try await self.llmRouter.checkAccess(for: providerID)
+                guard !Task.isCancelled else {
+                    return
+                }
+                self.grammarStatus = self.providerStatus(from: health)
             } catch {
+                guard !Task.isCancelled else {
+                    return
+                }
                 self.grammarStatus = .error(
                     providerID: providerID,
                     message: error.localizedDescription
@@ -191,14 +203,22 @@ final class AppState: ObservableObject {
         ocrStatus = .processing(providerID: providerID)
         refreshStatusUI()
 
-        Task {
+        ocrHealthCheckTask?.cancel()
+        ocrHealthCheckTask = Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+
             do {
-                let health = try await llmRouter.checkAccess(for: providerID)
-                self.ocrStatus =
-                    health.hasAccess
-                    ? .ok(providerID: health.providerID)
-                    : .error(providerID: health.providerID, message: "Access check failed")
+                let health = try await self.llmRouter.checkAccess(for: providerID)
+                guard !Task.isCancelled else {
+                    return
+                }
+                self.ocrStatus = self.providerStatus(from: health)
             } catch {
+                guard !Task.isCancelled else {
+                    return
+                }
                 self.ocrStatus = .error(
                     providerID: providerID,
                     message: error.localizedDescription
@@ -211,8 +231,17 @@ final class AppState: ObservableObject {
 
     func settingsDidChange() {
         applyClipboardHistorySettings()
-        checkGrammarProviderStatus()
-        checkOCRProviderStatus()
+        initialHealthCheckTask?.cancel()
+        settingsHealthDebounceTask?.cancel()
+        settingsHealthDebounceTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(800))
+            guard let self, !Task.isCancelled else {
+                return
+            }
+
+            self.checkGrammarProviderStatus()
+            self.checkOCRProviderStatus()
+        }
     }
 
     func openPreferences() {
@@ -382,7 +411,7 @@ final class AppState: ObservableObject {
     private func providerStatusTitle(prefix: String, status: ProviderStatus) -> String {
         switch status {
         case .ok(let providerID):
-            return "\(prefix): \(providerID.displayName) OK"
+            return "\(prefix): \(providerID.displayName) Ready"
         case .processing(let providerID):
             if let providerID {
                 return "\(prefix): \(providerID.displayName) Checking..."
@@ -391,10 +420,18 @@ final class AppState: ObservableObject {
             return "\(prefix): Checking..."
         case .error(let providerID, let message):
             if let providerID {
-                return "\(prefix): \(providerID.displayName) Error - Click to retry"
+                return "\(prefix): \(providerID.displayName) \(message)"
             }
 
             return "\(prefix): \(message)"
         }
+    }
+
+    private func providerStatus(from health: LLMProviderHealth) -> ProviderStatus {
+        if health.hasAccess {
+            return .ok(providerID: health.providerID)
+        }
+
+        return .error(providerID: health.providerID, message: health.message)
     }
 }

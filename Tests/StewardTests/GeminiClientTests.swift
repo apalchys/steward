@@ -26,11 +26,16 @@ final class GeminiClientTests: XCTestCase {
         XCTAssertTrue(hasAccess)
     }
 
-    func testCheckAccessReturnsFalseForInvalidBaseURL() async {
-        let client = makeClient(baseURL: "://invalid-url")
-        let hasAccess = await client.checkAccess(apiKey: "test-key", modelID: "gemini-3.1-flash-lite-preview")
+    func testCheckAccessStatusReturnsInvalidCredentials() async {
+        URLProtocolStub.configure(handler: { request in
+            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 401, httpVersion: nil, headerFields: nil)!
+            return (response, nil)
+        })
 
-        XCTAssertFalse(hasAccess)
+        let client = makeClient()
+        let result = await client.checkAccessStatus(apiKey: "test-key", modelID: "gemini-3.1-flash-lite-preview")
+
+        XCTAssertEqual(result.status, .invalidCredentials)
     }
 
     func testExtractMarkdownTextSuccessParsesAndTrimsOutput() async throws {
@@ -176,18 +181,6 @@ final class GeminiClientTests: XCTestCase {
         }
     }
 
-    func testExtractMarkdownTextReturnsInvalidURLErrorWhenBaseURLIsInvalid() async {
-        let client = makeClient(baseURL: "://invalid-url")
-        await assertThrowsErrorMessage("Gemini request URL is invalid.") {
-            try await client.extractMarkdownText(
-                apiKey: "test-key",
-                modelID: "gemini-3.1-flash-lite-preview",
-                imageData: Data("image".utf8),
-                mimeType: "image/png"
-            )
-        }
-    }
-
     func testCorrectGrammarSuccessParsesOutput() async throws {
         URLProtocolStub.configure(handler: { request in
             XCTAssertEqual(request.httpMethod, "POST")
@@ -220,20 +213,8 @@ final class GeminiClientTests: XCTestCase {
         XCTAssertEqual(text, "good text")
     }
 
-    func testCorrectGrammarReturnsInvalidURLErrorWhenBaseURLIsInvalid() async {
-        let client = makeClient(baseURL: "://invalid-url")
-        await assertThrowsErrorMessage("Gemini request URL is invalid.") {
-            try await client.correctGrammar(
-                apiKey: "test-key",
-                modelID: "gemini-3.1-flash-lite-preview",
-                customInstructions: "",
-                text: "bad text"
-            )
-        }
-    }
-
-    private func makeClient(baseURL: String = "https://generativelanguage.googleapis.com") -> GeminiClient {
-        GeminiClient(session: URLProtocolStub.makeSession(), apiBaseURL: baseURL)
+    private func makeClient() -> GeminiClient {
+        GeminiClient(session: URLProtocolStub.makeSession())
     }
 
     private func assertThrowsErrorMessage(

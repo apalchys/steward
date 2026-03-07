@@ -9,17 +9,15 @@ private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.stew
 struct LLMProviderProfile: Equatable {
     var apiKey: String
     var modelID: String
-    var baseURL: String
 
     static var empty: LLMProviderProfile {
-        LLMProviderProfile(apiKey: "", modelID: "", baseURL: "")
+        LLMProviderProfile(apiKey: "", modelID: "")
     }
 
     var configuration: LLMProviderConfiguration? {
         let configuration = LLMProviderConfiguration(
             apiKey: apiKey.trimmed,
-            modelID: modelID.trimmed,
-            baseURL: baseURL.trimmed.isEmpty ? nil : baseURL.trimmed
+            modelID: modelID.trimmed
         )
 
         return configuration.isConfigured ? configuration : nil
@@ -186,13 +184,6 @@ final class UserDefaultsLLMSettingsStore: LLMSettingsProviding {
             )
         }
 
-        func baseURL(for providerID: LLMProviderID) -> Defaults.Key<String> {
-            Defaults.Key<String>(
-                "llmProvider_\(providerID.rawValue)_baseURL",
-                default: "",
-                suite: userDefaults
-            )
-        }
     }
 
     private let keys: Keys
@@ -215,8 +206,7 @@ final class UserDefaultsLLMSettingsStore: LLMSettingsProviding {
 
             profiles[providerID] = LLMProviderProfile(
                 apiKey: secretsStore.apiKey(for: providerID),
-                modelID: modelID,
-                baseURL: Defaults[keys.baseURL(for: providerID)]
+                modelID: modelID
             )
         }
 
@@ -245,7 +235,6 @@ final class UserDefaultsLLMSettingsStore: LLMSettingsProviding {
             let normalizedModelID = profile.modelID.trimmed
             Defaults[keys.modelID(for: providerID)] =
                 normalizedModelID.isEmpty ? providerID.defaultModelID : normalizedModelID
-            Defaults[keys.baseURL(for: providerID)] = profile.baseURL
         }
 
         Defaults[keys.grammarProviderID] = settings.grammarProviderID.rawValue
