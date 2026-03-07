@@ -3,7 +3,46 @@ import SwiftUI
 
 @main
 struct StewardApp: App {
-    @StateObject private var appState = AppState()
+    @StateObject private var appState: AppState
+
+    init() {
+        let settingsStore = UserDefaultsLLMSettingsStore()
+        let clipboardHistoryStore = ClipboardHistoryStore()
+        let clipboardMonitor = ClipboardMonitor { record in
+            clipboardHistoryStore.append(record)
+        }
+        let textInteractionService = SystemTextInteractionService(suppression: clipboardMonitor)
+        let llmRouter = LLMRouter(
+            providers: [
+                OpenAILLMProvider(),
+                GeminiLLMProvider(),
+            ],
+            settingsStore: settingsStore
+        )
+        let grammarCoordinator = GrammarCoordinator(
+            router: llmRouter,
+            textInteraction: textInteractionService,
+            settingsStore: settingsStore
+        )
+        let screenOCRCoordinator = ScreenOCRCoordinator(
+            router: llmRouter,
+            textInteraction: textInteractionService,
+            captureService: SystemScreenCaptureService(),
+            selectionPresenter: ScreenSelectionOverlayController(),
+            settingsStore: settingsStore
+        )
+
+        _appState = StateObject(
+            wrappedValue: AppState(
+                settingsStore: settingsStore,
+                clipboardHistoryStore: clipboardHistoryStore,
+                clipboardMonitor: clipboardMonitor,
+                llmRouter: llmRouter,
+                grammarCoordinator: grammarCoordinator,
+                screenOCRCoordinator: screenOCRCoordinator
+            )
+        )
+    }
 
     var body: some Scene {
         MenuBarExtra {

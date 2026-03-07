@@ -1,7 +1,12 @@
 import Foundation
 
 @MainActor
-final class GrammarCoordinator {
+protocol GrammarCoordinating: AnyObject {
+    func handleHotKeyPress() async throws
+}
+
+@MainActor
+final class GrammarCoordinator: GrammarCoordinating {
     private let router: LLMRouting
     private let textInteraction: TextInteractionPerforming
     private let settingsStore: LLMSettingsProviding

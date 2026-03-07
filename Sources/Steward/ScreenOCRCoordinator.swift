@@ -2,7 +2,13 @@ import AppKit
 import Foundation
 
 @MainActor
-final class ScreenOCRCoordinator {
+protocol ScreenOCRCoordinating: AnyObject {
+    var onSelectionActivityChanged: ((Bool) -> Void)? { get set }
+    func handleHotKeyPress() async throws
+}
+
+@MainActor
+final class ScreenOCRCoordinator: ScreenOCRCoordinating {
     var onSelectionActivityChanged: ((Bool) -> Void)?
 
     private let router: LLMRouting

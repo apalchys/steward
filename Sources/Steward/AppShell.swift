@@ -6,6 +6,13 @@ import SwiftUI
 
 private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.steward", category: "app")
 
+protocol ClipboardMonitoring: ClipboardChangeSuppressing {
+    func start()
+    func stop()
+}
+
+extension ClipboardMonitor: ClipboardMonitoring {}
+
 @MainActor
 final class AppState: ObservableObject {
     private enum StatusSymbolName {
@@ -26,34 +33,10 @@ final class AppState: ObservableObject {
     @Published private(set) var grammarStatus: ProviderStatus = .error(providerID: nil, message: "Not checked")
     @Published private(set) var ocrStatus: ProviderStatus = .error(providerID: nil, message: "Not checked")
 
-    private lazy var clipboardMonitor = ClipboardMonitor { [weak self] record in
-        self?.clipboardHistoryStore.append(record)
-    }
-    private lazy var textInteractionService = SystemTextInteractionService(suppression: clipboardMonitor)
-    private let screenCaptureService = SystemScreenCaptureService()
-    private let selectionOverlayController = ScreenSelectionOverlayController()
-
-    private lazy var llmRouter = LLMRouter(
-        providers: [
-            OpenAILLMProvider(),
-            GeminiLLMProvider(),
-        ],
-        settingsStore: settingsStore
-    )
-
-    private lazy var grammarCoordinator = GrammarCoordinator(
-        router: llmRouter,
-        textInteraction: textInteractionService,
-        settingsStore: settingsStore
-    )
-
-    private lazy var screenOCRCoordinator = ScreenOCRCoordinator(
-        router: llmRouter,
-        textInteraction: textInteractionService,
-        captureService: screenCaptureService,
-        selectionPresenter: selectionOverlayController,
-        settingsStore: settingsStore
-    )
+    private let clipboardMonitor: any ClipboardMonitoring
+    private let llmRouter: any LLMRouting
+    private let grammarCoordinator: any GrammarCoordinating
+    private let screenOCRCoordinator: any ScreenOCRCoordinating
 
     private var grammarHotKey: HotKey?
     private var screenOCRHotKey: HotKey?
@@ -68,11 +51,19 @@ final class AppState: ObservableObject {
     private var lastOperationFailed = false
 
     init(
-        settingsStore: any LLMSettingsProviding & ClipboardHistorySettingsProviding = UserDefaultsLLMSettingsStore(),
-        clipboardHistoryStore: ClipboardHistoryStore = ClipboardHistoryStore()
+        settingsStore: any LLMSettingsProviding & ClipboardHistorySettingsProviding,
+        clipboardHistoryStore: ClipboardHistoryStore,
+        clipboardMonitor: any ClipboardMonitoring,
+        llmRouter: any LLMRouting,
+        grammarCoordinator: any GrammarCoordinating,
+        screenOCRCoordinator: any ScreenOCRCoordinating
     ) {
         self.settingsStore = settingsStore
         self.clipboardHistoryStore = clipboardHistoryStore
+        self.clipboardMonitor = clipboardMonitor
+        self.llmRouter = llmRouter
+        self.grammarCoordinator = grammarCoordinator
+        self.screenOCRCoordinator = screenOCRCoordinator
 
         Task { [weak self] in
             self?.start()
