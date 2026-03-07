@@ -6,39 +6,21 @@
 - App entry point is `Sources/Steward/Steward.swift`.
 - App state / lifecycle coordination is in `Sources/Steward/AppShell.swift` (`AppState`).
 - Build output goes to `.build/` (SwiftPM managed).
-- App bundle is assembled into `Steward.app/` by `make build` (`scripts/build.sh`).
+- App bundle is assembled into `Steward.app/` by `make build`.
 - Assets and icons: `Assets/`, `AppIcon.icns`.
 - Top-level docs and config: `README.md`, `BUILD_INSTRUCTIONS.md`, `Package.swift`, `Info.plist`.
 
 ## Architecture
 
-- Style: modular monolith with two SwiftPM targets (`Steward`, `StewardCore`).
-- App shell:
-  - SwiftUI scenes in `Steward.swift` (`MenuBarExtra`, `Window("History")`, `Settings`).
-  - Runtime controller in `AppShell.swift` (`AppState`) owns hotkeys, status state, startup checks, provider checks, and clipboard monitor lifecycle.
-- Feature coordination:
-  - `GrammarCoordinator`
-  - `ScreenOCRCoordinator`
-- UI:
-  - `SettingsView` (tabs: Grammar, Screenshot, About)
-  - `ClipboardHistoryView`
-- Platform services:
-  - text selection/replacement and clipboard writes (`SystemTextInteractionService`)
-  - screen capture (`SystemScreenCaptureService`)
-  - area-selection overlay (`ScreenSelectionOverlayController`)
-- LLM layer:
-  - Contracts in `LLMModels.swift` (`LLMProviderID`, `LLMTask`, `LLMRequest`, `LLMResult`).
-  - `LLMRequest` includes explicit `providerID`; there is no dynamic fallback routing.
-  - Router (`LLMRouter`) validates provider registration/config and dispatches to provider adapters.
-  - Provider adapters: OpenAI and Gemini (both wired for grammar + OCR tasks).
-- Settings/config:
-  - `LLMSettings` stores provider profiles and per-feature provider selection (`grammarProviderID`, `screenshotProviderID`).
-  - Secrets (API keys) are stored via Valet (`LLMSecretsStoring` / `ValetLLMSecretsStore`).
-  - Non-secrets (model IDs, selected providers, custom instructions) are stored via typed `Defaults` keys.
-  - `migrateLegacySettingsIfNeeded()` is intentionally a no-op in current iteration.
-- Dependency direction:
-  - `AppState -> Coordinators -> LLMRouter/PlatformServices -> StewardCore clients`.
-  - SwiftUI scenes/views consume `AppState` and stores; feature code must not call provider clients directly.
+- Style: modular monolith with two SwiftPM targets — an app target and a core library for provider clients and shared helpers.
+- Layers (top to bottom):
+  - SwiftUI scenes — menu bar extra, windows, settings.
+  - App state — a single `@MainActor ObservableObject` that owns lifecycle, hotkeys, status, and wires coordinators to services.
+  - Feature coordinators — one per feature. Each orchestrates a router, text interaction, and any additional services needed for its workflow.
+  - Router — validates provider registration/configuration and dispatches requests to the correct provider adapter. Requests carry an explicit provider ID; there is no dynamic fallback.
+  - Platform services — protocol-backed wrappers for text selection/replacement, clipboard, screen capture, and selection overlay.
+  - Core clients — HTTP clients for each LLM provider, living in the core library target.
+- Dependency direction is strictly top-down: scenes → app state → coordinators → router/services → core clients. Feature code must never call provider clients directly.
 
 ## Build, Test, and Development Commands
 
@@ -82,9 +64,21 @@
 ## Security & Configuration Tips
 
 - Supported providers: OpenAI and Gemini.
-- Do not hardcode API keys.
 - API keys are stored in Keychain via Valet.
 - Non-secret settings are stored locally via Defaults (`UserDefaults`).
 - Clipboard history is stored locally in Application Support (`Steward/clipboard-history.jsonl`).
 - App requires Accessibility permission for text capture/replacement.
 - App requires Screen Recording permission for OCR capture.
+
+## Development Principles
+
+1. Follow Apple Human Interface Guidelines (https://developer.apple.com/design/human-interface-guidelines). When in doubt, match first-party macOS apps.
+2. Define all dependencies as protocols, accept them via `init` with production defaults. No singletons, no global state.
+3. Use `async/await`, `Task`, `@MainActor` for concurrency. Never `DispatchQueue.main.async` or `Thread.sleep`.
+4. Views only observe state and fire actions. No I/O, no service calls, no business logic in SwiftUI views.
+5. Services and coordinators `throw` typed errors. App state catches at the boundary, updates status, and logs.
+6. Secrets (API keys) go in Keychain. Non-sensitive preferences go in `UserDefaults`. Never mix the two.
+7. Guard platform permissions (Accessibility, Screen Recording) at workflow start, before any UI or side effects.
+8. Menu-bar apps use `.accessory` activation policy. Overlay windows stay above apps but below system security UI.
+9. Log with `os.Logger` (consistent subsystem + per-module category), not `print`.
+10. Append-only persistence for local stores. Skip malformed entries on load. Atomic rewrites only for deletions.
