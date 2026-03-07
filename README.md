@@ -24,8 +24,9 @@ See `BUILD_INSTRUCTIONS.md`
 
 ## Development
 
-- Format Swift sources with `sh scripts/format.sh`
-- Check formatting with `sh scripts/format.sh --check`
+- Format Swift sources with `make fmt`
+- Build the app bundle with `make build`
+- Refresh the app icon with `make icon` or `make icon ICON_SOURCE=path/to/input.png`
 - Follow the repo conventions in `AGENTS.md`
 
 ## Running the Application

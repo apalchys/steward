@@ -4,16 +4,17 @@
 
 - Source code lives in `Sources/Steward` (SwiftUI/Cocoa app entry in `Steward.swift`).
 - Build output goes to `.build/` (managed by SwiftPM).
-- App bundle is assembled into `Steward.app/` by `scripts/build_app.sh`.
+- `Makefile` provides shorthand developer commands that delegate to the scripts in `scripts/`.
+- App bundle is assembled into `Steward.app/` by `make build`.
 - Assets and icons: `Assets/`, `AppIcon.icns`.
 - Top-level docs and config: `README.md`, `BUILD_INSTRUCTIONS.md`, `Package.swift`, `Info.plist`.
 
 ## Build, Test, and Development Commands
 
-- `sh scripts/build_app.sh` — Release build via SwiftPM and creates `Steward.app` (codesigned locally).
+- `make build` — Release build via SwiftPM and creates `Steward.app` (codesigned locally).
 - `swift build -c release` — Compile without bundling (binary in `.build/release/Steward`).
-- `sh scripts/format.sh` — Format Swift sources with the repo's `swift-format` rules.
-- `sh scripts/format.sh --check` — Check Swift formatting without rewriting files.
+- `make fmt` — Format Swift sources with the repo's `swift-format` rules.
+- `make icon` — Regenerate `AppIcon.icns` from `Assets/icon.png`.
 - `open Steward.app` — Launch the bundled app.
 - `open Steward.app/Contents/MacOS/Steward` — Run from Terminal.
 - After first run, grant Accessibility permissions in System Settings for text capture.
