@@ -266,7 +266,6 @@ struct SettingsView: View {
                 var profile = settings.profile(for: providerID)
                 profile[keyPath: keyPath] = newValue
                 settings.providerProfiles[providerID] = profile
-                persistSettings(settings)
             }
         )
     }
