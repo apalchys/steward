@@ -95,11 +95,25 @@ final class ClipboardMonitorTests: XCTestCase {
     }
 }
 
-private final class FakePasteboard: ClipboardTextReading {
+private final class FakePasteboard: PasteboardControlling {
     var changeCount = 0
     var currentText: String?
 
     func string(forType dataType: NSPasteboard.PasteboardType) -> String? {
         currentText
+    }
+
+    @discardableResult
+    func clearContents() -> Int {
+        currentText = nil
+        changeCount += 1
+        return changeCount
+    }
+
+    @discardableResult
+    func setString(_ string: String, forType dataType: NSPasteboard.PasteboardType) -> Bool {
+        currentText = string
+        changeCount += 1
+        return true
     }
 }

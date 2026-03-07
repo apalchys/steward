@@ -1,18 +1,22 @@
 import AppKit
 import Foundation
 
-protocol ClipboardTextReading {
+protocol PasteboardControlling: AnyObject {
     var changeCount: Int { get }
     func string(forType dataType: NSPasteboard.PasteboardType) -> String?
+    @discardableResult
+    func clearContents() -> Int
+    @discardableResult
+    func setString(_ string: String, forType dataType: NSPasteboard.PasteboardType) -> Bool
 }
 
-extension NSPasteboard: ClipboardTextReading {}
+extension NSPasteboard: PasteboardControlling {}
 
 @MainActor
 final class ClipboardMonitor {
     static let defaultPollInterval: TimeInterval = 0.75
 
-    private let pasteboard: ClipboardTextReading
+    private let pasteboard: PasteboardControlling
     private let pollInterval: TimeInterval
     private let maxRecordSize: Int
     private let suppressionExpiration: TimeInterval
@@ -24,7 +28,7 @@ final class ClipboardMonitor {
     private var suppressionExpiresAt: Date?
 
     init(
-        pasteboard: ClipboardTextReading = NSPasteboard.general,
+        pasteboard: PasteboardControlling = NSPasteboard.general,
         pollInterval: TimeInterval = ClipboardMonitor.defaultPollInterval,
         maxRecordSize: Int = ClipboardHistoryStore.maxRecordSize,
         suppressionExpiration: TimeInterval = 2.0,

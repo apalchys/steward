@@ -45,14 +45,13 @@ final class ClipboardHistoryStore: ObservableObject, @unchecked Sendable {
         }
     }
 
-    func load(completion: (@Sendable () -> Void)? = nil) {
+    func load() {
         ioQueue.async {
             self.loadFromDisk()
-            self.notifyCompletion(completion)
         }
     }
 
-    func append(_ record: ClipboardHistoryRecord, completion: (@Sendable () -> Void)? = nil) {
+    func append(_ record: ClipboardHistoryRecord) {
         ioQueue.async {
             self.queuedRecords.append(record)
             let didTrim = self.trimQueuedRecordsIfNeeded()
@@ -67,15 +66,12 @@ final class ClipboardHistoryStore: ObservableObject, @unchecked Sendable {
             } catch {
                 self.publishError("Could not save clipboard history.")
             }
-
-            self.notifyCompletion(completion)
         }
     }
 
-    func deleteRecord(id: ClipboardHistoryRecord.ID, completion: (@Sendable () -> Void)? = nil) {
+    func deleteRecord(id: ClipboardHistoryRecord.ID) {
         ioQueue.async {
             guard let index = self.queuedRecords.firstIndex(where: { $0.id == id }) else {
-                self.notifyCompletion(completion)
                 return
             }
 
@@ -91,12 +87,10 @@ final class ClipboardHistoryStore: ObservableObject, @unchecked Sendable {
             } catch {
                 self.publishError("Could not update clipboard history.")
             }
-
-            self.notifyCompletion(completion)
         }
     }
 
-    func clearAll(completion: (@Sendable () -> Void)? = nil) {
+    func clearAll() {
         ioQueue.async {
             self.queuedRecords.removeAll()
             self.publish(records: self.queuedRecords, errorMessage: nil)
@@ -106,19 +100,16 @@ final class ClipboardHistoryStore: ObservableObject, @unchecked Sendable {
             } catch {
                 self.publishError("Could not clear clipboard history.")
             }
-
-            self.notifyCompletion(completion)
         }
     }
 
-    func updateMaxStoredRecords(_ maxStoredRecords: Int, completion: (@Sendable () -> Void)? = nil) {
+    func updateMaxStoredRecords(_ maxStoredRecords: Int) {
         ioQueue.async {
             self.maxStoredRecords = ClipboardHistorySettings.sanitizedMaxStoredRecords(maxStoredRecords)
             let didTrim = self.trimQueuedRecordsIfNeeded()
             self.publish(records: self.queuedRecords, errorMessage: nil)
 
             guard didTrim else {
-                self.notifyCompletion(completion)
                 return
             }
 
@@ -127,8 +118,6 @@ final class ClipboardHistoryStore: ObservableObject, @unchecked Sendable {
             } catch {
                 self.publishError("Could not update clipboard history.")
             }
-
-            self.notifyCompletion(completion)
         }
     }
 
@@ -255,15 +244,6 @@ final class ClipboardHistoryStore: ObservableObject, @unchecked Sendable {
             self.lastErrorMessage = message
         }
     }
-
-    private func notifyCompletion(_ completion: (@Sendable () -> Void)?) {
-        guard let completion else {
-            return
-        }
-
-        completion()
-    }
-
     private enum StoreError: Error {
         case couldNotCreateFile
         case invalidFileEncoding

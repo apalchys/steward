@@ -23,9 +23,9 @@ final class ClipboardHistoryStoreTests: XCTestCase {
         try super.tearDownWithError()
     }
 
-    func testAppendAndReloadPersistsRecords() throws {
+    func testAppendAndReloadPersistsRecords() async throws {
         let store = makeStore()
-        waitForStoreOperation("load") { done in store.load(completion: done) }
+        store.load()
 
         let firstRecord = ClipboardHistoryRecord(
             id: UUID(),
@@ -38,21 +38,24 @@ final class ClipboardHistoryStoreTests: XCTestCase {
             text: "world"
         )
 
-        waitForStoreOperation("append first") { done in
-            store.append(firstRecord, completion: done)
-        }
-        waitForStoreOperation("append second") { done in
-            store.append(secondRecord, completion: done)
+        store.append(firstRecord)
+        await waitUntil("append first") {
+            store.records == [firstRecord]
         }
 
-        XCTAssertEqual(store.records, [firstRecord, secondRecord])
+        store.append(secondRecord)
+        await waitUntil("append second") {
+            store.records == [firstRecord, secondRecord]
+        }
 
         let reloadedStore = makeStore()
-        waitForStoreOperation("reload") { done in reloadedStore.load(completion: done) }
-        XCTAssertEqual(reloadedStore.records, [firstRecord, secondRecord])
+        reloadedStore.load()
+        await waitUntil("reload") {
+            reloadedStore.records == [firstRecord, secondRecord]
+        }
     }
 
-    func testLoadSkipsMalformedJSONLines() throws {
+    func testLoadSkipsMalformedJSONLines() async throws {
         let validRecordA = ClipboardHistoryRecord(
             id: UUID(),
             capturedAt: Date(timeIntervalSince1970: 1_700_000_000),
@@ -74,14 +77,16 @@ final class ClipboardHistoryStoreTests: XCTestCase {
         try payload.write(to: historyFileURL, atomically: true, encoding: .utf8)
 
         let store = makeStore()
-        waitForStoreOperation("load malformed") { done in store.load(completion: done) }
+        store.load()
 
-        XCTAssertEqual(store.records, [validRecordA, validRecordB])
+        await waitUntil("load malformed") {
+            store.records == [validRecordA, validRecordB]
+        }
     }
 
-    func testDeleteRecordRewritesFile() {
+    func testDeleteRecordRewritesFile() async {
         let store = makeStore()
-        waitForStoreOperation("load") { done in store.load(completion: done) }
+        store.load()
 
         let firstRecord = ClipboardHistoryRecord(
             id: UUID(),
@@ -94,49 +99,53 @@ final class ClipboardHistoryStoreTests: XCTestCase {
             text: "second"
         )
 
-        waitForStoreOperation("append first") { done in
-            store.append(firstRecord, completion: done)
-        }
-        waitForStoreOperation("append second") { done in
-            store.append(secondRecord, completion: done)
-        }
-        waitForStoreOperation("delete first") { done in
-            store.deleteRecord(id: firstRecord.id, completion: done)
+        store.append(firstRecord)
+        await waitUntil("append first") {
+            store.records == [firstRecord]
         }
 
-        XCTAssertEqual(store.records, [secondRecord])
+        store.append(secondRecord)
+        await waitUntil("append second") {
+            store.records == [firstRecord, secondRecord]
+        }
+
+        store.deleteRecord(id: firstRecord.id)
+        await waitUntil("delete first") {
+            store.records == [secondRecord]
+        }
 
         let reloadedStore = makeStore()
-        waitForStoreOperation("reload") { done in reloadedStore.load(completion: done) }
-        XCTAssertEqual(reloadedStore.records, [secondRecord])
+        reloadedStore.load()
+        await waitUntil("reload") {
+            reloadedStore.records == [secondRecord]
+        }
     }
 
-    func testClearAllRemovesHistoryFile() {
+    func testClearAllRemovesHistoryFile() async {
         let store = makeStore()
-        waitForStoreOperation("load") { done in store.load(completion: done) }
+        store.load()
 
         let record = ClipboardHistoryRecord(
             id: UUID(),
             capturedAt: Date(timeIntervalSince1970: 1_700_000_000),
             text: "record"
         )
-        waitForStoreOperation("append") { done in
-            store.append(record, completion: done)
+        store.append(record)
+        await waitUntil("append") {
+            store.records == [record]
         }
 
         XCTAssertTrue(FileManager.default.fileExists(atPath: historyFileURL.path))
 
-        waitForStoreOperation("clear all") { done in
-            store.clearAll(completion: done)
+        store.clearAll()
+        await waitUntil("clear all") {
+            store.records.isEmpty && !FileManager.default.fileExists(atPath: self.historyFileURL.path)
         }
-
-        XCTAssertEqual(store.records, [])
-        XCTAssertFalse(FileManager.default.fileExists(atPath: historyFileURL.path))
     }
 
-    func testAppendTrimsOldestRecordsWhenRetentionLimitIsReached() {
+    func testAppendTrimsOldestRecordsWhenRetentionLimitIsReached() async {
         let store = makeStore(maxStoredRecords: 2)
-        waitForStoreOperation("load") { done in store.load(completion: done) }
+        store.load()
 
         let firstRecord = ClipboardHistoryRecord(
             id: UUID(),
@@ -154,26 +163,31 @@ final class ClipboardHistoryStoreTests: XCTestCase {
             text: "third"
         )
 
-        waitForStoreOperation("append first") { done in
-            store.append(firstRecord, completion: done)
-        }
-        waitForStoreOperation("append second") { done in
-            store.append(secondRecord, completion: done)
-        }
-        waitForStoreOperation("append third") { done in
-            store.append(thirdRecord, completion: done)
+        store.append(firstRecord)
+        await waitUntil("append first") {
+            store.records == [firstRecord]
         }
 
-        XCTAssertEqual(store.records, [secondRecord, thirdRecord])
+        store.append(secondRecord)
+        await waitUntil("append second") {
+            store.records == [firstRecord, secondRecord]
+        }
+
+        store.append(thirdRecord)
+        await waitUntil("append third") {
+            store.records == [secondRecord, thirdRecord]
+        }
 
         let reloadedStore = makeStore(maxStoredRecords: 2)
-        waitForStoreOperation("reload") { done in reloadedStore.load(completion: done) }
-        XCTAssertEqual(reloadedStore.records, [secondRecord, thirdRecord])
+        reloadedStore.load()
+        await waitUntil("reload") {
+            reloadedStore.records == [secondRecord, thirdRecord]
+        }
     }
 
-    func testUpdateMaxStoredRecordsTrimsExistingHistory() {
+    func testUpdateMaxStoredRecordsTrimsExistingHistory() async {
         let store = makeStore(maxStoredRecords: 4)
-        waitForStoreOperation("load") { done in store.load(completion: done) }
+        store.load()
 
         let records = (0..<3).map { index in
             ClipboardHistoryRecord(
@@ -184,20 +198,22 @@ final class ClipboardHistoryStoreTests: XCTestCase {
         }
 
         for (index, record) in records.enumerated() {
-            waitForStoreOperation("append \(index)") { done in
-                store.append(record, completion: done)
+            store.append(record)
+            await waitUntil("append \(index)") {
+                store.records == Array(records.prefix(index + 1))
             }
         }
 
-        waitForStoreOperation("trim to two") { done in
-            store.updateMaxStoredRecords(2, completion: done)
+        store.updateMaxStoredRecords(2)
+        await waitUntil("trim to two") {
+            store.records == Array(records.suffix(2))
         }
 
-        XCTAssertEqual(store.records, Array(records.suffix(2)))
-
         let reloadedStore = makeStore(maxStoredRecords: 2)
-        waitForStoreOperation("reload") { done in reloadedStore.load(completion: done) }
-        XCTAssertEqual(reloadedStore.records, Array(records.suffix(2)))
+        reloadedStore.load()
+        await waitUntil("reload") {
+            reloadedStore.records == Array(records.suffix(2))
+        }
     }
 
     private func makeStore(maxStoredRecords: Int = ClipboardHistorySettings.default.maxStoredRecords) -> ClipboardHistoryStore {
@@ -210,12 +226,25 @@ final class ClipboardHistoryStoreTests: XCTestCase {
         )
     }
 
-    private func waitForStoreOperation(_ description: String, operation: (@escaping @Sendable () -> Void) -> Void) {
-        let completionExpectation = expectation(description: description)
-        operation {
-            completionExpectation.fulfill()
+    private func waitUntil(
+        _ description: String,
+        timeout: Duration = .seconds(2),
+        pollInterval: Duration = .milliseconds(10),
+        file: StaticString = #filePath,
+        line: UInt = #line,
+        _ condition: @escaping () -> Bool
+    ) async {
+        let deadline = ContinuousClock.now + timeout
+
+        while ContinuousClock.now < deadline {
+            if condition() {
+                return
+            }
+
+            try? await Task.sleep(for: pollInterval)
         }
-        wait(for: [completionExpectation], timeout: 2.0)
+
+        XCTAssertTrue(condition(), "Timed out waiting for \(description)", file: file, line: line)
     }
 
     private func jsonLine(for record: ClipboardHistoryRecord) throws -> String {

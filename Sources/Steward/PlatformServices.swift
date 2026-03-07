@@ -31,17 +31,6 @@ enum TextInteractionError: LocalizedError {
     }
 }
 
-protocol PasteboardControlling: AnyObject {
-    var changeCount: Int { get }
-    func string(forType dataType: NSPasteboard.PasteboardType) -> String?
-    @discardableResult
-    func clearContents() -> Int
-    @discardableResult
-    func setString(_ string: String, forType dataType: NSPasteboard.PasteboardType) -> Bool
-}
-
-extension NSPasteboard: PasteboardControlling {}
-
 protocol TextInteractionEventPosting {
     func postCopyCommand()
     func postPasteCommand()
