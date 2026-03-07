@@ -15,9 +15,7 @@ final class AppStateTests: XCTestCase {
         let router = FakeAppRouter()
         let grammarCoordinator = FakeGrammarCoordinator()
         let screenOCRCoordinator = FakeScreenOCRCoordinator()
-        let permissionStatusProvider = FakePermissionStatusProvider()
-        let shortcutAvailabilityChecker = FakeShortcutAvailabilityChecker()
-        let systemSettingsOpener = FakeSystemSettingsOpener()
+        let appSystemServices = FakeAppSystemServices()
         let appState = AppState(
             settingsStore: settingsStore,
             clipboardHistoryStore: clipboardHistoryStore,
@@ -25,9 +23,7 @@ final class AppStateTests: XCTestCase {
             llmRouter: router,
             grammarCoordinator: grammarCoordinator,
             screenOCRCoordinator: screenOCRCoordinator,
-            permissionStatusProvider: permissionStatusProvider,
-            shortcutAvailabilityChecker: shortcutAvailabilityChecker,
-            systemSettingsOpener: systemSettingsOpener
+            appSystemServices: appSystemServices.services
         )
 
         appState.start()
@@ -39,7 +35,7 @@ final class AppStateTests: XCTestCase {
 
     func testStartRefreshesPermissionStatuses() async {
         _ = NSApplication.shared
-        let permissionStatusProvider = FakePermissionStatusProvider(
+        let appSystemServices = FakeAppSystemServices(
             accessibilityPermissionGranted: true,
             screenRecordingPermissionGranted: false
         )
@@ -50,9 +46,7 @@ final class AppStateTests: XCTestCase {
             llmRouter: FakeAppRouter(),
             grammarCoordinator: FakeGrammarCoordinator(),
             screenOCRCoordinator: FakeScreenOCRCoordinator(),
-            permissionStatusProvider: permissionStatusProvider,
-            shortcutAvailabilityChecker: FakeShortcutAvailabilityChecker(),
-            systemSettingsOpener: FakeSystemSettingsOpener()
+            appSystemServices: appSystemServices.services
         )
 
         appState.start()
@@ -65,7 +59,7 @@ final class AppStateTests: XCTestCase {
 
     func testStartPublishesShortcutConflictMessageWhenShortcutIsUnavailable() async {
         _ = NSApplication.shared
-        let shortcutAvailabilityChecker = FakeShortcutAvailabilityChecker(unavailableKeyCodes: [Key.f.carbonKeyCode])
+        let appSystemServices = FakeAppSystemServices(unavailableKeyCodes: [Key.f.carbonKeyCode])
         let appState = AppState(
             settingsStore: FakeAppSettingsStore(),
             clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
@@ -73,9 +67,7 @@ final class AppStateTests: XCTestCase {
             llmRouter: FakeAppRouter(),
             grammarCoordinator: FakeGrammarCoordinator(),
             screenOCRCoordinator: FakeScreenOCRCoordinator(),
-            permissionStatusProvider: FakePermissionStatusProvider(),
-            shortcutAvailabilityChecker: shortcutAvailabilityChecker,
-            systemSettingsOpener: FakeSystemSettingsOpener()
+            appSystemServices: appSystemServices.services
         )
 
         appState.start()
@@ -89,7 +81,7 @@ final class AppStateTests: XCTestCase {
 
     func testOpenPreferencesUsesSettingsOpener() {
         _ = NSApplication.shared
-        let systemSettingsOpener = FakeSystemSettingsOpener()
+        let appSystemServices = FakeAppSystemServices()
         let appState = AppState(
             settingsStore: FakeAppSettingsStore(),
             clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
@@ -97,14 +89,12 @@ final class AppStateTests: XCTestCase {
             llmRouter: FakeAppRouter(),
             grammarCoordinator: FakeGrammarCoordinator(),
             screenOCRCoordinator: FakeScreenOCRCoordinator(),
-            permissionStatusProvider: FakePermissionStatusProvider(),
-            shortcutAvailabilityChecker: FakeShortcutAvailabilityChecker(),
-            systemSettingsOpener: systemSettingsOpener
+            appSystemServices: appSystemServices.services
         )
 
         appState.openPreferences()
 
-        XCTAssertEqual(systemSettingsOpener.openApplicationSettingsCallCount, 1)
+        XCTAssertEqual(appSystemServices.openApplicationSettingsCallCount, 1)
     }
 }
 
@@ -161,41 +151,41 @@ private final class FakeAppSettingsStore: AppSettingsProviding {
     }
 }
 
-private struct FakePermissionStatusProvider: PermissionStatusProviding {
+@MainActor
+private final class FakeAppSystemServices {
     var accessibilityPermissionGranted = false
     var screenRecordingPermissionGranted = false
-
-    func isAccessibilityPermissionGranted() -> Bool {
-        accessibilityPermissionGranted
-    }
-
-    func isScreenRecordingPermissionGranted() -> Bool {
-        screenRecordingPermissionGranted
-    }
-}
-
-private struct FakeShortcutAvailabilityChecker: ShortcutAvailabilityChecking {
     var unavailableKeyCodes: Set<UInt32> = []
-
-    func isShortcutAvailable(key: Key, modifiers: NSEvent.ModifierFlags) -> Bool {
-        !unavailableKeyCodes.contains(key.carbonKeyCode)
-    }
-}
-
-private final class FakeSystemSettingsOpener: SystemSettingsOpening {
     private(set) var openApplicationSettingsCallCount = 0
     private(set) var openAccessibilityPrivacySettingsCallCount = 0
     private(set) var openScreenRecordingPrivacySettingsCallCount = 0
 
-    func openApplicationSettings() {
-        openApplicationSettingsCallCount += 1
+    init(
+        accessibilityPermissionGranted: Bool = false,
+        screenRecordingPermissionGranted: Bool = false,
+        unavailableKeyCodes: Set<UInt32> = []
+    ) {
+        self.accessibilityPermissionGranted = accessibilityPermissionGranted
+        self.screenRecordingPermissionGranted = screenRecordingPermissionGranted
+        self.unavailableKeyCodes = unavailableKeyCodes
     }
 
-    func openAccessibilityPrivacySettings() {
-        openAccessibilityPrivacySettingsCallCount += 1
-    }
-
-    func openScreenRecordingPrivacySettings() {
-        openScreenRecordingPrivacySettingsCallCount += 1
+    var services: AppSystemServices {
+        AppSystemServices(
+            isAccessibilityPermissionGranted: { self.accessibilityPermissionGranted },
+            isScreenRecordingPermissionGranted: { self.screenRecordingPermissionGranted },
+            isShortcutAvailable: { key, _ in
+                !self.unavailableKeyCodes.contains(key.carbonKeyCode)
+            },
+            openApplicationSettings: {
+                self.openApplicationSettingsCallCount += 1
+            },
+            openAccessibilityPrivacySettings: {
+                self.openAccessibilityPrivacySettingsCallCount += 1
+            },
+            openScreenRecordingPrivacySettings: {
+                self.openScreenRecordingPrivacySettingsCallCount += 1
+            }
+        )
     }
 }

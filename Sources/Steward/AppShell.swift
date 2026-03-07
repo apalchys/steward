@@ -23,6 +23,24 @@ final class AppState: ObservableObject {
         let displayValue: String
     }
 
+    private enum FeatureKind {
+        case grammar
+        case ocr
+
+        var statusPrefix: String {
+            switch self {
+            case .grammar:
+                return "Grammar"
+            case .ocr:
+                return "OCR"
+            }
+        }
+
+        var logLabel: String {
+            statusPrefix
+        }
+    }
+
     private enum StatusSymbolName {
         static let readyFallback = "pencil.and.outline"
         static let error = "exclamationmark.triangle"
@@ -48,9 +66,7 @@ final class AppState: ObservableObject {
     private let llmRouter: any LLMRouting
     private let grammarCoordinator: any GrammarCoordinating
     private let screenOCRCoordinator: any ScreenOCRCoordinating
-    private let permissionStatusProvider: PermissionStatusProviding
-    private let shortcutAvailabilityChecker: ShortcutAvailabilityChecking
-    private let systemSettingsOpener: SystemSettingsOpening
+    private let appSystemServices: AppSystemServices
 
     private var grammarHotKey: HotKey?
     private var screenOCRHotKey: HotKey?
@@ -71,9 +87,7 @@ final class AppState: ObservableObject {
         llmRouter: any LLMRouting,
         grammarCoordinator: any GrammarCoordinating,
         screenOCRCoordinator: any ScreenOCRCoordinating,
-        permissionStatusProvider: PermissionStatusProviding,
-        shortcutAvailabilityChecker: ShortcutAvailabilityChecking,
-        systemSettingsOpener: SystemSettingsOpening
+        appSystemServices: AppSystemServices
     ) {
         self.settingsStore = settingsStore
         self.clipboardHistoryStore = clipboardHistoryStore
@@ -81,9 +95,7 @@ final class AppState: ObservableObject {
         self.llmRouter = llmRouter
         self.grammarCoordinator = grammarCoordinator
         self.screenOCRCoordinator = screenOCRCoordinator
-        self.permissionStatusProvider = permissionStatusProvider
-        self.shortcutAvailabilityChecker = shortcutAvailabilityChecker
-        self.systemSettingsOpener = systemSettingsOpener
+        self.appSystemServices = appSystemServices
 
         Task { [weak self] in
             self?.start()
@@ -119,11 +131,11 @@ final class AppState: ObservableObject {
     }
 
     var grammarStatusTitle: String {
-        providerStatusTitle(prefix: "Grammar", status: grammarStatus)
+        providerStatusTitle(prefix: FeatureKind.grammar.statusPrefix, status: grammarStatus)
     }
 
     var ocrStatusTitle: String {
-        providerStatusTitle(prefix: "OCR", status: ocrStatus)
+        providerStatusTitle(prefix: FeatureKind.ocr.statusPrefix, status: ocrStatus)
     }
 
     var accessibilityStatusTitle: String {
@@ -179,73 +191,19 @@ final class AppState: ObservableObject {
     }
 
     func runGrammarAction() {
-        handleGrammarHotKeyPress()
+        handleHotKeyPress(for: .grammar)
     }
 
     func runScreenOCRAction() {
-        handleScreenOCRHotKeyPress()
+        handleHotKeyPress(for: .ocr)
     }
 
     func checkGrammarProviderStatus() {
-        let providerID = currentGrammarProviderID()
-        grammarStatus = .processing(providerID: providerID)
-        refreshStatusUI()
-
-        grammarHealthCheckTask?.cancel()
-        grammarHealthCheckTask = Task { @MainActor [weak self] in
-            guard let self else {
-                return
-            }
-
-            do {
-                let health = try await self.llmRouter.checkAccess(for: providerID)
-                guard !Task.isCancelled else {
-                    return
-                }
-                self.grammarStatus = self.providerStatus(from: health)
-            } catch {
-                guard !Task.isCancelled else {
-                    return
-                }
-                self.grammarStatus = .error(
-                    providerID: providerID,
-                    message: error.localizedDescription
-                )
-            }
-
-            self.refreshStatusUI()
-        }
+        checkProviderStatus(for: .grammar)
     }
 
     func checkOCRProviderStatus() {
-        let providerID = currentScreenshotProviderID()
-        ocrStatus = .processing(providerID: providerID)
-        refreshStatusUI()
-
-        ocrHealthCheckTask?.cancel()
-        ocrHealthCheckTask = Task { @MainActor [weak self] in
-            guard let self else {
-                return
-            }
-
-            do {
-                let health = try await self.llmRouter.checkAccess(for: providerID)
-                guard !Task.isCancelled else {
-                    return
-                }
-                self.ocrStatus = self.providerStatus(from: health)
-            } catch {
-                guard !Task.isCancelled else {
-                    return
-                }
-                self.ocrStatus = .error(
-                    providerID: providerID,
-                    message: error.localizedDescription
-                )
-            }
-
-            self.refreshStatusUI()
-        }
+        checkProviderStatus(for: .ocr)
     }
 
     func settingsDidChange() {
@@ -268,16 +226,16 @@ final class AppState: ObservableObject {
     }
 
     func refreshPermissionStatuses() {
-        accessibilityPermissionGranted = permissionStatusProvider.isAccessibilityPermissionGranted()
-        screenRecordingPermissionGranted = permissionStatusProvider.isScreenRecordingPermissionGranted()
+        accessibilityPermissionGranted = appSystemServices.isAccessibilityPermissionGranted()
+        screenRecordingPermissionGranted = appSystemServices.isScreenRecordingPermissionGranted()
     }
 
     func openAccessibilityPrivacySettings() {
-        systemSettingsOpener.openAccessibilityPrivacySettings()
+        appSystemServices.openAccessibilityPrivacySettings()
     }
 
     func openScreenRecordingPrivacySettings() {
-        systemSettingsOpener.openScreenRecordingPrivacySettings()
+        appSystemServices.openScreenRecordingPrivacySettings()
     }
 
     private func setupHotKeys() {
@@ -299,7 +257,7 @@ final class AppState: ObservableObject {
         if let hotKey = makeHotKey(
             for: grammarShortcut,
             action: { [weak self] in
-                self?.handleGrammarHotKeyPress()
+                self?.handleHotKeyPress(for: .grammar)
             })
         {
             grammarHotKey = hotKey
@@ -310,7 +268,7 @@ final class AppState: ObservableObject {
         if let hotKey = makeHotKey(
             for: screenOCRShortcut,
             action: { [weak self] in
-                self?.handleScreenOCRHotKeyPress()
+                self?.handleHotKeyPress(for: .ocr)
             })
         {
             screenOCRHotKey = hotKey
@@ -321,42 +279,38 @@ final class AppState: ObservableObject {
         shortcutRegistrationMessage = shortcutConflictMessage(for: unavailableShortcuts)
     }
 
-    private func handleGrammarHotKeyPress() {
-        guard !isProcessing else {
-            return
-        }
-
-        lastOperationFailed = false
-        isProcessing = true
-
-        grammarStatus = .processing(providerID: currentGrammarProviderID())
+    private func checkProviderStatus(for feature: FeatureKind) {
+        let providerID = providerID(for: feature)
+        setStatus(.processing(providerID: providerID), for: feature)
         refreshStatusUI()
 
-        Task {
-            do {
-                try await grammarCoordinator.handleHotKeyPress()
-                self.lastOperationFailed = false
-                self.markGrammarStatusFromCurrentConfiguration(asError: false, message: nil)
-            } catch {
-                if case GrammarCoordinatorError.noSelectedText = error {
-                    self.lastOperationFailed = false
-                } else {
-                    self.lastOperationFailed = true
-                    self.markGrammarStatusFromCurrentConfiguration(
-                        asError: true, message: error.localizedDescription)
-                    if self.shouldOpenSettings(for: error) {
-                        self.openSettingsWindow()
-                    }
-                    logger.error("Grammar error: \(error.localizedDescription)")
+        healthCheckTask(for: feature)?.cancel()
+        setHealthCheckTask(
+            Task { @MainActor [weak self] in
+                guard let self else {
+                    return
                 }
-            }
 
-            self.isProcessing = false
-            self.refreshStatusUI()
-        }
+                do {
+                    let health = try await self.llmRouter.checkAccess(for: providerID)
+                    guard !Task.isCancelled else {
+                        return
+                    }
+                    self.setStatus(self.providerStatus(from: health), for: feature)
+                } catch {
+                    guard !Task.isCancelled else {
+                        return
+                    }
+                    self.setStatus(.error(providerID: providerID, message: error.localizedDescription), for: feature)
+                }
+
+                self.refreshStatusUI()
+            },
+            for: feature
+        )
     }
 
-    private func handleScreenOCRHotKeyPress() {
+    private func handleHotKeyPress(for feature: FeatureKind) {
         guard !isProcessing else {
             return
         }
@@ -364,24 +318,25 @@ final class AppState: ObservableObject {
         lastOperationFailed = false
         isProcessing = true
 
-        ocrStatus = .processing(providerID: currentScreenshotProviderID())
+        setStatus(.processing(providerID: providerID(for: feature)), for: feature)
         refreshStatusUI()
 
         Task {
             do {
-                try await screenOCRCoordinator.handleHotKeyPress()
+                try await performOperation(for: feature)
                 self.lastOperationFailed = false
-                self.markOCRStatusFromCurrentConfiguration(asError: false, message: nil)
+                self.markStatusFromCurrentConfiguration(for: feature, asError: false, message: nil)
             } catch {
-                if case ScreenOCRCoordinatorError.cancelled = error {
+                if self.shouldIgnoreFailure(for: feature, error: error) {
                     self.lastOperationFailed = false
                 } else {
                     self.lastOperationFailed = true
-                    self.markOCRStatusFromCurrentConfiguration(asError: true, message: error.localizedDescription)
+                    self.markStatusFromCurrentConfiguration(
+                        for: feature, asError: true, message: error.localizedDescription)
                     if self.shouldOpenSettings(for: error) {
                         self.openSettingsWindow()
                     }
-                    logger.error("OCR error: \(error.localizedDescription)")
+                    logger.error("\(feature.logLabel) error: \(error.localizedDescription)")
                 }
             }
 
@@ -400,35 +355,78 @@ final class AppState: ObservableObject {
     }
 
     private func openSettingsWindow() {
-        systemSettingsOpener.openApplicationSettings()
+        appSystemServices.openApplicationSettings()
     }
 
-    private func markGrammarStatusFromCurrentConfiguration(asError: Bool, message: String?) {
-        let providerID = currentGrammarProviderID()
+    private func markStatusFromCurrentConfiguration(for feature: FeatureKind, asError: Bool, message: String?) {
+        let providerID = providerID(for: feature)
+        let status: ProviderStatus =
+            asError
+            ? .error(providerID: providerID, message: message ?? "Error")
+            : .ok(providerID: providerID)
+        setStatus(status, for: feature)
+    }
 
-        if asError {
-            grammarStatus = .error(providerID: providerID, message: message ?? "Error")
-        } else {
-            grammarStatus = .ok(providerID: providerID)
+    private func providerID(for feature: FeatureKind) -> LLMProviderID {
+        let settings = settingsStore.loadSettings()
+
+        switch feature {
+        case .grammar:
+            return settings.grammarProviderID
+        case .ocr:
+            return settings.screenshotProviderID
         }
     }
 
-    private func markOCRStatusFromCurrentConfiguration(asError: Bool, message: String?) {
-        let providerID = currentScreenshotProviderID()
-
-        if asError {
-            ocrStatus = .error(providerID: providerID, message: message ?? "Error")
-        } else {
-            ocrStatus = .ok(providerID: providerID)
+    private func setStatus(_ status: ProviderStatus, for feature: FeatureKind) {
+        switch feature {
+        case .grammar:
+            grammarStatus = status
+        case .ocr:
+            ocrStatus = status
         }
     }
 
-    private func currentGrammarProviderID() -> LLMProviderID {
-        settingsStore.loadSettings().grammarProviderID
+    private func healthCheckTask(for feature: FeatureKind) -> Task<Void, Never>? {
+        switch feature {
+        case .grammar:
+            return grammarHealthCheckTask
+        case .ocr:
+            return ocrHealthCheckTask
+        }
     }
 
-    private func currentScreenshotProviderID() -> LLMProviderID {
-        settingsStore.loadSettings().screenshotProviderID
+    private func setHealthCheckTask(_ task: Task<Void, Never>, for feature: FeatureKind) {
+        switch feature {
+        case .grammar:
+            grammarHealthCheckTask = task
+        case .ocr:
+            ocrHealthCheckTask = task
+        }
+    }
+
+    private func performOperation(for feature: FeatureKind) async throws {
+        switch feature {
+        case .grammar:
+            try await grammarCoordinator.handleHotKeyPress()
+        case .ocr:
+            try await screenOCRCoordinator.handleHotKeyPress()
+        }
+    }
+
+    private func shouldIgnoreFailure(for feature: FeatureKind, error: Error) -> Bool {
+        switch feature {
+        case .grammar:
+            if case GrammarCoordinatorError.noSelectedText = error {
+                return true
+            }
+        case .ocr:
+            if case ScreenOCRCoordinatorError.cancelled = error {
+                return true
+            }
+        }
+
+        return false
     }
 
     private func refreshStatusUI() {
@@ -513,7 +511,7 @@ final class AppState: ObservableObject {
     }
 
     private func makeHotKey(for shortcut: AppShortcut, action: @escaping @MainActor () -> Void) -> HotKey? {
-        guard shortcutAvailabilityChecker.isShortcutAvailable(key: shortcut.key, modifiers: shortcut.modifiers) else {
+        guard appSystemServices.isShortcutAvailable(shortcut.key, shortcut.modifiers) else {
             logger.error("Shortcut unavailable: \(shortcut.displayValue, privacy: .public)")
             return nil
         }

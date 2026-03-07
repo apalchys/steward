@@ -12,9 +12,7 @@ struct StewardApp: App {
             clipboardHistoryStore.append(record)
         }
         let textInteractionService = SystemTextInteractionService(suppression: clipboardMonitor)
-        let permissionStatusProvider = SystemPermissionStatusProvider()
-        let shortcutAvailabilityChecker = SystemShortcutAvailabilityChecker()
-        let systemSettingsOpener = SystemSettingsOpener()
+        let appSystemServices = AppSystemServices.live()
         let llmRouter = LLMRouter(
             providers: [
                 OpenAILLMProvider(),
@@ -43,9 +41,7 @@ struct StewardApp: App {
                 llmRouter: llmRouter,
                 grammarCoordinator: grammarCoordinator,
                 screenOCRCoordinator: screenOCRCoordinator,
-                permissionStatusProvider: permissionStatusProvider,
-                shortcutAvailabilityChecker: shortcutAvailabilityChecker,
-                systemSettingsOpener: systemSettingsOpener
+                appSystemServices: appSystemServices
             )
         )
     }
