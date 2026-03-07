@@ -10,19 +10,3 @@ public func buildGrammarPrompt(customInstructions: String) -> String {
         return grammarCorrectionPrompt + "\n\nAdditional instructions to follow:\n" + customInstructions
     }
 }
-
-public func preferenceValue(forKey key: String, defaultValue: String) -> String {
-    let storedValue = UserDefaults.standard.string(forKey: key)?
-        .trimmingCharacters(in: .whitespacesAndNewlines)
-
-    if let storedValue, !storedValue.isEmpty {
-        return storedValue
-    }
-
-    return defaultValue
-}
-
-public func savePreferenceValue(_ value: String, forKey key: String, defaultValue: String) {
-    let normalizedValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
-    UserDefaults.standard.set(normalizedValue.isEmpty ? defaultValue : normalizedValue, forKey: key)
-}
