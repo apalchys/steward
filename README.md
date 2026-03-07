@@ -20,7 +20,13 @@ A macOS menu bar application for grammar correction and screen OCR using OpenAI'
 
 ## Building
 
-See BUILD_INSTRUCTIONS.md
+See `BUILD_INSTRUCTIONS.md`
+
+## Development
+
+- Format Swift sources with `sh scripts/format.sh`
+- Check formatting with `sh scripts/format.sh --check`
+- Follow the repo conventions in `AGENTS.md`
 
 ## Running the Application
 

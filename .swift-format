@@ -1,0 +1,21 @@
+{
+    "version": 1,
+    "indentation": {
+        "spaces": 4
+    },
+    "lineLength": 120,
+    "maximumBlankLines": 1,
+    "respectsExistingLineBreaks": true,
+    "indentSwitchCaseLabels": false,
+    "lineBreakBeforeControlFlowKeywords": false,
+    "lineBreakBeforeEachArgument": false,
+    "lineBreakBeforeEachGenericRequirement": false,
+    "lineBreakBetweenDeclarationAttributes": false,
+    "multiElementCollectionTrailingCommas": true,
+    "spacesBeforeEndOfLineComments": 2,
+    "tabWidth": 8,
+    "rules": {
+        "FileScopedDeclarationPrivacy": false,
+        "OrderedImports": false
+    }
+}

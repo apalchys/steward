@@ -4,14 +4,16 @@
 
 - Source code lives in `Sources/Steward` (SwiftUI/Cocoa app entry in `Steward.swift`).
 - Build output goes to `.build/` (managed by SwiftPM).
-- App bundle is assembled into `Steward.app/` by `build_app.sh`.
+- App bundle is assembled into `Steward.app/` by `scripts/build_app.sh`.
 - Assets and icons: `Assets/`, `AppIcon.icns`.
 - Top-level docs and config: `README.md`, `BUILD_INSTRUCTIONS.md`, `Package.swift`, `Info.plist`.
 
 ## Build, Test, and Development Commands
 
-- `sh build_app.sh` — Release build via SwiftPM and creates `Steward.app` (codesigned locally).
+- `sh scripts/build_app.sh` — Release build via SwiftPM and creates `Steward.app` (codesigned locally).
 - `swift build -c release` — Compile without bundling (binary in `.build/release/Steward`).
+- `sh scripts/format.sh` — Format Swift sources with the repo's `swift-format` rules.
+- `sh scripts/format.sh --check` — Check Swift formatting without rewriting files.
 - `open Steward.app` — Launch the bundled app.
 - `open Steward.app/Contents/MacOS/Steward` — Run from Terminal.
 - After first run, grant Accessibility permissions in System Settings for text capture.
@@ -20,9 +22,14 @@
 
 - Language: Swift 5.7+, macOS 13+. Prefer SwiftUI for UI and idiomatic Cocoa/AppKit usage where needed.
 - Indentation: 4 spaces; line length ~120 chars.
-- Naming: `UpperCamelCase` for types, `lowerCamelCase` for vars/functions, `SCREAMING_SNAKE_CASE` for constants.
+- Naming: `UpperCamelCase` for types, `lowerCamelCase` for vars/functions/properties/constants.
+- Prefer `guard`-first control flow and keep nesting shallow.
 - File layout: one primary type per file; group related views/utilities near usage under `Sources/Steward`.
-- No linter is enforced. Keep formatting consistent with existing code. Consider `swift-format` locally if desired.
+- In SwiftUI views, keep chained modifiers on separate lines when they stack up.
+- Add comments only when behavior is non-obvious, platform-specific, or permission-related.
+- Prefer type-scoped helpers and constants over new globals when practical.
+- Nest request/response helper types inside the client or owner that uses them.
+- Format Swift code with `swift format` using the repo's `.swift-format` config.
 
 ## Testing Guidelines
 

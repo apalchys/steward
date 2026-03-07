@@ -4,10 +4,10 @@ struct GeminiClient {
     static let defaultModelID = "gemini-3.1-flash-lite-preview"
 
     private static let ocrInstruction = """
-    You are an OCR assistant. Extract all visible text from the provided image and return only the extracted text in Markdown.
-    Preserve headings, paragraphs, lists, tables, and code blocks when they are visually clear.
-    Do not add explanations, summaries, or commentary.
-    """
+        You are an OCR assistant. Extract all visible text from the provided image and return only the extracted text in Markdown.
+        Preserve headings, paragraphs, lists, tables, and code blocks when they are visually clear.
+        Do not add explanations, summaries, or commentary.
+        """
 
     private struct GenerateContentRequest: Encodable {
         struct Content: Encodable {
@@ -117,7 +117,8 @@ struct GeminiClient {
 
     func checkAccess(apiKey: String, modelID: String, completion: @escaping (Bool) -> Void) {
         let encodedModelID = modelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? modelID
-        var components = URLComponents(string: "https://generativelanguage.googleapis.com/v1beta/models/\(encodedModelID)")
+        var components = URLComponents(
+            string: "https://generativelanguage.googleapis.com/v1beta/models/\(encodedModelID)")
         components?.queryItems = [URLQueryItem(name: "key", value: apiKey)]
 
         guard let apiURL = components?.url else {
@@ -146,7 +147,7 @@ struct GeminiClient {
             contents: [
                 .init(parts: [
                     .init(text: "Extract all visible text from this screenshot selection and return Markdown only."),
-                    .init(inlineData: .init(mimeType: mimeType, data: imageData.base64EncodedString()))
+                    .init(inlineData: .init(mimeType: mimeType, data: imageData.base64EncodedString())),
                 ])
             ]
         )

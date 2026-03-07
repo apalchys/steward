@@ -28,7 +28,8 @@ struct OpenAIClient {
         let output: [OutputItem]
 
         var outputText: String? {
-            let text = output
+            let text =
+                output
                 .filter { $0.type == "message" }
                 .flatMap { $0.content ?? [] }
                 .filter { $0.type == "output_text" }

@@ -5,7 +5,7 @@
 2. Build the app
 
 ```bash
-   sh build_app.sh
+   sh scripts/build_app.sh
 ```
 
 3. Copy `Steward.app` to Applications
@@ -27,6 +27,12 @@
    - Leaving model IDs empty falls back to `gpt-5.4` and `gemini-3.1-flash-lite-preview`
 5. To fix grammar, select text in any application and press `Command+Shift+F`
 6. To extract screen text, press `Command+Shift+R`, drag to select an area, and wait for the Markdown text to land in your clipboard
+
+## Formatting
+
+- Format Swift sources with `sh scripts/format.sh`
+- Check formatting with `sh scripts/format.sh --check`
+- Repo-specific style conventions live in `AGENTS.md`
 
 ## API Key Information
 

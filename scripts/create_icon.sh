@@ -1,7 +1,14 @@
 #!/bin/bash
 
 # This script creates an .icns file from a source image
-# Usage: ./create_icon.sh input.png
+# Usage: ./scripts/create_icon.sh input.png
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+cd "$REPO_ROOT"
 
 if [ $# -ne 1 ]; then
   echo "Usage: $0 input.png"
@@ -42,4 +49,4 @@ iconutil -c icns "$ICONSET_NAME"
 rm -rf "$ICONSET_NAME"
 
 echo "Icon created successfully: AppIcon.icns"
-echo "Use this icon in your build_app.sh script"
+echo "Use this icon in your scripts/build_app.sh script"

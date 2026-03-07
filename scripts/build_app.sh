@@ -3,6 +3,11 @@
 # Exit on error
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+cd "$REPO_ROOT"
+
 # Clean up any previous app bundle
 echo "Removing previous app bundle if it exists..."
 rm -rf Steward.app
@@ -69,7 +74,7 @@ if [ -f "AppIcon.icns" ]; then
   cp -f AppIcon.icns Steward.app/Contents/Resources/
   echo "✅ Found and copied app icon"
 else
-  echo "⚠️ No AppIcon.icns found. Create one using ./create_icon.sh your_image.png"
+  echo "⚠️ No AppIcon.icns found. Create one using ./scripts/create_icon.sh your_image.png"
   touch Steward.app/Contents/Resources/AppIcon.icns
 fi
 
