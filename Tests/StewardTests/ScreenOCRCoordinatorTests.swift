@@ -160,7 +160,6 @@ private final class FakeCaptureService: ScreenCaptureProviding, @unchecked Senda
 
 @MainActor
 private final class ScreenFakeRouter: LLMRouting {
-    let supportedProviderIDs: [LLMProviderID] = [.gemini]
     let result: Result<LLMResult, Error>
     var lastRequest: LLMRequest?
 

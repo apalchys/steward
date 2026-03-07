@@ -8,7 +8,7 @@ final class GeminiClientTests: XCTestCase {
         super.tearDown()
     }
 
-    func testCheckAccessReturnsTrueOnHTTP200() async {
+    func testCheckAccessStatusReturnsAvailableOnHTTP200() async {
         URLProtocolStub.configure(handler: { request in
             XCTAssertEqual(request.httpMethod, "GET")
             XCTAssertEqual(
@@ -21,9 +21,13 @@ final class GeminiClientTests: XCTestCase {
         })
 
         let client = makeClient()
-        let hasAccess = await client.checkAccess(apiKey: "test-key", modelID: "gemini-3.1-flash-lite-preview")
+        let result = await client.checkAccessStatus(
+            apiKey: "test-key",
+            modelID: "gemini-3.1-flash-lite-preview"
+        )
 
-        XCTAssertTrue(hasAccess)
+        XCTAssertEqual(result.status, .available)
+        XCTAssertTrue(result.hasAccess)
     }
 
     func testCheckAccessStatusReturnsInvalidCredentials() async {

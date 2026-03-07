@@ -126,8 +126,6 @@ private final class FakeClipboardMonitor: ClipboardMonitoring {
 
 @MainActor
 private final class FakeAppRouter: LLMRouting {
-    let supportedProviderIDs: [LLMProviderID] = [.openAI, .gemini]
-
     func perform(_ request: LLMRequest) async throws -> LLMResult {
         .text("ok")
     }
@@ -162,8 +160,6 @@ private final class FakeAppSettingsStore: LLMSettingsProviding, ClipboardHistory
     func saveSettings(_ settings: LLMSettings) {
         self.settings = settings
     }
-
-    func migrateLegacySettingsIfNeeded() {}
 
     func customGrammarInstructions() -> String { "" }
 

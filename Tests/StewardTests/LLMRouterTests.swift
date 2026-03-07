@@ -187,8 +187,6 @@ private final class FakeSettingsStore: LLMSettingsProviding {
         self.settings = settings
     }
 
-    func migrateLegacySettingsIfNeeded() {}
-
     func customGrammarInstructions() -> String { "" }
 
     func setCustomGrammarInstructions(_ value: String) {}

@@ -40,6 +40,5 @@ public protocol LLMClient: Sendable {
         customInstructions: String
     ) async throws -> String
 
-    func checkAccess(apiKey: String, modelID: String) async -> Bool
     func checkAccessStatus(apiKey: String, modelID: String) async -> LLMHealthCheckResult
 }

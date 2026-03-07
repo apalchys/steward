@@ -86,7 +86,6 @@ final class GrammarCoordinatorTests: XCTestCase {
 
 @MainActor
 private final class FakeRouter: LLMRouting {
-    let supportedProviderIDs: [LLMProviderID] = [.openAI]
     var lastRequest: LLMRequest?
     let result: Result<LLMResult, Error>
 
@@ -142,8 +141,6 @@ final class CoordinatorSettingsStore: LLMSettingsProviding {
     func saveSettings(_ settings: LLMSettings) {
         self.settings = settings
     }
-
-    func migrateLegacySettingsIfNeeded() {}
 
     func customGrammarInstructions() -> String { customInstructionsValue }
 

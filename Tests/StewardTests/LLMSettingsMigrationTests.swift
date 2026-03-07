@@ -35,25 +35,6 @@ final class LLMSettingsMigrationTests: XCTestCase {
         XCTAssertEqual(loaded.screenshotProviderID, .openAI)
     }
 
-    func testMigrationLegacyMethodIsNoOp() {
-        let suiteName = "LLMSettingsStoreTests.\(UUID().uuidString)"
-        let defaults = try! XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defaults.removePersistentDomain(forName: suiteName)
-        defer {
-            defaults.removePersistentDomain(forName: suiteName)
-        }
-
-        defaults.set("legacy-openai-key", forKey: "openAIApiKey")
-        defaults.set("legacy-gemini-key", forKey: "geminiAPIKey")
-
-        let store = UserDefaultsLLMSettingsStore(userDefaults: defaults, secretsStore: InMemoryLLMSecretsStore())
-        store.migrateLegacySettingsIfNeeded()
-        let loaded = store.loadSettings()
-
-        XCTAssertEqual(loaded.profile(for: .openAI).apiKey, "")
-        XCTAssertEqual(loaded.profile(for: .gemini).apiKey, "")
-    }
-
     func testCustomInstructionsRoundTrip() {
         let suiteName = "LLMSettingsStoreTests.\(UUID().uuidString)"
         let defaults = try! XCTUnwrap(UserDefaults(suiteName: suiteName))

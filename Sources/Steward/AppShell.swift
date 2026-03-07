@@ -140,7 +140,6 @@ final class AppState: ObservableObject {
         }
         hasStarted = true
 
-        settingsStore.migrateLegacySettingsIfNeeded()
         NSApp.setActivationPolicy(.accessory)
 
         refreshPermissionStatuses()

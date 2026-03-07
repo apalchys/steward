@@ -50,7 +50,6 @@ struct SettingsView: View {
         }
         .frame(width: 760, height: 520)
         .onAppear {
-            settingsStore.migrateLegacySettingsIfNeeded()
             settings = settingsStore.loadSettings()
             clipboardHistorySettings = settingsStore.clipboardHistorySettings()
             grammarInstructions = settingsStore.customGrammarInstructions()

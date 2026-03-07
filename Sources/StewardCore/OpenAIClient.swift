@@ -115,10 +115,6 @@ public struct OpenAIClient: Sendable {
         self.session = session
     }
 
-    public func checkAccess(apiKey: String, modelID: String) async -> Bool {
-        await checkAccessStatus(apiKey: apiKey, modelID: modelID).hasAccess
-    }
-
     public func checkAccessStatus(apiKey: String, modelID: String) async -> LLMHealthCheckResult {
         let encodedModelID = modelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? modelID
 

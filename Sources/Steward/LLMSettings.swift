@@ -66,7 +66,6 @@ struct ClipboardHistorySettings: Equatable {
 protocol LLMSettingsProviding {
     func loadSettings() -> LLMSettings
     func saveSettings(_ settings: LLMSettings)
-    func migrateLegacySettingsIfNeeded()
     func customGrammarInstructions() -> String
     func setCustomGrammarInstructions(_ value: String)
     func customScreenshotInstructions() -> String
@@ -239,10 +238,6 @@ final class UserDefaultsLLMSettingsStore: LLMSettingsProviding {
 
         Defaults[keys.grammarProviderID] = settings.grammarProviderID.rawValue
         Defaults[keys.screenshotProviderID] = settings.screenshotProviderID.rawValue
-    }
-
-    func migrateLegacySettingsIfNeeded() {
-        // Migration intentionally disabled in the current iteration.
     }
 
     func customGrammarInstructions() -> String {

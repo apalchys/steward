@@ -8,7 +8,7 @@ final class OpenAIClientTests: XCTestCase {
         super.tearDown()
     }
 
-    func testCheckAccessReturnsTrueOnHTTP200() async {
+    func testCheckAccessStatusReturnsAvailableOnHTTP200() async {
         URLProtocolStub.configure(handler: { request in
             XCTAssertEqual(request.httpMethod, "GET")
             XCTAssertEqual(request.url?.absoluteString, "https://api.openai.com/v1/models/gpt-5.4")
@@ -19,9 +19,10 @@ final class OpenAIClientTests: XCTestCase {
         })
 
         let client = makeClient()
-        let hasAccess = await client.checkAccess(apiKey: "sk-test", modelID: "gpt-5.4")
+        let result = await client.checkAccessStatus(apiKey: "sk-test", modelID: "gpt-5.4")
 
-        XCTAssertTrue(hasAccess)
+        XCTAssertEqual(result.status, .available)
+        XCTAssertTrue(result.hasAccess)
     }
 
     func testCheckAccessStatusReturnsInvalidCredentials() async {

@@ -11,16 +11,12 @@ protocol LLMProvider: Sendable {
 
 @MainActor
 protocol LLMRouting: AnyObject {
-    var supportedProviderIDs: [LLMProviderID] { get }
-
     func perform(_ request: LLMRequest) async throws -> LLMResult
     func checkAccess(for providerID: LLMProviderID) async throws -> LLMProviderHealth
 }
 
 @MainActor
 final class LLMRouter: LLMRouting {
-    let supportedProviderIDs: [LLMProviderID]
-
     private let providers: [LLMProviderID: LLMProvider]
     private let settingsStore: LLMSettingsProviding
 
@@ -28,7 +24,6 @@ final class LLMRouter: LLMRouting {
         let providerMap = Dictionary(uniqueKeysWithValues: providers.map { ($0.id, $0) })
         self.providers = providerMap
         self.settingsStore = settingsStore
-        self.supportedProviderIDs = LLMProviderID.allCases.filter { providerMap[$0] != nil }
     }
 
     func perform(_ request: LLMRequest) async throws -> LLMResult {
