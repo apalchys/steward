@@ -62,7 +62,7 @@ open Steward.app
 5. Configure each feature tab:
    - pick provider (OpenAI or Gemini)
    - set API key
-   - optionally set model (empty uses provider default)
+   - optionally set model (empty uses the selected provider default: `gpt-5.4` for OpenAI, `gemini-3.1-flash-lite-preview` for Gemini)
    - optionally set custom instructions
 
 ## Usage

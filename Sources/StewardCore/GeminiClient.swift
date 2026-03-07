@@ -187,8 +187,7 @@ public struct GeminiClient: Sendable {
         let (data, response) = try await performDataRequest(request)
 
         if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
-            let message = errorMessage(from: data) ?? "Gemini request failed with HTTP \(httpResponse.statusCode)."
-            throw ClientError.requestFailed(message)
+            throw ClientError.requestFailed(requestFailureMessage(statusCode: httpResponse.statusCode, data: data))
         }
 
         guard !data.isEmpty else {
@@ -240,8 +239,7 @@ public struct GeminiClient: Sendable {
         let (data, response) = try await performDataRequest(request)
 
         if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
-            let message = errorMessage(from: data) ?? "Gemini request failed with HTTP \(httpResponse.statusCode)."
-            throw ClientError.requestFailed(message)
+            throw ClientError.requestFailed(requestFailureMessage(statusCode: httpResponse.statusCode, data: data))
         }
 
         guard !data.isEmpty else {
@@ -269,12 +267,30 @@ public struct GeminiClient: Sendable {
         return components.url
     }
 
-    private func errorMessage(from data: Data?) -> String? {
+    private func requestFailureMessage(statusCode: Int, data: Data?) -> String {
+        switch statusCode {
+        case 400:
+            return apiErrorMessage(from: data) ?? "Gemini rejected the request."
+        case 401, 403:
+            return "Gemini API key is invalid."
+        case 404:
+            return "Gemini model was not found."
+        case 429:
+            return "Gemini is rate limiting requests."
+        case 500, 502, 503, 504:
+            return "Gemini is temporarily unavailable."
+        default:
+            return apiErrorMessage(from: data) ?? "Gemini request failed with HTTP \(statusCode)."
+        }
+    }
+
+    private func apiErrorMessage(from data: Data?) -> String? {
         guard let data else {
             return nil
         }
 
-        return try? JSONDecoder().decode(APIErrorResponse.self, from: data).error.message
+        let message = try? JSONDecoder().decode(APIErrorResponse.self, from: data).error.message
+        return message?.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func performDataRequest(_ request: URLRequest) async throws -> (Data, URLResponse) {

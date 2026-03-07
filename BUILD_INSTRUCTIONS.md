@@ -21,17 +21,17 @@
    - Add and enable the Steward application
 4. Set up your API keys:
    - Click on the app icon in the menu bar
-   - Select "Preferences..." (or press Command+,)
-   - Enter your OpenAI API key and optional model ID for grammar correction
-   - Enter your Gemini API key and optional model ID for screen text extraction
+   - Select "Preferences..."
+   - In each feature tab, choose either OpenAI or Gemini
+   - Enter the API key and optional model ID for the provider selected on that tab
    - Clipboard history is optional and can be enabled in the History tab
-   - Leaving model IDs empty falls back to `gpt-5.4` and `gemini-3.1-flash-lite-preview`
+   - Leaving model IDs empty falls back to `gpt-5.4` for OpenAI and `gemini-3.1-flash-lite-preview` for Gemini
 5. To fix grammar, select text in any application and press `Command+Shift+F`
 6. To extract screen text, press `Command+Shift+R`, drag to select an area, and wait for the Markdown text to land in your clipboard
 
 ## API Key Information
 
-The application requires an OpenAI API key for grammar correction and a Gemini API key for screen OCR. Your API keys and model IDs:
+The application requires at least one provider API key. Grammar correction and screen OCR can each use either OpenAI or Gemini. Your API keys and model IDs:
 - API keys are stored securely in macOS Keychain via Valet
 - Non-secret settings like model IDs and provider selection are stored locally in UserDefaults
 - Are only sent to the corresponding model provider when that feature runs

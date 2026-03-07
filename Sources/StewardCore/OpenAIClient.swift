@@ -170,8 +170,7 @@ public struct OpenAIClient: Sendable {
         let (data, response) = try await performDataRequest(request)
 
         if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
-            let message = errorMessage(from: data) ?? "OpenAI request failed with HTTP \(httpResponse.statusCode)."
-            throw ClientError.requestFailed(message)
+            throw ClientError.requestFailed(requestFailureMessage(statusCode: httpResponse.statusCode, data: data))
         }
 
         guard !data.isEmpty else {
@@ -223,8 +222,7 @@ public struct OpenAIClient: Sendable {
         let (data, response) = try await performDataRequest(request)
 
         if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
-            let message = errorMessage(from: data) ?? "OpenAI request failed with HTTP \(httpResponse.statusCode)."
-            throw ClientError.requestFailed(message)
+            throw ClientError.requestFailed(requestFailureMessage(statusCode: httpResponse.statusCode, data: data))
         }
 
         guard !data.isEmpty else {
@@ -319,12 +317,30 @@ public struct OpenAIClient: Sendable {
         }
     }
 
-    private func errorMessage(from data: Data?) -> String? {
+    private func requestFailureMessage(statusCode: Int, data: Data?) -> String {
+        switch statusCode {
+        case 400:
+            return apiErrorMessage(from: data) ?? "OpenAI rejected the request."
+        case 401, 403:
+            return "OpenAI API key is invalid."
+        case 404:
+            return "OpenAI model was not found."
+        case 429:
+            return "OpenAI is rate limiting requests."
+        case 500, 502, 503, 504:
+            return "OpenAI is temporarily unavailable."
+        default:
+            return apiErrorMessage(from: data) ?? "OpenAI request failed with HTTP \(statusCode)."
+        }
+    }
+
+    private func apiErrorMessage(from data: Data?) -> String? {
         guard let data else {
             return nil
         }
 
-        return try? JSONDecoder().decode(APIErrorResponse.self, from: data).error.message
+        let message = try? JSONDecoder().decode(APIErrorResponse.self, from: data).error.message
+        return message?.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func buildOCRPrompt(customInstructions: String) -> String {

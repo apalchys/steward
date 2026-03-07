@@ -94,7 +94,7 @@ final class OpenAIClientTests: XCTestCase {
         XCTAssertEqual(correctedText, "ok")
     }
 
-    func testCorrectGrammarReturnsAPIErrorMessageForNon2xx() async {
+    func testCorrectGrammarReturnsNormalizedErrorMessageForInvalidCredentials() async {
         URLProtocolStub.configure(handler: { request in
             let data = """
                 {"error":{"message":"Invalid API key."}}
@@ -104,7 +104,7 @@ final class OpenAIClientTests: XCTestCase {
         })
 
         let client = makeClient()
-        await assertThrowsErrorMessage("Invalid API key.") {
+        await assertThrowsErrorMessage("OpenAI API key is invalid.") {
             try await client.correctGrammar(
                 apiKey: "bad-key",
                 modelID: "gpt-5.4",
@@ -114,14 +114,34 @@ final class OpenAIClientTests: XCTestCase {
         }
     }
 
-    func testCorrectGrammarReturnsFallbackErrorMessageForNon2xxWithoutBody() async {
+    func testCorrectGrammarReturnsProviderMessageForBadRequest() async {
+        URLProtocolStub.configure(handler: { request in
+            let data = """
+                {"error":{"message":"Unsupported response format."}}
+                """.data(using: .utf8)
+            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 400, httpVersion: nil, headerFields: nil)!
+            return (response, data)
+        })
+
+        let client = makeClient()
+        await assertThrowsErrorMessage("Unsupported response format.") {
+            try await client.correctGrammar(
+                apiKey: "sk-test",
+                modelID: "gpt-5.4",
+                customInstructions: "",
+                text: "text"
+            )
+        }
+    }
+
+    func testCorrectGrammarReturnsServiceMessageForTemporaryFailure() async {
         URLProtocolStub.configure(handler: { request in
             let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 503, httpVersion: nil, headerFields: nil)!
             return (response, nil)
         })
 
         let client = makeClient()
-        await assertThrowsErrorMessage("OpenAI request failed with HTTP 503.") {
+        await assertThrowsErrorMessage("OpenAI is temporarily unavailable.") {
             try await client.correctGrammar(
                 apiKey: "sk-test",
                 modelID: "gpt-5.4",

@@ -89,7 +89,7 @@ final class GeminiClientTests: XCTestCase {
         XCTAssertEqual(text, "Heading\nBody text")
     }
 
-    func testExtractMarkdownTextReturnsAPIErrorMessageForNon2xx() async {
+    func testExtractMarkdownTextReturnsNormalizedErrorMessageForRateLimit() async {
         URLProtocolStub.configure(handler: { request in
             let data = """
                 {"error":{"message":"Quota exceeded."}}
@@ -99,7 +99,7 @@ final class GeminiClientTests: XCTestCase {
         })
 
         let client = makeClient()
-        await assertThrowsErrorMessage("Quota exceeded.") {
+        await assertThrowsErrorMessage("Gemini is rate limiting requests.") {
             try await client.extractMarkdownText(
                 apiKey: "test-key",
                 modelID: "gemini-3.1-flash-lite-preview",
@@ -109,14 +109,34 @@ final class GeminiClientTests: XCTestCase {
         }
     }
 
-    func testExtractMarkdownTextReturnsFallbackErrorMessageForNon2xxWithoutBody() async {
+    func testExtractMarkdownTextReturnsProviderMessageForBadRequest() async {
+        URLProtocolStub.configure(handler: { request in
+            let data = """
+                {"error":{"message":"Malformed inline_data payload."}}
+                """.data(using: .utf8)
+            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 400, httpVersion: nil, headerFields: nil)!
+            return (response, data)
+        })
+
+        let client = makeClient()
+        await assertThrowsErrorMessage("Malformed inline_data payload.") {
+            try await client.extractMarkdownText(
+                apiKey: "test-key",
+                modelID: "gemini-3.1-flash-lite-preview",
+                imageData: Data("image".utf8),
+                mimeType: "image/png"
+            )
+        }
+    }
+
+    func testExtractMarkdownTextReturnsServiceMessageForTemporaryFailure() async {
         URLProtocolStub.configure(handler: { request in
             let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 500, httpVersion: nil, headerFields: nil)!
             return (response, nil)
         })
 
         let client = makeClient()
-        await assertThrowsErrorMessage("Gemini request failed with HTTP 500.") {
+        await assertThrowsErrorMessage("Gemini is temporarily unavailable.") {
             try await client.extractMarkdownText(
                 apiKey: "test-key",
                 modelID: "gemini-3.1-flash-lite-preview",
