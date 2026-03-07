@@ -18,9 +18,9 @@ protocol LLMRouting: AnyObject {
 @MainActor
 final class LLMRouter: LLMRouting {
     private let providers: [LLMProviderID: LLMProvider]
-    private let settingsStore: LLMSettingsProviding
+    private let settingsStore: AppSettingsProviding
 
-    init(providers: [LLMProvider], settingsStore: LLMSettingsProviding) {
+    init(providers: [LLMProvider], settingsStore: AppSettingsProviding) {
         let providerMap = Dictionary(uniqueKeysWithValues: providers.map { ($0.id, $0) })
         self.providers = providerMap
         self.settingsStore = settingsStore

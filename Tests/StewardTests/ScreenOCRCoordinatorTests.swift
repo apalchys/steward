@@ -10,7 +10,7 @@ final class ScreenOCRCoordinatorTests: XCTestCase {
         let textInteraction = ScreenFakeTextInteraction()
         let captureService = FakeCaptureService(permissionGranted: false, imageData: Data())
         let selectionPresenter = FakeSelectionPresenter()
-        let settingsStore = CoordinatorSettingsStore(settings: .empty(), customInstructions: "")
+        let settingsStore = CoordinatorSettingsStore(settings: .empty())
         let coordinator = ScreenOCRCoordinator(
             router: router,
             textInteraction: textInteraction,
@@ -36,7 +36,7 @@ final class ScreenOCRCoordinatorTests: XCTestCase {
         let textInteraction = ScreenFakeTextInteraction()
         let captureService = FakeCaptureService(permissionGranted: true, imageData: Data("image".utf8))
         let selectionPresenter = FakeSelectionPresenter(mode: .cancel)
-        let settingsStore = CoordinatorSettingsStore(settings: .empty(), customInstructions: "")
+        let settingsStore = CoordinatorSettingsStore(settings: .empty())
         let coordinator = ScreenOCRCoordinator(
             router: router,
             textInteraction: textInteraction,
@@ -71,11 +71,8 @@ final class ScreenOCRCoordinatorTests: XCTestCase {
         var settings = LLMSettings.empty()
         settings.screenshotProviderID = .openAI
         settings.providerProfiles[.gemini] = LLMProviderProfile(apiKey: "key", modelID: "model")
-        let settingsStore = CoordinatorSettingsStore(
-            settings: settings,
-            customInstructions: "",
-            screenshotInstructions: "Keep table structure."
-        )
+        settings.screenshotCustomInstructions = "Keep table structure."
+        let settingsStore = CoordinatorSettingsStore(settings: settings)
 
         let coordinator = ScreenOCRCoordinator(
             router: router,
@@ -116,7 +113,7 @@ final class ScreenOCRCoordinatorTests: XCTestCase {
         let captureService = FakeCaptureService(permissionGranted: true, imageData: Data("image".utf8)) {
             XCTAssertTrue(selectionPresenter.didEndSelection)
         }
-        let settingsStore = CoordinatorSettingsStore(settings: .empty(), customInstructions: "")
+        let settingsStore = CoordinatorSettingsStore(settings: .empty())
         let coordinator = ScreenOCRCoordinator(
             router: router,
             textInteraction: textInteraction,

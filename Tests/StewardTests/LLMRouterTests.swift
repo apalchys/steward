@@ -174,7 +174,7 @@ private enum FakeProviderError: Error {
     case unexpectedTask
 }
 
-private final class FakeSettingsStore: LLMSettingsProviding {
+private final class FakeSettingsStore: AppSettingsProviding {
     var settings: LLMSettings
 
     init(settings: LLMSettings) {
@@ -186,14 +186,6 @@ private final class FakeSettingsStore: LLMSettingsProviding {
     func saveSettings(_ settings: LLMSettings) {
         self.settings = settings
     }
-
-    func customGrammarInstructions() -> String { "" }
-
-    func setCustomGrammarInstructions(_ value: String) {}
-
-    func customScreenshotInstructions() -> String { "" }
-
-    func setCustomScreenshotInstructions(_ value: String) {}
 }
 
 private struct FakeProvider: LLMProvider, @unchecked Sendable {

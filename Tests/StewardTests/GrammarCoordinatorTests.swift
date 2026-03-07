@@ -7,18 +7,14 @@ final class GrammarCoordinatorTests: XCTestCase {
     func testHandleHotKeyPressSendsRequestThroughRouterAndReplacesTextOnSuccess() async throws {
         let router = FakeRouter(result: .success(.text("corrected")))
         let textInteraction = FakeTextInteraction(selectedText: "bad")
-        let settingsStore = CoordinatorSettingsStore(
-            settings: {
-                var settings = LLMSettings.empty()
-                settings.grammarProviderID = .gemini
-                settings.providerProfiles[.openAI] = LLMProviderProfile(
-                    apiKey: "key",
-                    modelID: "model"
-                )
-                return settings
-            }(),
-            customInstructions: "Use concise language"
+        var settings = LLMSettings.empty()
+        settings.grammarProviderID = .gemini
+        settings.grammarCustomInstructions = "Use concise language"
+        settings.providerProfiles[.openAI] = LLMProviderProfile(
+            apiKey: "key",
+            modelID: "model"
         )
+        let settingsStore = CoordinatorSettingsStore(settings: settings)
 
         let coordinator = GrammarCoordinator(router: router, textInteraction: textInteraction, settingsStore: settingsStore)
 
@@ -43,7 +39,7 @@ final class GrammarCoordinatorTests: XCTestCase {
     func testHandleHotKeyPressFailsWhenNoSelectedText() async {
         let router = FakeRouter(result: .success(.text("ignored")))
         let textInteraction = FakeTextInteraction(selectedText: nil)
-        let settingsStore = CoordinatorSettingsStore(settings: .empty(), customInstructions: "")
+        let settingsStore = CoordinatorSettingsStore(settings: .empty())
 
         let coordinator = GrammarCoordinator(router: router, textInteraction: textInteraction, settingsStore: settingsStore)
 
@@ -67,7 +63,7 @@ final class GrammarCoordinatorTests: XCTestCase {
 
         let router = FakeRouter(result: .failure(TestError.failed))
         let textInteraction = FakeTextInteraction(selectedText: "bad")
-        let settingsStore = CoordinatorSettingsStore(settings: .empty(), customInstructions: "")
+        let settingsStore = CoordinatorSettingsStore(settings: .empty())
 
         let coordinator = GrammarCoordinator(router: router, textInteraction: textInteraction, settingsStore: settingsStore)
 
@@ -125,32 +121,16 @@ private final class FakeTextInteraction: TextInteractionPerforming, @unchecked S
     }
 }
 
-final class CoordinatorSettingsStore: LLMSettingsProviding {
+final class CoordinatorSettingsStore: AppSettingsProviding {
     var settings: LLMSettings
-    var customInstructionsValue: String
-    var screenshotInstructionsValue: String
 
-    init(settings: LLMSettings, customInstructions: String, screenshotInstructions: String = "") {
+    init(settings: LLMSettings) {
         self.settings = settings
-        self.customInstructionsValue = customInstructions
-        self.screenshotInstructionsValue = screenshotInstructions
     }
 
     func loadSettings() -> LLMSettings { settings }
 
     func saveSettings(_ settings: LLMSettings) {
         self.settings = settings
-    }
-
-    func customGrammarInstructions() -> String { customInstructionsValue }
-
-    func setCustomGrammarInstructions(_ value: String) {
-        customInstructionsValue = value
-    }
-
-    func customScreenshotInstructions() -> String { screenshotInstructionsValue }
-
-    func setCustomScreenshotInstructions(_ value: String) {
-        screenshotInstructionsValue = value
     }
 }

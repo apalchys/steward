@@ -15,7 +15,7 @@ final class ScreenOCRCoordinator: ScreenOCRCoordinating {
     private let textInteraction: TextInteractionPerforming
     private let captureService: ScreenCaptureProviding
     private let selectionPresenter: ScreenSelectionPresenting
-    private let settingsStore: LLMSettingsProviding
+    private let settingsStore: AppSettingsProviding
 
     // Temporary storage for the selection result, used to bridge the
     // @MainActor selection presenter callback into structured concurrency
@@ -28,7 +28,7 @@ final class ScreenOCRCoordinator: ScreenOCRCoordinating {
         textInteraction: TextInteractionPerforming,
         captureService: ScreenCaptureProviding,
         selectionPresenter: ScreenSelectionPresenting,
-        settingsStore: LLMSettingsProviding
+        settingsStore: AppSettingsProviding
     ) {
         self.router = router
         self.textInteraction = textInteraction
@@ -92,7 +92,7 @@ final class ScreenOCRCoordinator: ScreenOCRCoordinating {
             task: .screenOCR(
                 imageData: imageData,
                 mimeType: "image/png",
-                customInstructions: settingsStore.customScreenshotInstructions()
+                customInstructions: settings.screenshotCustomInstructions
             )
         )
 

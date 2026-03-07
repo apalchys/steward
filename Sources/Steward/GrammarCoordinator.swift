@@ -9,9 +9,9 @@ protocol GrammarCoordinating: AnyObject {
 final class GrammarCoordinator: GrammarCoordinating {
     private let router: LLMRouting
     private let textInteraction: TextInteractionPerforming
-    private let settingsStore: LLMSettingsProviding
+    private let settingsStore: AppSettingsProviding
 
-    init(router: LLMRouting, textInteraction: TextInteractionPerforming, settingsStore: LLMSettingsProviding) {
+    init(router: LLMRouting, textInteraction: TextInteractionPerforming, settingsStore: AppSettingsProviding) {
         self.router = router
         self.textInteraction = textInteraction
         self.settingsStore = settingsStore
@@ -25,7 +25,7 @@ final class GrammarCoordinator: GrammarCoordinating {
         let settings = settingsStore.loadSettings()
         let request = LLMRequest(
             providerID: settings.grammarProviderID,
-            task: .grammarCorrection(text: selectedText, customInstructions: settingsStore.customGrammarInstructions())
+            task: .grammarCorrection(text: selectedText, customInstructions: settings.grammarCustomInstructions)
         )
 
         let llmResult = try await router.perform(request)

@@ -28,12 +28,18 @@ struct LLMSettings: Equatable {
     var providerProfiles: [LLMProviderID: LLMProviderProfile]
     var grammarProviderID: LLMProviderID
     var screenshotProviderID: LLMProviderID
+    var grammarCustomInstructions: String
+    var screenshotCustomInstructions: String
+    var clipboardHistory: ClipboardHistorySettings
 
     static func empty() -> LLMSettings {
         LLMSettings(
             providerProfiles: [:],
             grammarProviderID: .openAI,
-            screenshotProviderID: .gemini
+            screenshotProviderID: .gemini,
+            grammarCustomInstructions: "",
+            screenshotCustomInstructions: "",
+            clipboardHistory: .default
         )
     }
 
@@ -63,18 +69,9 @@ struct ClipboardHistorySettings: Equatable {
     }
 }
 
-protocol LLMSettingsProviding {
+protocol AppSettingsProviding {
     func loadSettings() -> LLMSettings
     func saveSettings(_ settings: LLMSettings)
-    func customGrammarInstructions() -> String
-    func setCustomGrammarInstructions(_ value: String)
-    func customScreenshotInstructions() -> String
-    func setCustomScreenshotInstructions(_ value: String)
-}
-
-protocol ClipboardHistorySettingsProviding {
-    func clipboardHistorySettings() -> ClipboardHistorySettings
-    func setClipboardHistorySettings(_ settings: ClipboardHistorySettings)
 }
 
 protocol LLMSecretsStoring {
@@ -129,7 +126,7 @@ final class ValetLLMSecretsStore: LLMSecretsStoring {
     }
 }
 
-final class UserDefaultsLLMSettingsStore: LLMSettingsProviding {
+final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
     static let supportedProviders: [LLMProviderID] = [.openAI, .gemini]
 
     private struct Keys {
@@ -221,7 +218,13 @@ final class UserDefaultsLLMSettingsStore: LLMSettingsProviding {
         return LLMSettings(
             providerProfiles: profiles,
             grammarProviderID: grammarProviderID,
-            screenshotProviderID: screenshotProviderID
+            screenshotProviderID: screenshotProviderID,
+            grammarCustomInstructions: Defaults[keys.customGrammarInstructions],
+            screenshotCustomInstructions: Defaults[keys.customScreenshotInstructions],
+            clipboardHistory: ClipboardHistorySettings(
+                isEnabled: Defaults[keys.clipboardHistoryEnabled],
+                maxStoredRecords: Defaults[keys.clipboardHistoryMaxStoredRecords]
+            )
         )
     }
 
@@ -238,22 +241,10 @@ final class UserDefaultsLLMSettingsStore: LLMSettingsProviding {
 
         Defaults[keys.grammarProviderID] = settings.grammarProviderID.rawValue
         Defaults[keys.screenshotProviderID] = settings.screenshotProviderID.rawValue
-    }
-
-    func customGrammarInstructions() -> String {
-        Defaults[keys.customGrammarInstructions]
-    }
-
-    func setCustomGrammarInstructions(_ value: String) {
-        Defaults[keys.customGrammarInstructions] = value
-    }
-
-    func customScreenshotInstructions() -> String {
-        Defaults[keys.customScreenshotInstructions]
-    }
-
-    func setCustomScreenshotInstructions(_ value: String) {
-        Defaults[keys.customScreenshotInstructions] = value
+        Defaults[keys.customGrammarInstructions] = settings.grammarCustomInstructions
+        Defaults[keys.customScreenshotInstructions] = settings.screenshotCustomInstructions
+        Defaults[keys.clipboardHistoryEnabled] = settings.clipboardHistory.isEnabled
+        Defaults[keys.clipboardHistoryMaxStoredRecords] = settings.clipboardHistory.maxStoredRecords
     }
 
     private func validatedProviderID(rawValue: String, fallback: LLMProviderID) -> LLMProviderID {
@@ -265,19 +256,5 @@ final class UserDefaultsLLMSettingsStore: LLMSettingsProviding {
         }
 
         return providerID
-    }
-}
-
-extension UserDefaultsLLMSettingsStore: ClipboardHistorySettingsProviding {
-    func clipboardHistorySettings() -> ClipboardHistorySettings {
-        ClipboardHistorySettings(
-            isEnabled: Defaults[keys.clipboardHistoryEnabled],
-            maxStoredRecords: Defaults[keys.clipboardHistoryMaxStoredRecords]
-        )
-    }
-
-    func setClipboardHistorySettings(_ settings: ClipboardHistorySettings) {
-        Defaults[keys.clipboardHistoryEnabled] = settings.isEnabled
-        Defaults[keys.clipboardHistoryMaxStoredRecords] = settings.maxStoredRecords
     }
 }

@@ -145,12 +145,11 @@ private final class FakeScreenOCRCoordinator: ScreenOCRCoordinating {
     func handleHotKeyPress() async throws {}
 }
 
-private final class FakeAppSettingsStore: LLMSettingsProviding, ClipboardHistorySettingsProviding {
+private final class FakeAppSettingsStore: AppSettingsProviding {
     private var settings = LLMSettings.empty()
-    private var historySettings = ClipboardHistorySettings()
 
     init(historySettings: ClipboardHistorySettings = ClipboardHistorySettings()) {
-        self.historySettings = historySettings
+        settings.clipboardHistory = historySettings
     }
 
     func loadSettings() -> LLMSettings {
@@ -159,22 +158,6 @@ private final class FakeAppSettingsStore: LLMSettingsProviding, ClipboardHistory
 
     func saveSettings(_ settings: LLMSettings) {
         self.settings = settings
-    }
-
-    func customGrammarInstructions() -> String { "" }
-
-    func setCustomGrammarInstructions(_ value: String) {}
-
-    func customScreenshotInstructions() -> String { "" }
-
-    func setCustomScreenshotInstructions(_ value: String) {}
-
-    func clipboardHistorySettings() -> ClipboardHistorySettings {
-        historySettings
-    }
-
-    func setClipboardHistorySettings(_ settings: ClipboardHistorySettings) {
-        historySettings = settings
     }
 }
 

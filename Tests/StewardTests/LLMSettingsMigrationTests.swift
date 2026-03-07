@@ -25,6 +25,9 @@ final class LLMSettingsMigrationTests: XCTestCase {
         )
         settings.grammarProviderID = .gemini
         settings.screenshotProviderID = .openAI
+        settings.grammarCustomInstructions = "Rule 1\nRule 2"
+        settings.screenshotCustomInstructions = "Keep bullet lists"
+        settings.clipboardHistory = ClipboardHistorySettings(isEnabled: true, maxStoredRecords: 250)
 
         store.saveSettings(settings)
         let loaded = store.loadSettings()
@@ -33,9 +36,12 @@ final class LLMSettingsMigrationTests: XCTestCase {
         XCTAssertEqual(loaded.profile(for: .gemini).apiKey, "gemini-key")
         XCTAssertEqual(loaded.grammarProviderID, .gemini)
         XCTAssertEqual(loaded.screenshotProviderID, .openAI)
+        XCTAssertEqual(loaded.grammarCustomInstructions, "Rule 1\nRule 2")
+        XCTAssertEqual(loaded.screenshotCustomInstructions, "Keep bullet lists")
+        XCTAssertEqual(loaded.clipboardHistory, ClipboardHistorySettings(isEnabled: true, maxStoredRecords: 250))
     }
 
-    func testCustomInstructionsRoundTrip() {
+    func testLoadSettingsDefaultsCustomInstructionsAndClipboardHistory() {
         let suiteName = "LLMSettingsStoreTests.\(UUID().uuidString)"
         let defaults = try! XCTUnwrap(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
@@ -45,40 +51,11 @@ final class LLMSettingsMigrationTests: XCTestCase {
 
         let store = UserDefaultsLLMSettingsStore(userDefaults: defaults, secretsStore: InMemoryLLMSecretsStore())
 
-        store.setCustomGrammarInstructions("Rule 1\nRule 2")
-        store.setCustomScreenshotInstructions("Keep bullet lists")
+        let settings = store.loadSettings()
 
-        XCTAssertEqual(store.customGrammarInstructions(), "Rule 1\nRule 2")
-        XCTAssertEqual(store.customScreenshotInstructions(), "Keep bullet lists")
-    }
-
-    func testClipboardHistorySettingsDefaultToDisabled() {
-        let suiteName = "LLMSettingsStoreTests.\(UUID().uuidString)"
-        let defaults = try! XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defaults.removePersistentDomain(forName: suiteName)
-        defer {
-            defaults.removePersistentDomain(forName: suiteName)
-        }
-
-        let store = UserDefaultsLLMSettingsStore(userDefaults: defaults, secretsStore: InMemoryLLMSecretsStore())
-
-        XCTAssertEqual(store.clipboardHistorySettings(), .default)
-    }
-
-    func testClipboardHistorySettingsRoundTrip() {
-        let suiteName = "LLMSettingsStoreTests.\(UUID().uuidString)"
-        let defaults = try! XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defaults.removePersistentDomain(forName: suiteName)
-        defer {
-            defaults.removePersistentDomain(forName: suiteName)
-        }
-
-        let store = UserDefaultsLLMSettingsStore(userDefaults: defaults, secretsStore: InMemoryLLMSecretsStore())
-        let settings = ClipboardHistorySettings(isEnabled: true, maxStoredRecords: 250)
-
-        store.setClipboardHistorySettings(settings)
-
-        XCTAssertEqual(store.clipboardHistorySettings(), settings)
+        XCTAssertEqual(settings.grammarCustomInstructions, "")
+        XCTAssertEqual(settings.screenshotCustomInstructions, "")
+        XCTAssertEqual(settings.clipboardHistory, .default)
     }
 }
 

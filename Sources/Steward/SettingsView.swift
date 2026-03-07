@@ -4,16 +4,13 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject private var clipboardHistoryStore: ClipboardHistoryStore
     @State private var settings: LLMSettings
-    @State private var clipboardHistorySettings: ClipboardHistorySettings
-    @State private var grammarInstructions: String
-    @State private var screenshotInstructions: String
     @State private var showClearHistoryConfirmation = false
 
-    private let settingsStore: any LLMSettingsProviding & ClipboardHistorySettingsProviding
+    private let settingsStore: any AppSettingsProviding
     private let onSettingsChanged: (() -> Void)?
 
     init(
-        settingsStore: any LLMSettingsProviding & ClipboardHistorySettingsProviding = UserDefaultsLLMSettingsStore(),
+        settingsStore: any AppSettingsProviding = UserDefaultsLLMSettingsStore(),
         clipboardHistoryStore: ClipboardHistoryStore = ClipboardHistoryStore(autoLoad: false),
         onSettingsChanged: (() -> Void)? = nil
     ) {
@@ -21,9 +18,6 @@ struct SettingsView: View {
         self.onSettingsChanged = onSettingsChanged
         _clipboardHistoryStore = ObservedObject(wrappedValue: clipboardHistoryStore)
         _settings = State(initialValue: settingsStore.loadSettings())
-        _clipboardHistorySettings = State(initialValue: settingsStore.clipboardHistorySettings())
-        _grammarInstructions = State(initialValue: settingsStore.customGrammarInstructions())
-        _screenshotInstructions = State(initialValue: settingsStore.customScreenshotInstructions())
     }
 
     var body: some View {
@@ -51,24 +45,9 @@ struct SettingsView: View {
         .frame(width: 760, height: 520)
         .onAppear {
             settings = settingsStore.loadSettings()
-            clipboardHistorySettings = settingsStore.clipboardHistorySettings()
-            grammarInstructions = settingsStore.customGrammarInstructions()
-            screenshotInstructions = settingsStore.customScreenshotInstructions()
         }
         .onChange(of: settings) { _, newSettings in
             settingsStore.saveSettings(newSettings)
-            onSettingsChanged?()
-        }
-        .onChange(of: grammarInstructions) { _, newValue in
-            settingsStore.setCustomGrammarInstructions(newValue)
-            onSettingsChanged?()
-        }
-        .onChange(of: screenshotInstructions) { _, newValue in
-            settingsStore.setCustomScreenshotInstructions(newValue)
-            onSettingsChanged?()
-        }
-        .onChange(of: clipboardHistorySettings) { _, newValue in
-            settingsStore.setClipboardHistorySettings(newValue)
             onSettingsChanged?()
         }
         .alert("Clear clipboard history?", isPresented: $showClearHistoryConfirmation) {
@@ -109,7 +88,7 @@ struct SettingsView: View {
                 Text("Custom instructions for grammar check")
                     .font(.subheadline)
 
-                TextEditor(text: $grammarInstructions)
+                TextEditor(text: $settings.grammarCustomInstructions)
                     .font(.system(.body, design: .monospaced))
                     .padding(8)
                     .background(Color(NSColor.textBackgroundColor))
@@ -156,7 +135,7 @@ struct SettingsView: View {
                 Text("Custom instructions for screenshot to markdown")
                     .font(.subheadline)
 
-                TextEditor(text: $screenshotInstructions)
+                TextEditor(text: $settings.screenshotCustomInstructions)
                     .font(.system(.body, design: .monospaced))
                     .padding(8)
                     .background(Color(NSColor.textBackgroundColor))
@@ -181,7 +160,7 @@ struct SettingsView: View {
                 Text("Clipboard History")
                     .font(.headline)
 
-                Toggle("Enable clipboard history", isOn: $clipboardHistorySettings.isEnabled)
+                Toggle("Enable clipboard history", isOn: $settings.clipboardHistory.isEnabled)
 
                 Text("Clipboard history is stored only on this Mac and is disabled by default.")
                     .font(.subheadline)
@@ -189,18 +168,18 @@ struct SettingsView: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     Stepper(
-                        value: $clipboardHistorySettings.maxStoredRecords,
+                        value: $settings.clipboardHistory.maxStoredRecords,
                         in: 25...500,
                         step: 25
                     ) {
-                        Text("Keep up to \(clipboardHistorySettings.maxStoredRecords) entries")
+                        Text("Keep up to \(settings.clipboardHistory.maxStoredRecords) entries")
                     }
 
                     Text("Older entries are removed automatically when the limit is reached.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
-                .disabled(!clipboardHistorySettings.isEnabled)
+                .disabled(!settings.clipboardHistory.isEnabled)
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Storage")

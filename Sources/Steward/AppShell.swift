@@ -34,7 +34,7 @@ final class AppState: ObservableObject {
     private static let processingImage = StatusBarIcon.symbolImage(named: StatusSymbolName.processing)
     private static let errorImage = StatusBarIcon.symbolImage(named: StatusSymbolName.error)
 
-    let settingsStore: any LLMSettingsProviding & ClipboardHistorySettingsProviding
+    let settingsStore: any AppSettingsProviding
     let clipboardHistoryStore: ClipboardHistoryStore
 
     @Published private(set) var activityStatus: ActivityStatus = .ready
@@ -65,7 +65,7 @@ final class AppState: ObservableObject {
     private var lastOperationFailed = false
 
     init(
-        settingsStore: any LLMSettingsProviding & ClipboardHistorySettingsProviding,
+        settingsStore: any AppSettingsProviding,
         clipboardHistoryStore: ClipboardHistoryStore,
         clipboardMonitor: any ClipboardMonitoring,
         llmRouter: any LLMRouting,
@@ -454,7 +454,7 @@ final class AppState: ObservableObject {
     }
 
     private func applyClipboardHistorySettings() {
-        let clipboardHistorySettings = settingsStore.clipboardHistorySettings()
+        let clipboardHistorySettings = settingsStore.loadSettings().clipboardHistory
         clipboardHistoryStore.updateMaxStoredRecords(clipboardHistorySettings.maxStoredRecords)
 
         if clipboardHistorySettings.isEnabled {
