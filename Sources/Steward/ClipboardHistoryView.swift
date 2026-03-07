@@ -132,7 +132,7 @@ struct ClipboardHistoryView: View {
         Group {
             if let selectedRecord {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Captured: \(Self.detailDateFormatter.string(from: selectedRecord.capturedAt))")
+                    Text("Captured: \(selectedRecord.capturedAt.formatted(date: .abbreviated, time: .standard))")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
 
@@ -230,13 +230,6 @@ struct ClipboardHistoryView: View {
         }
     }
 
-    private static let detailDateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .medium
-        return formatter
-    }()
-
     private var recordCountSummary: String {
         if hasSearchQuery {
             return "\(visibleRecords.count) of \(store.records.count) records"
@@ -275,7 +268,7 @@ private struct ClipboardHistoryRow: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 HStack(spacing: 8) {
-                    Text(Self.timestampFormatter.string(from: record.capturedAt))
+                    Text(record.capturedAt.formatted(date: .omitted, time: .shortened))
                         .font(.caption)
                         .foregroundColor(.secondary)
 
@@ -309,10 +302,4 @@ private struct ClipboardHistoryRow: View {
         return String(normalized[..<index]) + "..."
     }
 
-    private static let timestampFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .none
-        formatter.timeStyle = .short
-        return formatter
-    }()
 }
