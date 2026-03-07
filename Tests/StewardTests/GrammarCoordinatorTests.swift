@@ -113,11 +113,11 @@ private final class FakeTextInteraction: TextInteractionPerforming, @unchecked S
         self.selectedText = selectedText
     }
 
-    func getSelectedText() async -> String? {
+    func getSelectedText() async throws -> String? {
         selectedText
     }
 
-    func replaceSelectedText(with newText: String) {
+    func replaceSelectedText(with newText: String) async throws {
         replacedText = newText
     }
 

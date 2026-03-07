@@ -147,11 +147,11 @@ private final class ScreenFakeRouter: LLMRouting, @unchecked Sendable {
 private final class ScreenFakeTextInteraction: TextInteractionPerforming, @unchecked Sendable {
     var copiedText: String?
 
-    func getSelectedText() async -> String? {
+    func getSelectedText() async throws -> String? {
         nil
     }
 
-    func replaceSelectedText(with newText: String) {}
+    func replaceSelectedText(with newText: String) async throws {}
 
     func copyTextToClipboard(_ text: String) {
         copiedText = text

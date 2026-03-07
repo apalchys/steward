@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import Foundation
 import ScreenCaptureKit
 
@@ -8,80 +9,343 @@ protocol ClipboardChangeSuppressing: AnyObject {
 
 extension ClipboardMonitor: ClipboardChangeSuppressing {}
 
-protocol TextInteractionPerforming: AnyObject, Sendable {
-    func getSelectedText() async -> String?
-    func replaceSelectedText(with newText: String)
+@MainActor
+protocol TextInteractionPerforming: AnyObject {
+    func getSelectedText() async throws -> String?
+    func replaceSelectedText(with newText: String) async throws
     func copyTextToClipboard(_ text: String)
 }
 
-final class SystemTextInteractionService: TextInteractionPerforming, @unchecked Sendable {
-    private let pasteboard: NSPasteboard
-    private weak var suppression: ClipboardChangeSuppressing?
+enum TextInteractionError: LocalizedError {
+    case accessibilityPermissionDenied
+    case couldNotReplaceSelectedText
 
-    init(pasteboard: NSPasteboard = .general, suppression: ClipboardChangeSuppressing?) {
-        self.pasteboard = pasteboard
-        self.suppression = suppression
+    var errorDescription: String? {
+        switch self {
+        case .accessibilityPermissionDenied:
+            return "Accessibility permission is required to read or replace selected text."
+        case .couldNotReplaceSelectedText:
+            return "Steward could not replace the selected text in the current app."
+        }
+    }
+}
+
+protocol PasteboardControlling: AnyObject {
+    var changeCount: Int { get }
+    func string(forType dataType: NSPasteboard.PasteboardType) -> String?
+    @discardableResult
+    func clearContents() -> Int
+    @discardableResult
+    func setString(_ string: String, forType dataType: NSPasteboard.PasteboardType) -> Bool
+}
+
+extension NSPasteboard: PasteboardControlling {}
+
+protocol TextInteractionEventPosting {
+    func postCopyCommand()
+    func postPasteCommand()
+}
+
+struct SystemTextInteractionEventPoster: TextInteractionEventPosting {
+    func postCopyCommand() {
+        postCommand(for: 0x08)
     }
 
-    func getSelectedText() async -> String? {
-        let oldPasteboardContent = pasteboard.string(forType: .string)
-        suppression?.suppressNextClipboardChanges(1)
+    func postPasteCommand() {
+        postCommand(for: 0x09)
+    }
 
+    private func postCommand(for virtualKey: CGKeyCode) {
         let source = CGEventSource(stateID: .hidSystemState)
-        let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x08, keyDown: true)
-        let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x08, keyDown: false)
+        let keyDown = CGEvent(keyboardEventSource: source, virtualKey: virtualKey, keyDown: true)
+        let keyUp = CGEvent(keyboardEventSource: source, virtualKey: virtualKey, keyDown: false)
 
         keyDown?.flags = .maskCommand
         keyUp?.flags = .maskCommand
 
         keyDown?.post(tap: .cghidEventTap)
         keyUp?.post(tap: .cghidEventTap)
+    }
+}
 
-        try? await Task.sleep(for: .milliseconds(200))
+protocol AccessibilityTextInteracting {
+    func isProcessTrusted() -> Bool
+    func selectedText() -> String?
+    func replaceSelectedText(with newText: String) -> Bool
+}
+
+struct SystemAccessibilityTextInteraction: AccessibilityTextInteracting {
+    func isProcessTrusted() -> Bool {
+        AXIsProcessTrusted()
+    }
+
+    func selectedText() -> String? {
+        guard let focusedElement = focusedElement() else {
+            return nil
+        }
+
+        if let selectedText = stringAttribute(kAXSelectedTextAttribute, from: focusedElement),
+            !selectedText.isEmpty
+        {
+            return selectedText
+        }
+
+        guard let selectedRange = selectedTextRange(from: focusedElement), selectedRange.length > 0 else {
+            return nil
+        }
+
+        return stringForRange(selectedRange, from: focusedElement)
+    }
+
+    func replaceSelectedText(with newText: String) -> Bool {
+        guard
+            let focusedElement = focusedElement(),
+            let selectedRange = selectedTextRange(from: focusedElement),
+            selectedRange.location != kCFNotFound
+        else {
+            return false
+        }
+
+        guard let fullText = stringAttribute(kAXValueAttribute, from: focusedElement) else {
+            return false
+        }
+
+        let fullNSString = fullText as NSString
+        let replacementRange = NSRange(location: selectedRange.location, length: selectedRange.length)
+        guard NSMaxRange(replacementRange) <= fullNSString.length else {
+            return false
+        }
+
+        let updatedText = fullNSString.replacingCharacters(in: replacementRange, with: newText)
+        let setValueResult = AXUIElementSetAttributeValue(
+            focusedElement,
+            kAXValueAttribute as CFString,
+            updatedText as CFTypeRef
+        )
+        guard setValueResult == .success else {
+            return false
+        }
+
+        var insertionRange = CFRange(location: selectedRange.location + (newText as NSString).length, length: 0)
+        if let selectionValue = AXValueCreate(.cfRange, &insertionRange) {
+            _ = AXUIElementSetAttributeValue(
+                focusedElement,
+                kAXSelectedTextRangeAttribute as CFString,
+                selectionValue
+            )
+        }
+
+        return true
+    }
+
+    private func focusedElement() -> AXUIElement? {
+        let systemWideElement = AXUIElementCreateSystemWide()
+        var focusedElement: CFTypeRef?
+        let result = AXUIElementCopyAttributeValue(
+            systemWideElement,
+            kAXFocusedUIElementAttribute as CFString,
+            &focusedElement
+        )
+
+        guard result == .success, let focusedElement else {
+            return nil
+        }
+
+        return (focusedElement as! AXUIElement)
+    }
+
+    private func stringAttribute(_ attribute: String, from element: AXUIElement) -> String? {
+        var value: CFTypeRef?
+        let result = AXUIElementCopyAttributeValue(element, attribute as CFString, &value)
+        guard result == .success, let stringValue = value as? String else {
+            return nil
+        }
+
+        return stringValue
+    }
+
+    private func selectedTextRange(from element: AXUIElement) -> CFRange? {
+        var value: CFTypeRef?
+        let result = AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &value)
+        guard result == .success, let value else {
+            return nil
+        }
+
+        let axValue = value as! AXValue
+        guard AXValueGetType(axValue) == .cfRange else {
+            return nil
+        }
+
+        var range = CFRange()
+        guard AXValueGetValue(axValue, .cfRange, &range) else {
+            return nil
+        }
+
+        return range
+    }
+
+    private func stringForRange(_ range: CFRange, from element: AXUIElement) -> String? {
+        var mutableRange = range
+        guard let rangeValue = AXValueCreate(.cfRange, &mutableRange) else {
+            return nil
+        }
+
+        var value: CFTypeRef?
+        let result = AXUIElementCopyParameterizedAttributeValue(
+            element,
+            kAXStringForRangeParameterizedAttribute as CFString,
+            rangeValue,
+            &value
+        )
+
+        guard result == .success, let stringValue = value as? String else {
+            return nil
+        }
+
+        return stringValue
+    }
+}
+
+@MainActor
+final class SystemTextInteractionService: TextInteractionPerforming {
+    private struct PasteboardSnapshot {
+        let text: String?
+        let changeCount: Int
+    }
+
+    private let pasteboard: PasteboardControlling
+    private weak var suppression: ClipboardChangeSuppressing?
+    private let accessibilityTextInteraction: AccessibilityTextInteracting
+    private let eventPoster: TextInteractionEventPosting
+    private let sleeper: @Sendable (Duration) async -> Void
+
+    init(
+        pasteboard: PasteboardControlling = NSPasteboard.general,
+        suppression: ClipboardChangeSuppressing?,
+        accessibilityTextInteraction: AccessibilityTextInteracting = SystemAccessibilityTextInteraction(),
+        eventPoster: TextInteractionEventPosting = SystemTextInteractionEventPoster(),
+        sleeper: @escaping @Sendable (Duration) async -> Void = { duration in
+            try? await Task.sleep(for: duration)
+        }
+    ) {
+        self.pasteboard = pasteboard
+        self.suppression = suppression
+        self.accessibilityTextInteraction = accessibilityTextInteraction
+        self.eventPoster = eventPoster
+        self.sleeper = sleeper
+    }
+
+    func getSelectedText() async throws -> String? {
+        guard accessibilityTextInteraction.isProcessTrusted() else {
+            throw TextInteractionError.accessibilityPermissionDenied
+        }
+
+        if let axSelectedText = accessibilityTextInteraction.selectedText(), !axSelectedText.isEmpty {
+            return axSelectedText
+        }
+
+        return await selectedTextUsingClipboardFallback()
+    }
+
+    func replaceSelectedText(with newText: String) async throws {
+        guard accessibilityTextInteraction.isProcessTrusted() else {
+            throw TextInteractionError.accessibilityPermissionDenied
+        }
+
+        if accessibilityTextInteraction.replaceSelectedText(with: newText) {
+            return
+        }
+
+        try await replaceSelectedTextUsingClipboardFallback(with: newText)
+    }
+
+    func copyTextToClipboard(_ text: String) {
+        _ = writePasteboard(text)
+    }
+
+    private func selectedTextUsingClipboardFallback() async -> String? {
+        let originalSnapshot = currentPasteboardSnapshot()
+        suppression?.suppressNextClipboardChanges(1)
+        eventPoster.postCopyCommand()
+
+        guard let copiedChangeCount = await waitForPasteboardChange(after: originalSnapshot.changeCount) else {
+            return nil
+        }
 
         let selectedText = pasteboard.string(forType: .string)
-
-        if let oldPasteboardContent {
-            suppression?.suppressNextClipboardChanges(2)
-            pasteboard.clearContents()
-            pasteboard.setString(oldPasteboardContent, forType: .string)
-        }
+        restorePasteboardIfUnchanged(
+            from: originalSnapshot,
+            expectedChangeCount: copiedChangeCount,
+            expectedText: selectedText
+        )
 
         return selectedText
     }
 
-    func replaceSelectedText(with newText: String) {
-        let oldPasteboardContent = pasteboard.string(forType: .string)
+    private func replaceSelectedTextUsingClipboardFallback(with newText: String) async throws {
+        let originalSnapshot = currentPasteboardSnapshot()
+        let temporaryChangeCount = writePasteboard(newText)
+        eventPoster.postPasteCommand()
 
-        suppression?.suppressNextClipboardChanges(2)
-        pasteboard.clearContents()
-        pasteboard.setString(newText, forType: .string)
+        await sleeper(.milliseconds(300))
+        restorePasteboardIfUnchanged(
+            from: originalSnapshot,
+            expectedChangeCount: temporaryChangeCount,
+            expectedText: newText
+        )
 
-        let source = CGEventSource(stateID: .hidSystemState)
-        let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true)
-        let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
-
-        keyDown?.flags = .maskCommand
-        keyUp?.flags = .maskCommand
-
-        keyDown?.post(tap: .cghidEventTap)
-        keyUp?.post(tap: .cghidEventTap)
-
-        Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(500))
-            guard let self, let oldPasteboardContent else {
-                return
-            }
-
-            self.suppression?.suppressNextClipboardChanges(2)
-            self.pasteboard.clearContents()
-            self.pasteboard.setString(oldPasteboardContent, forType: .string)
+        if pasteboard.changeCount == temporaryChangeCount && pasteboard.string(forType: .string) == newText {
+            throw TextInteractionError.couldNotReplaceSelectedText
         }
     }
 
-    func copyTextToClipboard(_ text: String) {
+    private func currentPasteboardSnapshot() -> PasteboardSnapshot {
+        PasteboardSnapshot(text: pasteboard.string(forType: .string), changeCount: pasteboard.changeCount)
+    }
+
+    @discardableResult
+    private func writePasteboard(_ text: String?) -> Int {
+        let suppressedChangeCount = text == nil ? 1 : 2
+        suppression?.suppressNextClipboardChanges(suppressedChangeCount)
         pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
+
+        if let text {
+            _ = pasteboard.setString(text, forType: .string)
+        }
+
+        return pasteboard.changeCount
+    }
+
+    private func waitForPasteboardChange(
+        after changeCount: Int,
+        timeoutMilliseconds: Int = 400,
+        pollMilliseconds: Int = 20
+    ) async -> Int? {
+        for _ in 0..<(timeoutMilliseconds / pollMilliseconds) {
+            if pasteboard.changeCount != changeCount {
+                return pasteboard.changeCount
+            }
+
+            await sleeper(.milliseconds(pollMilliseconds))
+        }
+
+        return pasteboard.changeCount == changeCount ? nil : pasteboard.changeCount
+    }
+
+    private func restorePasteboardIfUnchanged(
+        from snapshot: PasteboardSnapshot,
+        expectedChangeCount: Int,
+        expectedText: String?
+    ) {
+        guard pasteboard.changeCount == expectedChangeCount else {
+            return
+        }
+
+        guard pasteboard.string(forType: .string) == expectedText else {
+            return
+        }
+
+        _ = writePasteboard(snapshot.text)
     }
 }
 
