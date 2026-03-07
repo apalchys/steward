@@ -67,7 +67,7 @@ struct SettingsView: View {
                     .font(.headline)
 
                 Picker("Provider", selection: $settings.grammarProviderID) {
-                    ForEach(providerOptions(for: .textCorrection)) { providerID in
+                    ForEach(LLMProviderID.allCases) { providerID in
                         Text(providerID.displayName).tag(providerID)
                     }
                 }
@@ -114,7 +114,7 @@ struct SettingsView: View {
                     .font(.headline)
 
                 Picker("Provider", selection: $settings.screenshotProviderID) {
-                    ForEach(providerOptions(for: .visionOCR)) { providerID in
+                    ForEach(LLMProviderID.allCases) { providerID in
                         Text(providerID.displayName).tag(providerID)
                     }
                 }
@@ -258,9 +258,6 @@ struct SettingsView: View {
         )
     }
 
-    private func providerOptions(for capability: LLMCapability) -> [LLMProviderID] {
-        LLMProviderID.allCases.filter { $0.capabilities.contains(capability) }
-    }
 }
 
 extension Bundle {

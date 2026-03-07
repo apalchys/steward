@@ -1,71 +1,70 @@
 import Foundation
 import XCTest
 @testable import Steward
+@testable import StewardCore
 
 @MainActor
 final class LLMRouterTests: XCTestCase {
-    func testPerformUsesRequestedProviderForGrammar() async throws {
-        let callTracker = CallTracker()
-        let settingsStore = FakeSettingsStore(settings: makeSettings(configured: [.openAI, .gemini]))
-        let router = makeRouter(
-            settingsStore: settingsStore,
-            providers: [
-                FakeProvider(
-                    id: .openAI,
-                    capabilities: [.textCorrection],
-                    performHandler: { task, configuration in
-                        callTracker.calledOpenAI = true
-                        guard case let .grammarCorrection(text, _) = task else {
-                            XCTFail("Expected grammar task")
-                            throw FakeProviderError.unexpectedTask
-                        }
-                        XCTAssertEqual(text, "text")
-                        XCTAssertEqual(configuration.apiKey, "key-openAI")
-                        return .text("ok")
-                    }
-                ),
-                FakeProvider(
-                    id: .gemini,
-                    capabilities: [.visionOCR],
-                    performHandler: { _, _ in
-                        callTracker.calledGemini = true
-                        return .text("ignored")
-                    }
-                ),
-            ]
-        )
-
-        let response = try await router.perform(
-            LLMRequest(providerID: .openAI, task: .grammarCorrection(text: "text", customInstructions: ""))
-        )
-
-        XCTAssertEqual(response.textValue, "ok")
-        XCTAssertTrue(callTracker.calledOpenAI)
-        XCTAssertFalse(callTracker.calledGemini)
+    override func tearDown() {
+        URLProtocolStub.reset()
+        super.tearDown()
     }
 
-    func testPerformFailsWhenProviderIsNotRegistered() async {
-        let settingsStore = FakeSettingsStore(settings: makeSettings(configured: [.openAI]))
-        let router = makeRouter(settingsStore: settingsStore, providers: [])
+    func testPerformRoutesGrammarRequestsToOpenAI() async throws {
+        URLProtocolStub.configure(handler: { request in
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertEqual(request.url?.absoluteString, "https://api.openai.com/v1/responses")
 
-        do {
-            _ = try await router.perform(
-                LLMRequest(providerID: .openAI, task: .grammarCorrection(text: "text", customInstructions: ""))
+            let body = try XCTUnwrap(request.bodyData())
+            let payload = try XCTUnwrap(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+            XCTAssertEqual(payload["model"] as? String, "model-openAI")
+            XCTAssertEqual(payload["input"] as? String, "bad text")
+
+            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let data = """
+                {"output":[{"type":"message","content":[{"type":"output_text","text":"good text"}]}]}
+                """.data(using: .utf8)
+            return (response, data)
+        })
+
+        let router = makeRouter(configured: [.openAI], openAISession: URLProtocolStub.makeSession())
+
+        let response = try await router.perform(
+            LLMRequest(providerID: .openAI, task: .grammarCorrection(text: "bad text", customInstructions: ""))
+        )
+
+        XCTAssertEqual(response.textValue, "good text")
+    }
+
+    func testPerformRoutesOCRRequestsToGemini() async throws {
+        URLProtocolStub.configure(handler: { request in
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertEqual(
+                request.url?.absoluteString,
+                "https://generativelanguage.googleapis.com/v1beta/models/model-gemini:generateContent?key=key-gemini"
             )
-            XCTFail("Expected registration error")
-        } catch {
-            guard case let LLMRouterError.providerNotRegistered(providerID) = error else {
-                XCTFail("Unexpected error: \(error)")
-                return
-            }
 
-            XCTAssertEqual(providerID, .openAI)
-        }
+            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let data = """
+                {"candidates":[{"content":{"parts":[{"text":"Extracted"}]}}]}
+                """.data(using: .utf8)
+            return (response, data)
+        })
+
+        let router = makeRouter(configured: [.gemini], geminiSession: URLProtocolStub.makeSession())
+
+        let response = try await router.perform(
+            LLMRequest(
+                providerID: .gemini,
+                task: .screenOCR(imageData: Data("image".utf8), mimeType: "image/png", customInstructions: "")
+            )
+        )
+
+        XCTAssertEqual(response.textValue, "Extracted")
     }
 
     func testPerformFailsWhenProviderIsNotConfigured() async {
-        let settingsStore = FakeSettingsStore(settings: makeSettings(configured: []))
-        let router = makeRouter(settingsStore: settingsStore)
+        let router = makeRouter(configured: [])
 
         do {
             _ = try await router.perform(
@@ -82,45 +81,16 @@ final class LLMRouterTests: XCTestCase {
         }
     }
 
-    func testPerformFailsWhenRequestedProviderDoesNotSupportCapability() async {
-        let settingsStore = FakeSettingsStore(settings: makeSettings(configured: [.openAI]))
-        let router = makeRouter(
-            settingsStore: settingsStore,
-            providers: [FakeProvider(id: .openAI, capabilities: [.visionOCR])]
-        )
-
-        do {
-            _ = try await router.perform(
-                LLMRequest(providerID: .openAI, task: .grammarCorrection(text: "text", customInstructions: ""))
-            )
-            XCTFail("Expected capability error")
-        } catch {
-            guard case let LLMRouterError.providerDoesNotSupportCapability(providerID, capability) = error else {
-                XCTFail("Unexpected error: \(error)")
-                return
-            }
-            XCTAssertEqual(providerID, .openAI)
-            XCTAssertEqual(capability, .textCorrection)
-        }
-    }
-
     func testCheckAccessReturnsRequestedProviderHealth() async throws {
-        let settingsStore = FakeSettingsStore(settings: makeSettings(configured: [.openAI, .gemini]))
-        let router = makeRouter(
-            settingsStore: settingsStore,
-            providers: [
-                FakeProvider(
-                    id: .openAI,
-                    capabilities: [.textCorrection],
-                    checkAccessResult: LLMProviderHealth(
-                        providerID: .openAI,
-                        state: .available,
-                        message: "Ready"
-                    )
-                )
-            ]
-        )
+        URLProtocolStub.configure(handler: { request in
+            XCTAssertEqual(request.httpMethod, "GET")
+            XCTAssertEqual(request.url?.absoluteString, "https://api.openai.com/v1/models/model-openAI")
 
+            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, nil)
+        })
+
+        let router = makeRouter(configured: [.openAI], openAISession: URLProtocolStub.makeSession())
         let health = try await router.checkAccess(for: .openAI)
 
         XCTAssertEqual(health.providerID, .openAI)
@@ -129,8 +99,7 @@ final class LLMRouterTests: XCTestCase {
     }
 
     func testCheckAccessReturnsNotConfiguredDiagnostic() async throws {
-        let settingsStore = FakeSettingsStore(settings: makeSettings(configured: []))
-        let router = makeRouter(settingsStore: settingsStore)
+        let router = makeRouter(configured: [])
 
         let health = try await router.checkAccess(for: .openAI)
 
@@ -139,15 +108,14 @@ final class LLMRouterTests: XCTestCase {
     }
 
     private func makeRouter(
-        settingsStore: FakeSettingsStore,
-        providers: [FakeProvider] = [
-            FakeProvider(id: .openAI, capabilities: [.textCorrection, .visionOCR]),
-            FakeProvider(id: .gemini, capabilities: [.textCorrection, .visionOCR]),
-        ]
+        configured: Set<LLMProviderID>,
+        openAISession: URLSession = .shared,
+        geminiSession: URLSession = .shared
     ) -> LLMRouter {
         LLMRouter(
-            providers: providers,
-            settingsStore: settingsStore
+            settingsStore: FakeSettingsStore(settings: makeSettings(configured: configured)),
+            openAIClient: OpenAIClient(session: openAISession),
+            geminiClient: GeminiClient(session: geminiSession)
         )
     }
 
@@ -165,15 +133,6 @@ final class LLMRouterTests: XCTestCase {
     }
 }
 
-private final class CallTracker: @unchecked Sendable {
-    var calledOpenAI = false
-    var calledGemini = false
-}
-
-private enum FakeProviderError: Error {
-    case unexpectedTask
-}
-
 private final class FakeSettingsStore: AppSettingsProviding {
     var settings: LLMSettings
 
@@ -185,40 +144,5 @@ private final class FakeSettingsStore: AppSettingsProviding {
 
     func saveSettings(_ settings: LLMSettings) {
         self.settings = settings
-    }
-}
-
-private struct FakeProvider: LLMProvider, @unchecked Sendable {
-    let id: LLMProviderID
-    let capabilities: Set<LLMCapability>
-    let checkAccessResult: LLMProviderHealth
-    let performHandler: (@Sendable (LLMTask, LLMProviderConfiguration) async throws -> LLMResult)?
-
-    init(
-        id: LLMProviderID,
-        capabilities: Set<LLMCapability>,
-        checkAccessResult: LLMProviderHealth? = nil,
-        performHandler: (@Sendable (LLMTask, LLMProviderConfiguration) async throws -> LLMResult)? = nil
-    ) {
-        self.id = id
-        self.capabilities = capabilities
-        self.checkAccessResult = checkAccessResult
-            ?? LLMProviderHealth(providerID: id, state: .available, message: "Ready")
-        self.performHandler = performHandler
-    }
-
-    func checkAccess(configuration: LLMProviderConfiguration) async -> LLMProviderHealth {
-        checkAccessResult
-    }
-
-    func perform(
-        task: LLMTask,
-        configuration: LLMProviderConfiguration
-    ) async throws -> LLMResult {
-        if let performHandler {
-            return try await performHandler(task, configuration)
-        }
-
-        return .text("ok")
     }
 }

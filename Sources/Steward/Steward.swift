@@ -14,10 +14,6 @@ struct StewardApp: App {
         let textInteractionService = SystemTextInteractionService(suppression: clipboardMonitor)
         let appSystemServices = AppSystemServices.live()
         let llmRouter = LLMRouter(
-            providers: [
-                OpenAILLMProvider(),
-                GeminiLLMProvider(),
-            ],
             settingsStore: settingsStore
         )
         let grammarCoordinator = GrammarCoordinator(
