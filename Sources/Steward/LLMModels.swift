@@ -122,9 +122,3 @@ enum ActivityStatus {
     case processing
     case error
 }
-
-extension String {
-    var trimmed: String {
-        trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-}
