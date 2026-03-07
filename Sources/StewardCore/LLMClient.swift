@@ -2,6 +2,7 @@ import Foundation
 
 public enum LLMHealthCheckStatus: Sendable, Equatable {
     case available
+    case notConfigured
     case invalidCredentials
     case invalidModel
     case networkIssue

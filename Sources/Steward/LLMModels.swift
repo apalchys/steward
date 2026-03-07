@@ -56,20 +56,9 @@ struct LLMProviderConfiguration: Equatable {
     }
 }
 
-enum LLMProviderHealthState: Equatable {
-    case available
-    case notConfigured
-    case invalidCredentials
-    case invalidModel
-    case networkIssue
-    case rateLimited
-    case serviceIssue
-    case unknown
-}
-
 struct LLMProviderHealth {
     let providerID: LLMProviderID
-    let state: LLMProviderHealthState
+    let state: LLMHealthCheckStatus
     let message: String
 
     var hasAccess: Bool {

@@ -138,27 +138,8 @@ final class LLMRouter: LLMRouting {
 
         return LLMProviderHealth(
             providerID: providerID,
-            state: mapHealthState(result.status),
+            state: result.status,
             message: result.message
         )
-    }
-
-    private func mapHealthState(_ status: LLMHealthCheckStatus) -> LLMProviderHealthState {
-        switch status {
-        case .available:
-            return .available
-        case .invalidCredentials:
-            return .invalidCredentials
-        case .invalidModel:
-            return .invalidModel
-        case .networkIssue:
-            return .networkIssue
-        case .rateLimited:
-            return .rateLimited
-        case .serviceIssue:
-            return .serviceIssue
-        case .unknown:
-            return .unknown
-        }
     }
 }
