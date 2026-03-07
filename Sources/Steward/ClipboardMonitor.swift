@@ -8,7 +8,8 @@ protocol ClipboardTextReading {
 
 extension NSPasteboard: ClipboardTextReading {}
 
-final class ClipboardMonitor: @unchecked Sendable {
+@MainActor
+final class ClipboardMonitor {
     static let defaultPollInterval: TimeInterval = 0.75
 
     private let pasteboard: ClipboardTextReading
@@ -17,7 +18,7 @@ final class ClipboardMonitor: @unchecked Sendable {
     private let suppressionExpiration: TimeInterval
     private let onAcceptedRecord: (ClipboardHistoryRecord) -> Void
 
-    private var timer: Timer?
+    private var pollingTask: Task<Void, Never>?
     private var lastChangeCount = 0
     private var suppressedChangeCount = 0
     private var suppressionExpiresAt: Date?
@@ -37,27 +38,33 @@ final class ClipboardMonitor: @unchecked Sendable {
     }
 
     deinit {
-        stop()
+        pollingTask?.cancel()
     }
 
     func start() {
-        guard timer == nil else {
+        guard pollingTask == nil else {
             return
         }
 
         lastChangeCount = pasteboard.changeCount
 
-        let timer = Timer(timeInterval: pollInterval, repeats: true) { [weak self] _ in
-            self?.pollPasteboardIfNeeded()
+        pollingTask = Task { [weak self, pollInterval] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(pollInterval))
+                guard !Task.isCancelled else {
+                    return
+                }
+
+                await MainActor.run {
+                    self?.pollPasteboardIfNeeded()
+                }
+            }
         }
-        timer.tolerance = min(0.25, pollInterval * 0.5)
-        RunLoop.main.add(timer, forMode: .common)
-        self.timer = timer
     }
 
     func stop() {
-        timer?.invalidate()
-        timer = nil
+        pollingTask?.cancel()
+        pollingTask = nil
     }
 
     func suppressNextClipboardChanges(_ count: Int = 1) {

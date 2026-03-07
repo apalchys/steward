@@ -3,6 +3,7 @@ import ApplicationServices
 import Foundation
 import ScreenCaptureKit
 
+@MainActor
 protocol ClipboardChangeSuppressing: AnyObject {
     func suppressNextClipboardChanges(_ count: Int)
 }
@@ -365,12 +366,12 @@ struct ScreenCaptureRequest: Sendable {
     }
 }
 
-protocol ScreenCaptureProviding: AnyObject, Sendable {
+protocol ScreenCaptureProviding: Sendable {
     func ensureScreenCaptureAccess() -> Bool
     func captureSelectionImageData(request: ScreenCaptureRequest, selectionRect: CGRect) async -> Data?
 }
 
-final class SystemScreenCaptureService: ScreenCaptureProviding, @unchecked Sendable {
+struct SystemScreenCaptureService: ScreenCaptureProviding {
     func ensureScreenCaptureAccess() -> Bool {
         if CGPreflightScreenCaptureAccess() {
             return true

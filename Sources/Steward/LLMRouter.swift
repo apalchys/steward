@@ -9,14 +9,16 @@ protocol LLMProvider: Sendable {
     func perform(task: LLMTask, configuration: LLMProviderConfiguration) async throws -> LLMResult
 }
 
-protocol LLMRouting: AnyObject, Sendable {
+@MainActor
+protocol LLMRouting: AnyObject {
     var supportedProviderIDs: [LLMProviderID] { get }
 
     func perform(_ request: LLMRequest) async throws -> LLMResult
     func checkAccess(for providerID: LLMProviderID) async throws -> LLMProviderHealth
 }
 
-final class LLMRouter: LLMRouting, @unchecked Sendable {
+@MainActor
+final class LLMRouter: LLMRouting {
     let supportedProviderIDs: [LLMProviderID]
 
     private let providers: [LLMProviderID: LLMProvider]

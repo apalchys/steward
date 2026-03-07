@@ -31,6 +31,7 @@ final class AppStateTests: XCTestCase {
     }
 }
 
+@MainActor
 private final class FakeClipboardMonitor: ClipboardMonitoring {
     private(set) var startCallCount = 0
     private(set) var stopCallCount = 0
@@ -46,7 +47,8 @@ private final class FakeClipboardMonitor: ClipboardMonitoring {
     func suppressNextClipboardChanges(_ count: Int) {}
 }
 
-private final class FakeAppRouter: LLMRouting, @unchecked Sendable {
+@MainActor
+private final class FakeAppRouter: LLMRouting {
     let supportedProviderIDs: [LLMProviderID] = [.openAI, .gemini]
 
     func perform(_ request: LLMRequest) async throws -> LLMResult {

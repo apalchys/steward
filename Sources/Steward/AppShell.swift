@@ -6,6 +6,7 @@ import SwiftUI
 
 private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.steward", category: "app")
 
+@MainActor
 protocol ClipboardMonitoring: ClipboardChangeSuppressing {
     func start()
     func stop()

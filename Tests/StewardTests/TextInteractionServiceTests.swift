@@ -122,6 +122,7 @@ private final class FakePasteboard: PasteboardControlling, @unchecked Sendable {
     }
 }
 
+@MainActor
 private final class FakeClipboardChangeSuppressor: ClipboardChangeSuppressing {
     private(set) var suppressedCounts: [Int] = []
 

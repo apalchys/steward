@@ -2,6 +2,7 @@ import Foundation
 import XCTest
 @testable import Steward
 
+@MainActor
 final class LLMRouterTests: XCTestCase {
     func testPerformUsesRequestedProviderForGrammar() async throws {
         let callTracker = CallTracker()

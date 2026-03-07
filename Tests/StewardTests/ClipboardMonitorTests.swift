@@ -3,6 +3,7 @@ import Foundation
 import XCTest
 @testable import Steward
 
+@MainActor
 final class ClipboardMonitorTests: XCTestCase {
     func testPollAcceptsNonEmptyTextWithinSizeLimit() {
         let fakePasteboard = FakePasteboard()

@@ -84,7 +84,8 @@ final class GrammarCoordinatorTests: XCTestCase {
     }
 }
 
-private final class FakeRouter: LLMRouting, @unchecked Sendable {
+@MainActor
+private final class FakeRouter: LLMRouting {
     let supportedProviderIDs: [LLMProviderID] = [.openAI]
     var lastRequest: LLMRequest?
     let result: Result<LLMResult, Error>
