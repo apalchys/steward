@@ -9,15 +9,15 @@ final class GrammarCoordinatorTests: XCTestCase {
         let settingsStore = CoordinatorSettingsStore(
             settings: {
                 var settings = LLMSettings.empty()
-                settings.grammarProviderOverrideID = .openAICompatible
-                settings.providerProfiles[.openAICompatible] = LLMProviderProfile(
+                settings.grammarProviderID = .gemini
+                settings.providerProfiles[.openAI] = LLMProviderProfile(
                     apiKey: "key",
                     modelID: "model",
-                    baseURL: "https://example.com"
+                    baseURL: ""
                 )
                 return settings
             }(),
-            customRules: "Use concise language"
+            customInstructions: "Use concise language"
         )
 
         let coordinator = GrammarCoordinator(router: router, textInteraction: textInteraction, settingsStore: settingsStore)
@@ -34,14 +34,14 @@ final class GrammarCoordinatorTests: XCTestCase {
                 return
             }
 
-            guard case let .grammarCorrection(text, customRules) = request.task else {
+            guard case let .grammarCorrection(text, customInstructions) = request.task else {
                 XCTFail("Expected grammar task")
                 return
             }
 
+            XCTAssertEqual(request.providerID, .gemini)
             XCTAssertEqual(text, "bad")
-            XCTAssertEqual(customRules, "Use concise language")
-            XCTAssertEqual(request.featureOverrideProviderID, .openAICompatible)
+            XCTAssertEqual(customInstructions, "Use concise language")
         case .failure(let error):
             XCTFail("Expected success, got \(error)")
         }
@@ -50,7 +50,7 @@ final class GrammarCoordinatorTests: XCTestCase {
     func testHandleHotKeyPressFailsWhenNoSelectedText() {
         let router = FakeRouter(result: .success(.text("ignored")))
         let textInteraction = FakeTextInteraction(selectedText: nil)
-        let settingsStore = CoordinatorSettingsStore(settings: .empty(), customRules: "")
+        let settingsStore = CoordinatorSettingsStore(settings: .empty(), customInstructions: "")
 
         let coordinator = GrammarCoordinator(router: router, textInteraction: textInteraction, settingsStore: settingsStore)
 
@@ -78,7 +78,7 @@ final class GrammarCoordinatorTests: XCTestCase {
 
         let router = FakeRouter(result: .failure(TestError.failed))
         let textInteraction = FakeTextInteraction(selectedText: "bad")
-        let settingsStore = CoordinatorSettingsStore(settings: .empty(), customRules: "")
+        let settingsStore = CoordinatorSettingsStore(settings: .empty(), customInstructions: "")
 
         let coordinator = GrammarCoordinator(router: router, textInteraction: textInteraction, settingsStore: settingsStore)
 
@@ -113,16 +113,11 @@ private final class FakeRouter: LLMRouting {
         completion(result)
     }
 
-    func resolvedProviderID(for capability: LLMCapability, featureOverrideProviderID: LLMProviderID?) -> LLMProviderID? {
-        featureOverrideProviderID ?? .openAI
-    }
-
     func checkAccess(
-        for capability: LLMCapability,
-        featureOverrideProviderID: LLMProviderID?,
+        for providerID: LLMProviderID,
         completion: @escaping (Result<LLMProviderHealth, Error>) -> Void
     ) {
-        completion(.success(LLMProviderHealth(providerID: .openAI, hasAccess: true)))
+        completion(.success(LLMProviderHealth(providerID: providerID, hasAccess: true)))
     }
 }
 
@@ -150,11 +145,13 @@ private final class FakeTextInteraction: TextInteractionPerforming {
 
 final class CoordinatorSettingsStore: LLMSettingsProviding {
     var settings: LLMSettings
-    var customRulesValue: String
+    var customInstructionsValue: String
+    var screenshotInstructionsValue: String
 
-    init(settings: LLMSettings, customRules: String) {
+    init(settings: LLMSettings, customInstructions: String, screenshotInstructions: String = "") {
         self.settings = settings
-        self.customRulesValue = customRules
+        self.customInstructionsValue = customInstructions
+        self.screenshotInstructionsValue = screenshotInstructions
     }
 
     func loadSettings() -> LLMSettings { settings }
@@ -165,9 +162,15 @@ final class CoordinatorSettingsStore: LLMSettingsProviding {
 
     func migrateLegacySettingsIfNeeded() {}
 
-    func customGrammarRules() -> String { customRulesValue }
+    func customGrammarInstructions() -> String { customInstructionsValue }
 
-    func setCustomGrammarRules(_ value: String) {
-        customRulesValue = value
+    func setCustomGrammarInstructions(_ value: String) {
+        customInstructionsValue = value
+    }
+
+    func customScreenshotInstructions() -> String { screenshotInstructionsValue }
+
+    func setCustomScreenshotInstructions(_ value: String) {
+        screenshotInstructionsValue = value
     }
 }

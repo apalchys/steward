@@ -4,8 +4,6 @@ import StewardCore
 enum LLMProviderID: String, CaseIterable, Codable, Identifiable {
     case openAI
     case gemini
-    case anthropic
-    case openAICompatible
 
     var id: String { rawValue }
 
@@ -15,23 +13,15 @@ enum LLMProviderID: String, CaseIterable, Codable, Identifiable {
             return "OpenAI"
         case .gemini:
             return "Gemini"
-        case .anthropic:
-            return "Anthropic"
-        case .openAICompatible:
-            return "OpenAI-Compatible"
         }
     }
 
     var capabilities: Set<LLMCapability> {
         switch self {
         case .openAI:
-            return [.textCorrection]
+            return [.textCorrection, .visionOCR]
         case .gemini:
-            return [.visionOCR]
-        case .anthropic:
-            return [.textCorrection]
-        case .openAICompatible:
-            return [.textCorrection]
+            return [.textCorrection, .visionOCR]
         }
     }
 
@@ -41,10 +31,6 @@ enum LLMProviderID: String, CaseIterable, Codable, Identifiable {
             return OpenAIClient.defaultModelID
         case .gemini:
             return GeminiClient.defaultModelID
-        case .anthropic:
-            return "claude-3-5-haiku-latest"
-        case .openAICompatible:
-            return OpenAIClient.defaultModelID
         }
     }
 }
@@ -55,8 +41,8 @@ enum LLMCapability: String, Codable {
 }
 
 enum LLMTask {
-    case grammarCorrection(text: String, customRules: String)
-    case screenOCR(imageData: Data, mimeType: String)
+    case grammarCorrection(text: String, customInstructions: String)
+    case screenOCR(imageData: Data, mimeType: String, customInstructions: String)
 
     var requiredCapability: LLMCapability {
         switch self {
@@ -69,8 +55,8 @@ enum LLMTask {
 }
 
 struct LLMRequest {
+    let providerID: LLMProviderID
     let task: LLMTask
-    let featureOverrideProviderID: LLMProviderID?
 }
 
 enum LLMResult {
@@ -103,7 +89,6 @@ enum LLMRouterError: LocalizedError {
     case providerNotRegistered(LLMProviderID)
     case providerDoesNotSupportCapability(providerID: LLMProviderID, capability: LLMCapability)
     case providerNotConfigured(LLMProviderID)
-    case noConfiguredProvider(LLMCapability)
 
     var errorDescription: String? {
         switch self {
@@ -118,27 +103,6 @@ enum LLMRouterError: LocalizedError {
             }
         case .providerNotConfigured(let providerID):
             return "Provider \(providerID.displayName) is missing API key or model ID in Preferences."
-        case .noConfiguredProvider(let capability):
-            switch capability {
-            case .textCorrection:
-                return "No configured provider is available for grammar correction."
-            case .visionOCR:
-                return "No configured provider is available for screen OCR."
-            }
-        }
-    }
-}
-
-enum LLMProviderError: LocalizedError {
-    case unsupportedTask(providerID: LLMProviderID)
-    case missingBaseURL
-
-    var errorDescription: String? {
-        switch self {
-        case .unsupportedTask(let providerID):
-            return "Provider \(providerID.displayName) cannot handle this task."
-        case .missingBaseURL:
-            return "OpenAI-compatible provider requires a Base URL in Preferences."
         }
     }
 }

@@ -49,4 +49,4 @@ iconutil -c icns "$ICONSET_NAME"
 rm -rf "$ICONSET_NAME"
 
 echo "Icon created successfully: AppIcon.icns"
-echo "Use this icon in your scripts/build_app.sh script"
+echo "Use this icon in your scripts/build.sh script"

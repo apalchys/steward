@@ -3,99 +3,112 @@ import XCTest
 @testable import Steward
 
 final class LLMRouterTests: XCTestCase {
-    func testResolvedProviderPrefersFeatureOverrideOverGlobalDefault() {
-        let settingsStore = FakeSettingsStore(
-            settings: makeSettings(
-                globalDefault: .openAI,
-                grammarOverride: .openAICompatible,
-                configured: [.openAI, .openAICompatible]
-            )
-        )
-        let router = LLMRouter(
+    func testPerformUsesRequestedProviderForGrammar() {
+        var didCallOpenAI = false
+        var didCallGemini = false
+        let settingsStore = FakeSettingsStore(settings: makeSettings(configured: [.openAI, .gemini]))
+        let router = makeRouter(
+            settingsStore: settingsStore,
             providers: [
-                FakeProvider(id: .openAI, capabilities: [.textCorrection]),
-                FakeProvider(id: .openAICompatible, capabilities: [.textCorrection]),
-            ],
-            settingsStore: settingsStore
-        )
-
-        let providerID = router.resolvedProviderID(
-            for: .textCorrection,
-            featureOverrideProviderID: .openAICompatible
-        )
-
-        XCTAssertEqual(providerID, .openAICompatible)
-    }
-
-    func testResolvedProviderFallsBackToGlobalDefaultWhenNoOverride() {
-        let settingsStore = FakeSettingsStore(
-            settings: makeSettings(
-                globalDefault: .openAI,
-                grammarOverride: nil,
-                configured: [.openAI, .openAICompatible]
-            )
-        )
-        let router = LLMRouter(
-            providers: [
-                FakeProvider(id: .openAI, capabilities: [.textCorrection]),
-                FakeProvider(id: .openAICompatible, capabilities: [.textCorrection]),
-            ],
-            settingsStore: settingsStore
-        )
-
-        let providerID = router.resolvedProviderID(
-            for: .textCorrection,
-            featureOverrideProviderID: nil
-        )
-
-        XCTAssertEqual(providerID, .openAI)
-    }
-
-    func testResolvedProviderUsesFirstConfiguredCapableWhenOverrideAndDefaultMissing() {
-        let settingsStore = FakeSettingsStore(
-            settings: makeSettings(
-                globalDefault: nil,
-                grammarOverride: nil,
-                configured: [.openAICompatible]
-            )
-        )
-        let router = LLMRouter(
-            providers: [
-                FakeProvider(id: .openAI, capabilities: [.textCorrection]),
-                FakeProvider(id: .openAICompatible, capabilities: [.textCorrection]),
-            ],
-            settingsStore: settingsStore
-        )
-
-        let providerID = router.resolvedProviderID(
-            for: .textCorrection,
-            featureOverrideProviderID: nil
-        )
-
-        XCTAssertEqual(providerID, .openAICompatible)
-    }
-
-    func testPerformFailsWhenOverrideProviderDoesNotSupportCapability() {
-        let settingsStore = FakeSettingsStore(
-            settings: makeSettings(
-                globalDefault: nil,
-                grammarOverride: .gemini,
-                configured: [.gemini]
-            )
-        )
-        let router = LLMRouter(
-            providers: [
-                FakeProvider(id: .gemini, capabilities: [.visionOCR]),
-            ],
-            settingsStore: settingsStore
+                FakeProvider(
+                    id: .openAI,
+                    capabilities: [.textCorrection],
+                    performHandler: { task, configuration, completion in
+                        didCallOpenAI = true
+                        guard case let .grammarCorrection(text, _) = task else {
+                            XCTFail("Expected grammar task")
+                            return
+                        }
+                        XCTAssertEqual(text, "text")
+                        XCTAssertEqual(configuration.apiKey, "key-openAI")
+                        completion(.success(.text("ok")))
+                    }
+                ),
+                FakeProvider(
+                    id: .gemini,
+                    capabilities: [.visionOCR],
+                    performHandler: { _, _, _ in
+                        didCallGemini = true
+                    }
+                ),
+            ]
         )
 
         let result: Result<LLMResult, Error> = waitForValue { completion in
             router.perform(
-                LLMRequest(
-                    task: .grammarCorrection(text: "text", customRules: ""),
-                    featureOverrideProviderID: .gemini
-                ),
+                LLMRequest(providerID: .openAI, task: .grammarCorrection(text: "text", customInstructions: "")),
+                completion: completion
+            )
+        }
+
+        switch result {
+        case .success(let response):
+            XCTAssertEqual(response.textValue, "ok")
+            XCTAssertTrue(didCallOpenAI)
+            XCTAssertFalse(didCallGemini)
+        case .failure(let error):
+            XCTFail("Expected success, got \(error)")
+        }
+    }
+
+    func testPerformFailsWhenProviderIsNotRegistered() {
+        let settingsStore = FakeSettingsStore(settings: makeSettings(configured: [.openAI]))
+        let router = makeRouter(settingsStore: settingsStore, providers: [])
+
+        let result: Result<LLMResult, Error> = waitForValue { completion in
+            router.perform(
+                LLMRequest(providerID: .openAI, task: .grammarCorrection(text: "text", customInstructions: "")),
+                completion: completion
+            )
+        }
+
+        switch result {
+        case .success:
+            XCTFail("Expected registration error")
+        case .failure(let error):
+            guard case let LLMRouterError.providerNotRegistered(providerID) = error else {
+                XCTFail("Unexpected error: \(error)")
+                return
+            }
+
+            XCTAssertEqual(providerID, .openAI)
+        }
+    }
+
+    func testPerformFailsWhenProviderIsNotConfigured() {
+        let settingsStore = FakeSettingsStore(settings: makeSettings(configured: []))
+        let router = makeRouter(settingsStore: settingsStore)
+
+        let result: Result<LLMResult, Error> = waitForValue { completion in
+            router.perform(
+                LLMRequest(providerID: .openAI, task: .grammarCorrection(text: "text", customInstructions: "")),
+                completion: completion
+            )
+        }
+
+        switch result {
+        case .success:
+            XCTFail("Expected configuration error")
+        case .failure(let error):
+            guard case let LLMRouterError.providerNotConfigured(providerID) = error else {
+                XCTFail("Unexpected error: \(error)")
+                return
+            }
+
+            XCTAssertEqual(providerID, .openAI)
+        }
+    }
+
+    func testPerformFailsWhenRequestedProviderDoesNotSupportCapability() {
+        let settingsStore = FakeSettingsStore(settings: makeSettings(configured: [.openAI]))
+        let router = makeRouter(
+            settingsStore: settingsStore,
+            providers: [FakeProvider(id: .openAI, capabilities: [.visionOCR])]
+        )
+
+        let result: Result<LLMResult, Error> = waitForValue { completion in
+            router.perform(
+                LLMRequest(providerID: .openAI, task: .grammarCorrection(text: "text", customInstructions: "")),
                 completion: completion
             )
         }
@@ -108,56 +121,20 @@ final class LLMRouterTests: XCTestCase {
                 XCTFail("Unexpected error: \(error)")
                 return
             }
-            XCTAssertEqual(providerID, .gemini)
+            XCTAssertEqual(providerID, .openAI)
             XCTAssertEqual(capability, .textCorrection)
         }
     }
 
-    func testPerformFailsWhenNoConfiguredProviderExists() {
-        let settingsStore = FakeSettingsStore(settings: makeSettings(globalDefault: nil, grammarOverride: nil, configured: []))
-        let router = LLMRouter(
-            providers: [
-                FakeProvider(id: .openAI, capabilities: [.textCorrection])
-            ],
-            settingsStore: settingsStore
-        )
-
-        let result: Result<LLMResult, Error> = waitForValue { completion in
-            router.perform(
-                LLMRequest(task: .grammarCorrection(text: "text", customRules: ""), featureOverrideProviderID: nil),
-                completion: completion
-            )
-        }
-
-        switch result {
-        case .success:
-            XCTFail("Expected missing provider error")
-        case .failure(let error):
-            guard case let LLMRouterError.noConfiguredProvider(capability) = error else {
-                XCTFail("Unexpected error: \(error)")
-                return
-            }
-            XCTAssertEqual(capability, .textCorrection)
-        }
-    }
-
-    func testCheckAccessReturnsSelectedProviderHealth() {
-        let settingsStore = FakeSettingsStore(
-            settings: makeSettings(
-                globalDefault: .openAI,
-                grammarOverride: nil,
-                configured: [.openAI]
-            )
-        )
-        let router = LLMRouter(
-            providers: [
-                FakeProvider(id: .openAI, capabilities: [.textCorrection], checkAccessResult: true)
-            ],
-            settingsStore: settingsStore
+    func testCheckAccessReturnsRequestedProviderHealth() {
+        let settingsStore = FakeSettingsStore(settings: makeSettings(configured: [.openAI, .gemini]))
+        let router = makeRouter(
+            settingsStore: settingsStore,
+            providers: [FakeProvider(id: .openAI, capabilities: [.textCorrection], checkAccessResult: true)]
         )
 
         let result: Result<LLMProviderHealth, Error> = waitForValue { completion in
-            router.checkAccess(for: .textCorrection, featureOverrideProviderID: nil, completion: completion)
+            router.checkAccess(for: .openAI, completion: completion)
         }
 
         switch result {
@@ -169,20 +146,27 @@ final class LLMRouterTests: XCTestCase {
         }
     }
 
-    private func makeSettings(
-        globalDefault: LLMProviderID?,
-        grammarOverride: LLMProviderID?,
-        configured: Set<LLMProviderID>
-    ) -> LLMSettings {
+    private func makeRouter(
+        settingsStore: FakeSettingsStore,
+        providers: [FakeProvider] = [
+            FakeProvider(id: .openAI, capabilities: [.textCorrection, .visionOCR]),
+            FakeProvider(id: .gemini, capabilities: [.textCorrection, .visionOCR]),
+        ]
+    ) -> LLMRouter {
+        LLMRouter(
+            providers: providers,
+            settingsStore: settingsStore
+        )
+    }
+
+    private func makeSettings(configured: Set<LLMProviderID>) -> LLMSettings {
         var settings = LLMSettings.empty()
-        settings.globalDefaultProviderID = globalDefault
-        settings.grammarProviderOverrideID = grammarOverride
 
         for providerID in configured {
             settings.providerProfiles[providerID] = LLMProviderProfile(
                 apiKey: "key-\(providerID.rawValue)",
                 modelID: "model-\(providerID.rawValue)",
-                baseURL: providerID == .openAICompatible ? "https://compatible.example" : ""
+                baseURL: ""
             )
         }
 
@@ -205,9 +189,13 @@ private final class FakeSettingsStore: LLMSettingsProviding {
 
     func migrateLegacySettingsIfNeeded() {}
 
-    func customGrammarRules() -> String { "" }
+    func customGrammarInstructions() -> String { "" }
 
-    func setCustomGrammarRules(_ value: String) {}
+    func setCustomGrammarInstructions(_ value: String) {}
+
+    func customScreenshotInstructions() -> String { "" }
+
+    func setCustomScreenshotInstructions(_ value: String) {}
 }
 
 private struct FakeProvider: LLMProvider {

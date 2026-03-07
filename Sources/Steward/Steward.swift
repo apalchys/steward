@@ -1,12 +1,69 @@
+import AppKit
 import SwiftUI
 
 @main
 struct StewardApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @StateObject private var appState = AppState()
 
     var body: some Scene {
+        MenuBarExtra {
+            AppMenuView()
+                .environmentObject(appState)
+        } label: {
+            Image(nsImage: appState.statusBarIconImage)
+        }
+        .menuBarExtraStyle(.menu)
+
+        Window("History", id: "history") {
+            ClipboardHistoryView(store: appState.clipboardHistoryStore)
+        }
+        .defaultSize(width: 860, height: 520)
+
         Settings {
-            SettingsView()
+            SettingsView(settingsStore: appState.settingsStore) {
+                appState.settingsDidChange()
+            }
+        }
+    }
+}
+
+private struct AppMenuView: View {
+    @EnvironmentObject private var appState: AppState
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Group {
+            Text("Grammar Check (⌘⇧F)")
+            Text("Screen Text Capture (⌘⇧R)")
+
+            Divider()
+
+            Text(appState.activityStatusTitle)
+
+            Button(appState.grammarStatusTitle) {
+                appState.checkGrammarProviderStatus()
+            }
+
+            Button(appState.ocrStatusTitle) {
+                appState.checkOCRProviderStatus()
+            }
+
+            Divider()
+
+            Button("History") {
+                openWindow(id: "history")
+                NSApp.activate(ignoringOtherApps: true)
+            }
+
+            Button("Preferences...") {
+                appState.openPreferences()
+            }
+
+            Divider()
+
+            Button("Quit") {
+                NSApplication.shared.terminate(nil)
+            }
         }
     }
 }

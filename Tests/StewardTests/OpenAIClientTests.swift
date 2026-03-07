@@ -46,7 +46,7 @@ final class OpenAIClientTests: XCTestCase {
             let payload = try XCTUnwrap(try JSONSerialization.jsonObject(with: requestBody) as? [String: Any])
             XCTAssertEqual(payload["model"] as? String, "gpt-5.4")
             XCTAssertEqual(payload["input"] as? String, "This are bad grammar.")
-            XCTAssertTrue((payload["instructions"] as? String)?.contains("Additional rules to follow:") ?? false)
+            XCTAssertTrue((payload["instructions"] as? String)?.contains("Additional instructions to follow:") ?? false)
 
             let reasoning = try XCTUnwrap(payload["reasoning"] as? [String: Any])
             XCTAssertEqual(reasoning["effort"] as? String, "none")
@@ -63,7 +63,7 @@ final class OpenAIClientTests: XCTestCase {
             client.correctGrammar(
                 apiKey: "sk-test",
                 modelID: "gpt-5.4",
-                customRules: "Use concise language.",
+                customInstructions: "Use concise language.",
                 text: "This are bad grammar.",
                 completion: completion
             )
@@ -95,7 +95,7 @@ final class OpenAIClientTests: XCTestCase {
             client.correctGrammar(
                 apiKey: "sk-test",
                 modelID: "gpt-4.1-mini",
-                customRules: "",
+                customInstructions: "",
                 text: "bad text",
                 completion: completion
             )
@@ -123,7 +123,7 @@ final class OpenAIClientTests: XCTestCase {
             client.correctGrammar(
                 apiKey: "bad-key",
                 modelID: "gpt-5.4",
-                customRules: "",
+                customInstructions: "",
                 text: "text",
                 completion: completion
             )
@@ -143,7 +143,7 @@ final class OpenAIClientTests: XCTestCase {
             client.correctGrammar(
                 apiKey: "sk-test",
                 modelID: "gpt-5.4",
-                customRules: "",
+                customInstructions: "",
                 text: "text",
                 completion: completion
             )
@@ -163,7 +163,7 @@ final class OpenAIClientTests: XCTestCase {
             client.correctGrammar(
                 apiKey: "sk-test",
                 modelID: "gpt-5.4",
-                customRules: "",
+                customInstructions: "",
                 text: "text",
                 completion: completion
             )
@@ -186,7 +186,7 @@ final class OpenAIClientTests: XCTestCase {
             client.correctGrammar(
                 apiKey: "sk-test",
                 modelID: "gpt-5.4",
-                customRules: "",
+                customInstructions: "",
                 text: "text",
                 completion: completion
             )
@@ -203,7 +203,7 @@ final class OpenAIClientTests: XCTestCase {
             client.correctGrammar(
                 apiKey: "sk-test",
                 modelID: "gpt-5.4",
-                customRules: "",
+                customInstructions: "",
                 text: "text",
                 completion: completion
             )
@@ -224,8 +224,71 @@ final class OpenAIClientTests: XCTestCase {
             client.correctGrammar(
                 apiKey: "sk-test",
                 modelID: "gpt-5.4",
-                customRules: "",
+                customInstructions: "",
                 text: "text",
+                completion: completion
+            )
+        }
+
+        assertFailureMessage(result, equals: "OpenAI request URL is invalid.")
+    }
+
+    func testExtractMarkdownTextSuccessReturnsExtractedTextAndSendsImageInput() {
+        let imageData = Data("image-bytes".utf8)
+
+        URLProtocolStub.configure(handler: { request in
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertEqual(request.url?.absoluteString, "https://api.openai.com/v1/responses")
+
+            let requestBody = try XCTUnwrap(request.bodyData())
+            let payload = try XCTUnwrap(try JSONSerialization.jsonObject(with: requestBody) as? [String: Any])
+            XCTAssertEqual(payload["model"] as? String, "gpt-5.4")
+
+            let input = try XCTUnwrap(payload["input"] as? [[String: Any]])
+            let content = try XCTUnwrap(input.first?["content"] as? [[String: Any]])
+            XCTAssertEqual(content.first?["type"] as? String, "input_text")
+            XCTAssertEqual(content.last?["type"] as? String, "input_image")
+
+            let imageURL = try XCTUnwrap(content.last?["image_url"] as? String)
+            XCTAssertTrue(imageURL.hasPrefix("data:image/png;base64,"))
+            XCTAssertTrue(imageURL.hasSuffix(imageData.base64EncodedString()))
+
+            let data = """
+                {"output":[{"type":"message","content":[{"type":"output_text","text":"Extracted text"}]}]}
+                """.data(using: .utf8)
+            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, data)
+        })
+
+        let client = makeClient()
+        let result: Result<String, Error> = waitForValue { completion in
+            client.extractMarkdownText(
+                apiKey: "sk-test",
+                modelID: "gpt-5.4",
+                imageData: imageData,
+                mimeType: "image/png",
+                customInstructions: "",
+                completion: completion
+            )
+        }
+
+        switch result {
+        case .success(let extractedText):
+            XCTAssertEqual(extractedText, "Extracted text")
+        case .failure(let error):
+            XCTFail("Expected success but got error: \(error)")
+        }
+    }
+
+    func testExtractMarkdownTextReturnsInvalidURLErrorWhenBaseURLIsInvalid() {
+        let client = makeClient(baseURL: "://invalid-url")
+        let result: Result<String, Error> = waitForValue { completion in
+            client.extractMarkdownText(
+                apiKey: "sk-test",
+                modelID: "gpt-5.4",
+                imageData: Data("image".utf8),
+                mimeType: "image/png",
+                customInstructions: "",
                 completion: completion
             )
         }

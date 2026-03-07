@@ -78,6 +78,20 @@ else
   touch Steward.app/Contents/Resources/AppIcon.icns
 fi
 
+echo "Copying status bar icon..."
+if [ -f "Assets/status-icon.png" ]; then
+  cp -f Assets/status-icon.png Steward.app/Contents/Resources/status-icon.png
+  echo "✅ Found and copied Assets/status-icon.png"
+elif [ -f "status-icon.png" ]; then
+  cp -f status-icon.png Steward.app/Contents/Resources/status-icon.png
+  echo "✅ Found and copied status-icon.png"
+elif [ -f "statusicon.png" ]; then
+  cp -f statusicon.png Steward.app/Contents/Resources/status-icon.png
+  echo "✅ Found and copied legacy statusicon.png as status-icon.png"
+else
+  echo "⚠️ No status-icon.png found. Using SF Symbol fallback for status bar."
+fi
+
 # Add PkgInfo file
 echo "Creating PkgInfo file..."
 echo "APPL????" > Steward.app/Contents/PkgInfo

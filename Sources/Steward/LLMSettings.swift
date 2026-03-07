@@ -1,5 +1,7 @@
+import Defaults
 import Foundation
 import StewardCore
+import Valet
 
 struct LLMProviderProfile: Equatable {
     var apiKey: String
@@ -22,17 +24,15 @@ struct LLMProviderProfile: Equatable {
 }
 
 struct LLMSettings: Equatable {
-    var globalDefaultProviderID: LLMProviderID?
-    var grammarProviderOverrideID: LLMProviderID?
-    var ocrProviderOverrideID: LLMProviderID?
     var providerProfiles: [LLMProviderID: LLMProviderProfile]
+    var grammarProviderID: LLMProviderID
+    var screenshotProviderID: LLMProviderID
 
     static func empty() -> LLMSettings {
         LLMSettings(
-            globalDefaultProviderID: nil,
-            grammarProviderOverrideID: nil,
-            ocrProviderOverrideID: nil,
-            providerProfiles: [:]
+            providerProfiles: [:],
+            grammarProviderID: .openAI,
+            screenshotProviderID: .gemini
         )
     }
 
@@ -49,154 +49,200 @@ protocol LLMSettingsProviding {
     func loadSettings() -> LLMSettings
     func saveSettings(_ settings: LLMSettings)
     func migrateLegacySettingsIfNeeded()
-    func customGrammarRules() -> String
-    func setCustomGrammarRules(_ value: String)
+    func customGrammarInstructions() -> String
+    func setCustomGrammarInstructions(_ value: String)
+    func customScreenshotInstructions() -> String
+    func setCustomScreenshotInstructions(_ value: String)
+}
+
+protocol LLMSecretsStoring {
+    func apiKey(for providerID: LLMProviderID) -> String
+    func setAPIKey(_ apiKey: String, for providerID: LLMProviderID)
+}
+
+final class ValetLLMSecretsStore: LLMSecretsStoring {
+    private enum Keys {
+        static func apiKey(for providerID: LLMProviderID) -> String {
+            "llmProvider_\(providerID.rawValue)_apiKey"
+        }
+    }
+
+    private let valet: Valet
+
+    init(valet: Valet = ValetLLMSecretsStore.makeDefaultValet()) {
+        self.valet = valet
+    }
+
+    func apiKey(for providerID: LLMProviderID) -> String {
+        (try? valet.string(forKey: Keys.apiKey(for: providerID))) ?? ""
+    }
+
+    func setAPIKey(_ apiKey: String, for providerID: LLMProviderID) {
+        let normalizedValue = apiKey.trimmed
+        let key = Keys.apiKey(for: providerID)
+
+        do {
+            if normalizedValue.isEmpty {
+                try valet.removeObject(forKey: key)
+            } else {
+                try valet.setString(normalizedValue, forKey: key)
+            }
+        } catch {
+            print("ValetLLMSecretsStore write failed for \(providerID.rawValue): \(error)")
+        }
+    }
+
+    private static func makeDefaultValet() -> Valet {
+        if let bundleIdentifier = Bundle.main.bundleIdentifier,
+            let identifier = Identifier(nonEmpty: "\(bundleIdentifier)_llm")
+        {
+            return Valet.valet(with: identifier, accessibility: .whenUnlocked)
+        }
+
+        guard let fallbackIdentifier = Identifier(nonEmpty: "Steward_llm") else {
+            preconditionFailure("Could not build Valet identifier for LLM secrets")
+        }
+
+        return Valet.valet(with: fallbackIdentifier, accessibility: .whenUnlocked)
+    }
 }
 
 final class UserDefaultsLLMSettingsStore: LLMSettingsProviding {
-    private enum Keys {
-        static let migrated = "llmSettingsMigratedV1"
-        static let globalDefaultProvider = "llm.globalDefaultProvider"
-        static let grammarOverrideProvider = "llm.grammarProviderOverride"
-        static let ocrOverrideProvider = "llm.ocrProviderOverride"
-        static let customGrammarRules = "customGrammarRules"
+    static let supportedProviders: [LLMProviderID] = [.openAI, .gemini]
 
-        static func apiKey(for providerID: LLMProviderID) -> String {
-            "llm.provider.\(providerID.rawValue).apiKey"
+    private struct Keys {
+        let grammarProviderID: Defaults.Key<String>
+        let screenshotProviderID: Defaults.Key<String>
+        let customGrammarInstructions: Defaults.Key<String>
+        let customScreenshotInstructions: Defaults.Key<String>
+        let userDefaults: UserDefaults
+
+        init(userDefaults: UserDefaults) {
+            self.userDefaults = userDefaults
+            grammarProviderID = Defaults.Key<String>(
+                "llmProvider_grammar",
+                default: LLMProviderID.openAI.rawValue,
+                suite: userDefaults
+            )
+            screenshotProviderID = Defaults.Key<String>(
+                "llmProvider_screenshot",
+                default: LLMProviderID.gemini.rawValue,
+                suite: userDefaults
+            )
+            customGrammarInstructions = Defaults.Key<String>(
+                "customGrammarInstructions",
+                default: "",
+                suite: userDefaults
+            )
+            customScreenshotInstructions = Defaults.Key<String>(
+                "customScreenshotInstructions",
+                default: "",
+                suite: userDefaults
+            )
         }
 
-        static func modelID(for providerID: LLMProviderID) -> String {
-            "llm.provider.\(providerID.rawValue).modelID"
+        func modelID(for providerID: LLMProviderID) -> Defaults.Key<String> {
+            Defaults.Key<String>(
+                "llmProvider_\(providerID.rawValue)_modelID",
+                default: providerID.defaultModelID,
+                suite: userDefaults
+            )
         }
 
-        static func baseURL(for providerID: LLMProviderID) -> String {
-            "llm.provider.\(providerID.rawValue).baseURL"
+        func baseURL(for providerID: LLMProviderID) -> Defaults.Key<String> {
+            Defaults.Key<String>(
+                "llmProvider_\(providerID.rawValue)_baseURL",
+                default: "",
+                suite: userDefaults
+            )
         }
-
-        static let legacyOpenAIApiKey = "openAIApiKey"
-        static let legacyOpenAIModelID = "openAIModelID"
-        static let legacyGeminiAPIKey = "geminiAPIKey"
-        static let legacyGeminiModelID = "geminiModelID"
     }
 
-    static let supportedProviders: [LLMProviderID] = [.openAI, .gemini, .openAICompatible]
+    private let keys: Keys
+    private let secretsStore: any LLMSecretsStoring
 
-    private let userDefaults: UserDefaults
-
-    init(userDefaults: UserDefaults = .standard) {
-        self.userDefaults = userDefaults
+    init(
+        userDefaults: UserDefaults = .standard,
+        secretsStore: any LLMSecretsStoring = ValetLLMSecretsStore()
+    ) {
+        self.keys = Keys(userDefaults: userDefaults)
+        self.secretsStore = secretsStore
     }
 
     func loadSettings() -> LLMSettings {
         var profiles: [LLMProviderID: LLMProviderProfile] = [:]
 
         for providerID in Self.supportedProviders {
+            let rawModelID = Defaults[keys.modelID(for: providerID)].trimmed
+            let modelID = rawModelID.isEmpty ? providerID.defaultModelID : rawModelID
+
             profiles[providerID] = LLMProviderProfile(
-                apiKey: userDefaults.string(forKey: Keys.apiKey(for: providerID)) ?? "",
-                modelID: userDefaults.string(forKey: Keys.modelID(for: providerID)) ?? providerID.defaultModelID,
-                baseURL: userDefaults.string(forKey: Keys.baseURL(for: providerID)) ?? ""
+                apiKey: secretsStore.apiKey(for: providerID),
+                modelID: modelID,
+                baseURL: Defaults[keys.baseURL(for: providerID)]
             )
         }
 
+        let grammarProviderID = validatedProviderID(
+            rawValue: Defaults[keys.grammarProviderID],
+            fallback: .openAI
+        )
+        let screenshotProviderID = validatedProviderID(
+            rawValue: Defaults[keys.screenshotProviderID],
+            fallback: .gemini
+        )
+
         return LLMSettings(
-            globalDefaultProviderID: decodeProvider(from: Keys.globalDefaultProvider),
-            grammarProviderOverrideID: decodeProvider(from: Keys.grammarOverrideProvider),
-            ocrProviderOverrideID: decodeProvider(from: Keys.ocrOverrideProvider),
-            providerProfiles: profiles
+            providerProfiles: profiles,
+            grammarProviderID: grammarProviderID,
+            screenshotProviderID: screenshotProviderID
         )
     }
 
     func saveSettings(_ settings: LLMSettings) {
-        encodeProvider(settings.globalDefaultProviderID, into: Keys.globalDefaultProvider)
-        encodeProvider(settings.grammarProviderOverrideID, into: Keys.grammarOverrideProvider)
-        encodeProvider(settings.ocrProviderOverrideID, into: Keys.ocrOverrideProvider)
-
         for providerID in Self.supportedProviders {
             let profile = settings.profile(for: providerID)
-            userDefaults.set(profile.apiKey, forKey: Keys.apiKey(for: providerID))
+
+            secretsStore.setAPIKey(profile.apiKey, for: providerID)
+
             let normalizedModelID = profile.modelID.trimmed
-            userDefaults.set(
-                normalizedModelID.isEmpty ? providerID.defaultModelID : normalizedModelID,
-                forKey: Keys.modelID(for: providerID)
-            )
-            userDefaults.set(profile.baseURL, forKey: Keys.baseURL(for: providerID))
+            Defaults[keys.modelID(for: providerID)] =
+                normalizedModelID.isEmpty ? providerID.defaultModelID : normalizedModelID
+            Defaults[keys.baseURL(for: providerID)] = profile.baseURL
         }
+
+        Defaults[keys.grammarProviderID] = settings.grammarProviderID.rawValue
+        Defaults[keys.screenshotProviderID] = settings.screenshotProviderID.rawValue
     }
 
     func migrateLegacySettingsIfNeeded() {
-        guard !userDefaults.bool(forKey: Keys.migrated) else {
-            return
-        }
-
-        var settings = loadSettings()
-
-        let legacyOpenAIKey = userDefaults.string(forKey: Keys.legacyOpenAIApiKey)?.trimmed ?? ""
-        let legacyOpenAIModel = normalizedPreferenceValue(
-            forKey: Keys.legacyOpenAIModelID,
-            defaultValue: LLMProviderID.openAI.defaultModelID
-        )
-        if settings.profile(for: .openAI).apiKey.trimmed.isEmpty && !legacyOpenAIKey.isEmpty {
-            var profile = settings.profile(for: .openAI)
-            profile.apiKey = legacyOpenAIKey
-            profile.modelID = legacyOpenAIModel
-            settings.providerProfiles[.openAI] = profile
-        }
-
-        let legacyGeminiKey = userDefaults.string(forKey: Keys.legacyGeminiAPIKey)?.trimmed ?? ""
-        let legacyGeminiModel = normalizedPreferenceValue(
-            forKey: Keys.legacyGeminiModelID,
-            defaultValue: LLMProviderID.gemini.defaultModelID
-        )
-        if settings.profile(for: .gemini).apiKey.trimmed.isEmpty && !legacyGeminiKey.isEmpty {
-            var profile = settings.profile(for: .gemini)
-            profile.apiKey = legacyGeminiKey
-            profile.modelID = legacyGeminiModel
-            settings.providerProfiles[.gemini] = profile
-        }
-
-        if settings.globalDefaultProviderID == nil {
-            if settings.configuration(for: .openAI) != nil {
-                settings.globalDefaultProviderID = .openAI
-            } else if settings.configuration(for: .gemini) != nil {
-                settings.globalDefaultProviderID = .gemini
-            }
-        }
-
-        saveSettings(settings)
-        userDefaults.set(true, forKey: Keys.migrated)
+        // Migration intentionally disabled in the current iteration.
     }
 
-    func customGrammarRules() -> String {
-        userDefaults.string(forKey: Keys.customGrammarRules) ?? ""
+    func customGrammarInstructions() -> String {
+        Defaults[keys.customGrammarInstructions]
     }
 
-    func setCustomGrammarRules(_ value: String) {
-        userDefaults.set(value, forKey: Keys.customGrammarRules)
+    func setCustomGrammarInstructions(_ value: String) {
+        Defaults[keys.customGrammarInstructions] = value
     }
 
-    private func decodeProvider(from key: String) -> LLMProviderID? {
-        guard let value = userDefaults.string(forKey: key) else {
-            return nil
+    func customScreenshotInstructions() -> String {
+        Defaults[keys.customScreenshotInstructions]
+    }
+
+    func setCustomScreenshotInstructions(_ value: String) {
+        Defaults[keys.customScreenshotInstructions] = value
+    }
+
+    private func validatedProviderID(rawValue: String, fallback: LLMProviderID) -> LLMProviderID {
+        guard
+            let providerID = LLMProviderID(rawValue: rawValue),
+            Self.supportedProviders.contains(providerID)
+        else {
+            return fallback
         }
 
-        return LLMProviderID(rawValue: value)
-    }
-
-    private func encodeProvider(_ providerID: LLMProviderID?, into key: String) {
-        if let providerID {
-            userDefaults.set(providerID.rawValue, forKey: key)
-        } else {
-            userDefaults.removeObject(forKey: key)
-        }
-    }
-
-    private func normalizedPreferenceValue(forKey key: String, defaultValue: String) -> String {
-        let storedValue = userDefaults.string(forKey: key)?.trimmed
-
-        if let storedValue, !storedValue.isEmpty {
-            return storedValue
-        }
-
-        return defaultValue
+        return providerID
     }
 }

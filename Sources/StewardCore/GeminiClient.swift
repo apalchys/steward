@@ -153,10 +153,12 @@ public struct GeminiClient {
         modelID: String,
         imageData: Data,
         mimeType: String,
+        customInstructions: String = "",
         completion: @escaping (Result<String, Error>) -> Void
     ) {
+        let combinedInstructions = buildOCRInstructions(customInstructions: customInstructions)
         let requestBody = GenerateContentRequest(
-            systemInstruction: .init(parts: [.init(text: Self.ocrInstruction)]),
+            systemInstruction: .init(parts: [.init(text: combinedInstructions)]),
             contents: [
                 .init(parts: [
                     .init(text: "Extract all visible text from this screenshot selection and return Markdown only."),
@@ -217,6 +219,74 @@ public struct GeminiClient {
         }.resume()
     }
 
+    public func correctGrammar(
+        apiKey: String,
+        modelID: String,
+        customInstructions: String,
+        text: String,
+        completion: @escaping (Result<String, Error>) -> Void
+    ) {
+        let requestBody = GenerateContentRequest(
+            systemInstruction: .init(parts: [.init(text: buildGrammarPrompt(customInstructions: customInstructions))]),
+            contents: [
+                .init(parts: [
+                    .init(text: text)
+                ])
+            ]
+        )
+
+        guard let httpBody = try? JSONEncoder().encode(requestBody) else {
+            complete(.failure(ClientError.encodingFailed), into: completion)
+            return
+        }
+
+        let encodedModelID = modelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? modelID
+        guard
+            let apiURL = makeURL(
+                path: "/v1beta/models/\(encodedModelID):generateContent",
+                queryItems: [URLQueryItem(name: "key", value: apiKey)])
+        else {
+            complete(.failure(ClientError.invalidURL), into: completion)
+            return
+        }
+
+        var request = URLRequest(url: apiURL)
+        request.httpMethod = "POST"
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = httpBody
+
+        session.dataTask(with: request) { data, response, error in
+            if let error {
+                complete(.failure(error), into: completion)
+                return
+            }
+
+            if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
+                let message = errorMessage(from: data) ?? "Gemini request failed with HTTP \(httpResponse.statusCode)."
+                complete(.failure(ClientError.requestFailed(message)), into: completion)
+                return
+            }
+
+            guard let data, !data.isEmpty else {
+                complete(.failure(ClientError.emptyResponse), into: completion)
+                return
+            }
+
+            do {
+                let apiResponse = try JSONDecoder().decode(GenerateContentResponse.self, from: data)
+
+                guard let correctedText = apiResponse.outputText else {
+                    complete(.failure(ClientError.emptyOutput), into: completion)
+                    return
+                }
+
+                complete(.success(correctedText), into: completion)
+            } catch {
+                complete(.failure(error), into: completion)
+            }
+        }.resume()
+    }
+
     private var normalizedBaseURL: String {
         apiBaseURL.hasSuffix("/") ? String(apiBaseURL.dropLast()) : apiBaseURL
     }
@@ -252,9 +322,25 @@ public struct GeminiClient {
         return try? JSONDecoder().decode(APIErrorResponse.self, from: data).error.message
     }
 
+    private func buildOCRInstructions(customInstructions: String) -> String {
+        let trimmedCustomInstructions = customInstructions.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedCustomInstructions.isEmpty else {
+            return Self.ocrInstruction
+        }
+
+        return """
+            \(Self.ocrInstruction)
+
+            Additional instructions to follow:
+            \(trimmedCustomInstructions)
+            """
+    }
+
     private func complete<T>(_ value: T, into completion: @escaping (T) -> Void) {
         callbackQueue.async {
             completion(value)
         }
     }
 }
+
+extension GeminiClient: LLMClient {}

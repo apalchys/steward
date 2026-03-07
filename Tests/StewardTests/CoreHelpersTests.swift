@@ -3,18 +3,18 @@ import XCTest
 
 final class CoreHelpersTests: XCTestCase {
     func testBuildGrammarPromptReturnsBasePromptWhenRulesAreEmpty() {
-        let defaultPrompt = buildGrammarPrompt(customRules: "")
-        let whitespacePrompt = buildGrammarPrompt(customRules: "  \n\t")
+        let defaultPrompt = buildGrammarPrompt(customInstructions: "")
+        let whitespacePrompt = buildGrammarPrompt(customInstructions: "  \n\t")
 
         XCTAssertEqual(whitespacePrompt, defaultPrompt)
     }
 
-    func testBuildGrammarPromptAppendsCustomRules() {
-        let customRules = "Prefer short sentences."
-        let prompt = buildGrammarPrompt(customRules: customRules)
+    func testBuildGrammarPromptAppendsCustomInstructions() {
+        let customInstructions = "Prefer short sentences."
+        let prompt = buildGrammarPrompt(customInstructions: customInstructions)
 
-        XCTAssertTrue(prompt.contains("Additional rules to follow:"))
-        XCTAssertTrue(prompt.hasSuffix(customRules))
+        XCTAssertTrue(prompt.contains("Additional instructions to follow:"))
+        XCTAssertTrue(prompt.hasSuffix(customInstructions))
     }
 
     func testPreferenceValueReturnsDefaultWhenMissingOrWhitespace() {

@@ -8,7 +8,7 @@ fmt:
 	sh scripts/format.sh
 
 build:
-	sh scripts/build_app.sh
+	sh scripts/build.sh
 
 test:
 	swift test

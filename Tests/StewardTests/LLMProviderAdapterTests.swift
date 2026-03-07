@@ -32,7 +32,7 @@ final class LLMProviderAdapterTests: XCTestCase {
 
         let result: Result<LLMResult, Error> = waitForValue { completion in
             provider.perform(
-                task: .grammarCorrection(text: "bad text", customRules: ""),
+                task: .grammarCorrection(text: "bad text", customInstructions: ""),
                 configuration: LLMProviderConfiguration(apiKey: "sk-test", modelID: "gpt-5.4", baseURL: nil),
                 completion: completion
             )
@@ -67,7 +67,11 @@ final class LLMProviderAdapterTests: XCTestCase {
 
         let result: Result<LLMResult, Error> = waitForValue { completion in
             provider.perform(
-                task: .screenOCR(imageData: Data("image".utf8), mimeType: "image/png"),
+                task: .screenOCR(
+                    imageData: Data("image".utf8),
+                    mimeType: "image/png",
+                    customInstructions: ""
+                ),
                 configuration: LLMProviderConfiguration(
                     apiKey: "test-key",
                     modelID: GeminiClient.defaultModelID,
@@ -85,31 +89,83 @@ final class LLMProviderAdapterTests: XCTestCase {
         }
     }
 
-    func testOpenAICompatibleAdapterUsesConfiguredBaseURL() {
+    func testOpenAIAdapterMapsOCRTaskToOpenAIClient() {
         URLProtocolStub.configure(handler: { request in
             XCTAssertEqual(request.httpMethod, "POST")
-            XCTAssertEqual(request.url?.absoluteString, "https://compatible.example/v1/responses")
-            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer comp-key")
+            XCTAssertEqual(request.url?.absoluteString, "https://api.openai.com/v1/responses")
+
+            let body = try XCTUnwrap(request.bodyData())
+            let payload = try XCTUnwrap(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+            XCTAssertEqual(payload["model"] as? String, "gpt-5.4")
+
+            let input = try XCTUnwrap(payload["input"] as? [[String: Any]])
+            let content = try XCTUnwrap(input.first?["content"] as? [[String: Any]])
+            XCTAssertEqual(content.first?["type"] as? String, "input_text")
+            XCTAssertEqual(content.last?["type"] as? String, "input_image")
 
             let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
             let data = """
-                {"output":[{"type":"message","content":[{"type":"output_text","text":"compat ok"}]}]}
+                {"output":[{"type":"message","content":[{"type":"output_text","text":"Extracted"}]}]}
                 """.data(using: .utf8)
             return (response, data)
         })
 
-        let provider = OpenAICompatibleLLMProvider(
-            session: URLProtocolStub.makeSession(),
-            callbackQueue: .main
+        let provider = OpenAILLMProvider(
+            client: OpenAIClient(session: URLProtocolStub.makeSession(), callbackQueue: .main)
         )
 
         let result: Result<LLMResult, Error> = waitForValue { completion in
             provider.perform(
-                task: .grammarCorrection(text: "text", customRules: ""),
+                task: .screenOCR(
+                    imageData: Data("image".utf8),
+                    mimeType: "image/png",
+                    customInstructions: "Keep layout."
+                ),
+                configuration: LLMProviderConfiguration(apiKey: "sk-test", modelID: "gpt-5.4", baseURL: nil),
+                completion: completion
+            )
+        }
+
+        switch result {
+        case .success(let llmResult):
+            XCTAssertEqual(llmResult.textValue, "Extracted")
+        case .failure(let error):
+            XCTFail("Expected success, got \(error)")
+        }
+    }
+
+    func testGeminiAdapterMapsGrammarTaskToGeminiClient() {
+        URLProtocolStub.configure(handler: { request in
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertEqual(
+                request.url?.absoluteString,
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=test-key"
+            )
+
+            let body = try XCTUnwrap(request.bodyData())
+            let payload = try XCTUnwrap(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+            let contents = try XCTUnwrap(payload["contents"] as? [[String: Any]])
+            let parts = try XCTUnwrap(contents.first?["parts"] as? [[String: Any]])
+            XCTAssertEqual(parts.first?["text"] as? String, "bad text")
+
+            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let data = """
+                {"candidates":[{"content":{"parts":[{"text":"good text"}]}}]}
+                """.data(using: .utf8)
+            return (response, data)
+        })
+
+        let provider = GeminiLLMProvider(
+            client: GeminiClient(session: URLProtocolStub.makeSession(), callbackQueue: .main)
+        )
+
+        let result: Result<LLMResult, Error> = waitForValue { completion in
+            provider.perform(
+                task: .grammarCorrection(text: "bad text", customInstructions: "Be concise"),
                 configuration: LLMProviderConfiguration(
-                    apiKey: "comp-key",
-                    modelID: "gpt-compatible",
-                    baseURL: "https://compatible.example"
+                    apiKey: "test-key",
+                    modelID: GeminiClient.defaultModelID,
+                    baseURL: nil
                 ),
                 completion: completion
             )
@@ -117,7 +173,7 @@ final class LLMProviderAdapterTests: XCTestCase {
 
         switch result {
         case .success(let llmResult):
-            XCTAssertEqual(llmResult.textValue, "compat ok")
+            XCTAssertEqual(llmResult.textValue, "good text")
         case .failure(let error):
             XCTFail("Expected success, got \(error)")
         }

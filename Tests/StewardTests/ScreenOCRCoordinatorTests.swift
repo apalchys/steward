@@ -9,7 +9,7 @@ final class ScreenOCRCoordinatorTests: XCTestCase {
         let textInteraction = ScreenFakeTextInteraction()
         let captureService = FakeCaptureService(permissionGranted: false, imageData: Data())
         let selectionPresenter = FakeSelectionPresenter()
-        let settingsStore = CoordinatorSettingsStore(settings: .empty(), customRules: "")
+        let settingsStore = CoordinatorSettingsStore(settings: .empty(), customInstructions: "")
         let coordinator = ScreenOCRCoordinator(
             router: router,
             textInteraction: textInteraction,
@@ -39,7 +39,7 @@ final class ScreenOCRCoordinatorTests: XCTestCase {
         let textInteraction = ScreenFakeTextInteraction()
         let captureService = FakeCaptureService(permissionGranted: true, imageData: Data("image".utf8))
         let selectionPresenter = FakeSelectionPresenter(mode: .cancel)
-        let settingsStore = CoordinatorSettingsStore(settings: .empty(), customRules: "")
+        let settingsStore = CoordinatorSettingsStore(settings: .empty(), customInstructions: "")
         let coordinator = ScreenOCRCoordinator(
             router: router,
             textInteraction: textInteraction,
@@ -76,9 +76,13 @@ final class ScreenOCRCoordinatorTests: XCTestCase {
         let selectionPresenter = FakeSelectionPresenter(mode: .finish(screen: screen, rect: CGRect(x: 10, y: 10, width: 120, height: 80)))
 
         var settings = LLMSettings.empty()
-        settings.ocrProviderOverrideID = .gemini
+        settings.screenshotProviderID = .openAI
         settings.providerProfiles[.gemini] = LLMProviderProfile(apiKey: "key", modelID: "model", baseURL: "")
-        let settingsStore = CoordinatorSettingsStore(settings: settings, customRules: "")
+        let settingsStore = CoordinatorSettingsStore(
+            settings: settings,
+            customInstructions: "",
+            screenshotInstructions: "Keep table structure."
+        )
 
         let coordinator = ScreenOCRCoordinator(
             router: router,
@@ -100,11 +104,12 @@ final class ScreenOCRCoordinatorTests: XCTestCase {
                 return
             }
 
-            guard case .screenOCR = request.task else {
+            guard case .screenOCR(_, _, let customInstructions) = request.task else {
                 XCTFail("Expected OCR task")
                 return
             }
-            XCTAssertEqual(request.featureOverrideProviderID, .gemini)
+            XCTAssertEqual(request.providerID, .openAI)
+            XCTAssertEqual(customInstructions, "Keep table structure.")
             XCTAssertTrue(selectionPresenter.didBeginSelection)
             XCTAssertTrue(selectionPresenter.didEndSelection)
         case .failure(let error):
@@ -145,16 +150,11 @@ private final class ScreenFakeRouter: LLMRouting {
         completion(result)
     }
 
-    func resolvedProviderID(for capability: LLMCapability, featureOverrideProviderID: LLMProviderID?) -> LLMProviderID? {
-        featureOverrideProviderID ?? .gemini
-    }
-
     func checkAccess(
-        for capability: LLMCapability,
-        featureOverrideProviderID: LLMProviderID?,
+        for providerID: LLMProviderID,
         completion: @escaping (Result<LLMProviderHealth, Error>) -> Void
     ) {
-        completion(.success(LLMProviderHealth(providerID: .gemini, hasAccess: true)))
+        completion(.success(LLMProviderHealth(providerID: providerID, hasAccess: true)))
     }
 }
 

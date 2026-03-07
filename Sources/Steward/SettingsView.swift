@@ -1,29 +1,35 @@
+import AppKit
 import SwiftUI
 
 struct SettingsView: View {
-    @State private var settings = UserDefaultsLLMSettingsStore().loadSettings()
-    @State private var customRules = UserDefaultsLLMSettingsStore().customGrammarRules()
+    @State private var settings: LLMSettings
+    @State private var grammarInstructions: String
+    @State private var screenshotInstructions: String
 
-    private let settingsStore = UserDefaultsLLMSettingsStore()
+    private let settingsStore: any LLMSettingsProviding
+    private let onSettingsChanged: (() -> Void)?
 
-    private var grammarProviderOptions: [LLMProviderID] {
-        UserDefaultsLLMSettingsStore.supportedProviders.filter { $0.capabilities.contains(.textCorrection) }
-    }
-
-    private var ocrProviderOptions: [LLMProviderID] {
-        UserDefaultsLLMSettingsStore.supportedProviders.filter { $0.capabilities.contains(.visionOCR) }
+    init(
+        settingsStore: any LLMSettingsProviding = UserDefaultsLLMSettingsStore(),
+        onSettingsChanged: (() -> Void)? = nil
+    ) {
+        self.settingsStore = settingsStore
+        self.onSettingsChanged = onSettingsChanged
+        _settings = State(initialValue: settingsStore.loadSettings())
+        _grammarInstructions = State(initialValue: settingsStore.customGrammarInstructions())
+        _screenshotInstructions = State(initialValue: settingsStore.customScreenshotInstructions())
     }
 
     var body: some View {
         TabView {
-            generalTab
+            grammarTab
                 .tabItem {
-                    Label("General", systemImage: "gear")
+                    Label("Grammar", systemImage: "text.book.closed")
                 }
 
-            customRulesTab
+            screenshotTab
                 .tabItem {
-                    Label("Custom Rules", systemImage: "list.bullet.rectangle")
+                    Label("Screenshot", systemImage: "photo.on.rectangle")
                 }
 
             aboutTab
@@ -35,125 +41,115 @@ struct SettingsView: View {
         .onAppear {
             settingsStore.migrateLegacySettingsIfNeeded()
             settings = settingsStore.loadSettings()
-            customRules = settingsStore.customGrammarRules()
+            grammarInstructions = settingsStore.customGrammarInstructions()
+            screenshotInstructions = settingsStore.customScreenshotInstructions()
         }
         .onChange(of: settings) { newSettings in
             settingsStore.saveSettings(newSettings)
-            NotificationCenter.default.post(name: .checkGrammarProviderStatus, object: nil)
-            NotificationCenter.default.post(name: .checkOCRProviderStatus, object: nil)
+            onSettingsChanged?()
         }
-        .onChange(of: customRules) { newValue in
-            settingsStore.setCustomGrammarRules(newValue)
+        .onChange(of: grammarInstructions) { newValue in
+            settingsStore.setCustomGrammarInstructions(newValue)
+            onSettingsChanged?()
+        }
+        .onChange(of: screenshotInstructions) { newValue in
+            settingsStore.setCustomScreenshotInstructions(newValue)
+            onSettingsChanged?()
         }
     }
 
-    private var generalTab: some View {
+    private var grammarTab: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                providerRoutingSection
-                Divider()
-                providerProfileSection(for: .openAI)
-                providerProfileSection(for: .gemini)
-                providerProfileSection(for: .openAICompatible)
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Grammar")
+                    .font(.headline)
+
+                Picker("Provider", selection: $settings.grammarProviderID) {
+                    ForEach(providerOptions(for: .textCorrection)) { providerID in
+                        Text(providerID.displayName).tag(providerID)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                SecureField(
+                    "\(settings.grammarProviderID.displayName) API Key",
+                    text: profileBinding(for: settings.grammarProviderID, keyPath: \.apiKey)
+                )
+                .textFieldStyle(.roundedBorder)
+
+                TextField(
+                    "Model (default: \(settings.grammarProviderID.defaultModelID))",
+                    text: profileBinding(for: settings.grammarProviderID, keyPath: \.modelID)
+                )
+                .textFieldStyle(.roundedBorder)
+
+                Text("Custom instructions for grammar check")
+                    .font(.subheadline)
+
+                TextEditor(text: $grammarInstructions)
+                    .font(.system(.body, design: .monospaced))
+                    .padding(8)
+                    .background(Color(NSColor.textBackgroundColor))
+                    .cornerRadius(6)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                    )
+                    .frame(minHeight: 220)
+
+                Text("Used as additional guidance when fixing grammar.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
             .padding(20)
         }
     }
 
-    private var providerRoutingSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("LLM Routing")
-                .font(.headline)
+    private var screenshotTab: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Screenshot to Markdown")
+                    .font(.headline)
 
-            Picker(
-                "Global default provider",
-                selection: Binding<LLMProviderID?>(
-                    get: { settings.globalDefaultProviderID },
-                    set: { settings.globalDefaultProviderID = $0 }
-                )
-            ) {
-                Text("Automatic").tag(Optional<LLMProviderID>.none)
-                ForEach(UserDefaultsLLMSettingsStore.supportedProviders) { providerID in
-                    Text(providerID.displayName).tag(Optional(providerID))
+                Picker("Provider", selection: $settings.screenshotProviderID) {
+                    ForEach(providerOptions(for: .visionOCR)) { providerID in
+                        Text(providerID.displayName).tag(providerID)
+                    }
                 }
-            }
+                .pickerStyle(.segmented)
 
-            Picker(
-                "Grammar provider override",
-                selection: Binding<LLMProviderID?>(
-                    get: { settings.grammarProviderOverrideID },
-                    set: { settings.grammarProviderOverrideID = $0 }
+                SecureField(
+                    "\(settings.screenshotProviderID.displayName) API Key",
+                    text: profileBinding(for: settings.screenshotProviderID, keyPath: \.apiKey)
                 )
-            ) {
-                Text("Use global default").tag(Optional<LLMProviderID>.none)
-                ForEach(grammarProviderOptions) { providerID in
-                    Text(providerID.displayName).tag(Optional(providerID))
-                }
-            }
-
-            Picker(
-                "OCR provider override",
-                selection: Binding<LLMProviderID?>(
-                    get: { settings.ocrProviderOverrideID },
-                    set: { settings.ocrProviderOverrideID = $0 }
-                )
-            ) {
-                Text("Use global default").tag(Optional<LLMProviderID>.none)
-                ForEach(ocrProviderOptions) { providerID in
-                    Text(providerID.displayName).tag(Optional(providerID))
-                }
-            }
-
-            Text("OCR picker only shows providers with vision capability.")
-                .font(.caption)
-                .foregroundColor(.secondary)
-        }
-    }
-
-    private func providerProfileSection(for providerID: LLMProviderID) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(providerID.displayName)
-                .font(.headline)
-
-            SecureField("API Key", text: profileBinding(for: providerID, keyPath: \.apiKey))
                 .textFieldStyle(.roundedBorder)
 
-            TextField("Model ID (default: \(providerID.defaultModelID))", text: profileBinding(for: providerID, keyPath: \.modelID))
+                TextField(
+                    "Model (default: \(settings.screenshotProviderID.defaultModelID))",
+                    text: profileBinding(for: settings.screenshotProviderID, keyPath: \.modelID)
+                )
                 .textFieldStyle(.roundedBorder)
 
-            if providerID == .openAICompatible {
-                TextField("Base URL (example: https://api.example.com)", text: profileBinding(for: providerID, keyPath: \.baseURL))
-                    .textFieldStyle(.roundedBorder)
+                Text("Custom instructions for screenshot to markdown")
+                    .font(.subheadline)
+
+                TextEditor(text: $screenshotInstructions)
+                    .font(.system(.body, design: .monospaced))
+                    .padding(8)
+                    .background(Color(NSColor.textBackgroundColor))
+                    .cornerRadius(6)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                    )
+                    .frame(minHeight: 220)
+
+                Text("Used as additional guidance when extracting text from screenshots.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
-
-            Text(providerDescription(for: providerID))
-                .font(.caption)
-                .foregroundColor(.secondary)
+            .padding(20)
         }
-    }
-
-    private var customRulesTab: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("Custom Grammar Rules")
-                .font(.headline)
-
-            TextEditor(text: $customRules)
-                .font(.system(.body, design: .monospaced))
-                .padding(8)
-                .background(Color(NSColor.textBackgroundColor))
-                .cornerRadius(6)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(Color(NSColor.separatorColor), lineWidth: 1)
-                )
-
-            Text("These rules are appended to grammar correction prompts for providers that support text correction.")
-                .font(.caption)
-                .foregroundColor(.secondary)
-
-            Spacer()
-        }
-        .padding(20)
     }
 
     private var aboutTab: some View {
@@ -180,9 +176,11 @@ struct SettingsView: View {
                 .font(.largeTitle)
                 .bold()
 
-            Text("Modular architecture with swappable LLM backends")
+            Text("Steward helps you polish writing and turn screenshot text into clean Markdown in seconds.")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 430)
 
             Spacer()
         }
@@ -206,17 +204,8 @@ struct SettingsView: View {
         )
     }
 
-    private func providerDescription(for providerID: LLMProviderID) -> String {
-        switch providerID {
-        case .openAI:
-            return "Native OpenAI Responses API provider for grammar correction."
-        case .gemini:
-            return "Native Gemini provider for screen OCR extraction."
-        case .anthropic:
-            return "Anthropic profile is reserved for future support."
-        case .openAICompatible:
-            return "Use any OpenAI-compatible endpoint by setting API key, model, and base URL."
-        }
+    private func providerOptions(for capability: LLMCapability) -> [LLMProviderID] {
+        LLMProviderID.allCases.filter { $0.capabilities.contains(capability) }
     }
 }
 

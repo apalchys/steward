@@ -19,8 +19,8 @@ final class GrammarCoordinator {
 
         let settings = settingsStore.loadSettings()
         let request = LLMRequest(
-            task: .grammarCorrection(text: selectedText, customRules: settingsStore.customGrammarRules()),
-            featureOverrideProviderID: settings.grammarProviderOverrideID
+            providerID: settings.grammarProviderID,
+            task: .grammarCorrection(text: selectedText, customInstructions: settingsStore.customGrammarInstructions())
         )
 
         router.perform(request) { [weak self] result in

@@ -220,6 +220,61 @@ final class GeminiClientTests: XCTestCase {
         assertFailureMessage(result, equals: "Gemini request URL is invalid.")
     }
 
+    func testCorrectGrammarSuccessParsesOutput() {
+        URLProtocolStub.configure(handler: { request in
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertEqual(
+                request.url?.absoluteString,
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=test-key"
+            )
+
+            let requestBody = try XCTUnwrap(request.bodyData())
+            let payload = try XCTUnwrap(try JSONSerialization.jsonObject(with: requestBody) as? [String: Any])
+            let contents = try XCTUnwrap(payload["contents"] as? [[String: Any]])
+            let parts = try XCTUnwrap(contents.first?["parts"] as? [[String: Any]])
+            XCTAssertEqual(parts.first?["text"] as? String, "bad text")
+
+            let data = """
+                {"candidates":[{"content":{"parts":[{"text":"good text"}]}}]}
+                """.data(using: .utf8)
+            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, data)
+        })
+
+        let client = makeClient()
+        let result: Result<String, Error> = waitForValue { completion in
+            client.correctGrammar(
+                apiKey: "test-key",
+                modelID: "gemini-3.1-flash-lite-preview",
+                customInstructions: "Keep concise",
+                text: "bad text",
+                completion: completion
+            )
+        }
+
+        switch result {
+        case .success(let text):
+            XCTAssertEqual(text, "good text")
+        case .failure(let error):
+            XCTFail("Expected success but got error: \(error)")
+        }
+    }
+
+    func testCorrectGrammarReturnsInvalidURLErrorWhenBaseURLIsInvalid() {
+        let client = makeClient(baseURL: "://invalid-url")
+        let result: Result<String, Error> = waitForValue { completion in
+            client.correctGrammar(
+                apiKey: "test-key",
+                modelID: "gemini-3.1-flash-lite-preview",
+                customInstructions: "",
+                text: "bad text",
+                completion: completion
+            )
+        }
+
+        assertFailureMessage(result, equals: "Gemini request URL is invalid.")
+    }
+
     private func makeClient(baseURL: String = "https://generativelanguage.googleapis.com") -> GeminiClient {
         GeminiClient(session: URLProtocolStub.makeSession(), callbackQueue: .main, apiBaseURL: baseURL)
     }

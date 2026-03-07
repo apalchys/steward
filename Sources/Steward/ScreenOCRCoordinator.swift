@@ -57,7 +57,9 @@ final class ScreenOCRCoordinator {
         )
     }
 
-    private func extractText(on screen: NSScreen, selectionRect: CGRect, completion: @escaping (Result<Void, Error>) -> Void) {
+    private func extractText(
+        on screen: NSScreen, selectionRect: CGRect, completion: @escaping (Result<Void, Error>) -> Void
+    ) {
         guard let imageData = captureService.captureSelectionImageData(on: screen, selectionRect: selectionRect) else {
             completion(.failure(ScreenOCRCoordinatorError.couldNotCaptureImage))
             return
@@ -65,8 +67,12 @@ final class ScreenOCRCoordinator {
 
         let settings = settingsStore.loadSettings()
         let request = LLMRequest(
-            task: .screenOCR(imageData: imageData, mimeType: "image/png"),
-            featureOverrideProviderID: settings.ocrProviderOverrideID
+            providerID: settings.screenshotProviderID,
+            task: .screenOCR(
+                imageData: imageData,
+                mimeType: "image/png",
+                customInstructions: settingsStore.customScreenshotInstructions()
+            )
         )
 
         router.perform(request) { [weak self] result in
