@@ -1,26 +1,29 @@
 import Foundation
 import XCTest
+
 @testable import Steward
 
+@MainActor
 final class ClipboardHistoryStoreTests: XCTestCase {
     private var temporaryDirectoryURL: URL!
     private var historyFileURL: URL!
 
-    override func setUpWithError() throws {
-        try super.setUpWithError()
+    override func setUp() async throws {
+        try await super.setUp()
         temporaryDirectoryURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("StewardTests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: temporaryDirectoryURL, withIntermediateDirectories: true)
-        historyFileURL = temporaryDirectoryURL.appendingPathComponent("clipboard-history.jsonl", isDirectory: false)
+        historyFileURL = temporaryDirectoryURL.appendingPathComponent(
+            "clipboard-history.jsonl", isDirectory: false)
     }
 
-    override func tearDownWithError() throws {
+    override func tearDown() async throws {
         if let temporaryDirectoryURL {
             try? FileManager.default.removeItem(at: temporaryDirectoryURL)
         }
         temporaryDirectoryURL = nil
         historyFileURL = nil
-        try super.tearDownWithError()
+        try await super.tearDown()
     }
 
     func testAppendAndReloadPersistsRecords() async throws {
@@ -48,6 +51,7 @@ final class ClipboardHistoryStoreTests: XCTestCase {
             store.records == [firstRecord, secondRecord]
         }
 
+        await store.waitForPendingDiskWrites()
         let reloadedStore = makeStore()
         reloadedStore.load()
         await waitUntil("reload") {
@@ -114,6 +118,7 @@ final class ClipboardHistoryStoreTests: XCTestCase {
             store.records == [secondRecord]
         }
 
+        await store.waitForPendingDiskWrites()
         let reloadedStore = makeStore()
         reloadedStore.load()
         await waitUntil("reload") {
@@ -135,7 +140,9 @@ final class ClipboardHistoryStoreTests: XCTestCase {
             store.records == [record]
         }
 
-        XCTAssertTrue(FileManager.default.fileExists(atPath: historyFileURL.path))
+        await waitUntil("file exists") {
+            FileManager.default.fileExists(atPath: self.historyFileURL.path)
+        }
 
         store.clearAll()
         await waitUntil("clear all") {
@@ -178,6 +185,7 @@ final class ClipboardHistoryStoreTests: XCTestCase {
             store.records == [secondRecord, thirdRecord]
         }
 
+        await store.waitForPendingDiskWrites()
         let reloadedStore = makeStore(maxStoredRecords: 2)
         reloadedStore.load()
         await waitUntil("reload") {
@@ -209,6 +217,7 @@ final class ClipboardHistoryStoreTests: XCTestCase {
             store.records == Array(records.suffix(2))
         }
 
+        await store.waitForPendingDiskWrites()
         let reloadedStore = makeStore(maxStoredRecords: 2)
         reloadedStore.load()
         await waitUntil("reload") {
@@ -216,11 +225,12 @@ final class ClipboardHistoryStoreTests: XCTestCase {
         }
     }
 
-    private func makeStore(maxStoredRecords: Int = ClipboardHistorySettings.default.maxStoredRecords) -> ClipboardHistoryStore {
+    private func makeStore(
+        maxStoredRecords: Int = ClipboardHistorySettings.default.maxStoredRecords
+    ) -> ClipboardHistoryStore {
         ClipboardHistoryStore(
             fileManager: .default,
             historyFileURL: historyFileURL,
-            ioQueue: DispatchQueue(label: "StewardTests.ClipboardHistoryStore.\(UUID().uuidString)"),
             maxStoredRecords: maxStoredRecords,
             autoLoad: false
         )
