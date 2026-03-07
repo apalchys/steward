@@ -38,24 +38,28 @@ final class ScreenOCRCoordinator {
 
         onSelectionActivityChanged?(true)
 
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            selectionPresenter.beginSelection(
-                onSelectionFinished: { [weak self] screen, selectionRect in
-                    guard let self else { return }
-                    self.selectionPresenter.endSelection()
-                    self.onSelectionActivityChanged?(false)
-                    self.pendingSelectionScreen = screen
-                    self.pendingSelectionRect = selectionRect
-                    continuation.resume()
-                },
-                onSelectionCancelled: { [weak self] in
-                    guard let self else { return }
-                    self.selectionPresenter.endSelection()
-                    self.onSelectionActivityChanged?(false)
-                    continuation.resume(throwing: ScreenOCRCoordinatorError.cancelled)
-                }
-            )
+        do {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                selectionPresenter.beginSelection(
+                    onSelectionFinished: { [weak self] screen, selectionRect in
+                        guard let self else { return }
+                        self.pendingSelectionScreen = screen
+                        self.pendingSelectionRect = selectionRect
+                        continuation.resume()
+                    },
+                    onSelectionCancelled: {
+                        continuation.resume(throwing: ScreenOCRCoordinatorError.cancelled)
+                    }
+                )
+            }
+        } catch {
+            await selectionPresenter.endSelection()
+            onSelectionActivityChanged?(false)
+            throw error
         }
+
+        await selectionPresenter.endSelection()
+        onSelectionActivityChanged?(false)
 
         guard let screen = pendingSelectionScreen, let selectionRect = pendingSelectionRect else {
             throw ScreenOCRCoordinatorError.couldNotCaptureImage
@@ -68,9 +72,6 @@ final class ScreenOCRCoordinator {
         guard let captureRequest = ScreenCaptureRequest(screen: screen) else {
             throw ScreenOCRCoordinatorError.couldNotCaptureImage
         }
-
-        // Brief delay to allow the overlay window to dismiss before capturing the screen.
-        try await Task.sleep(for: .milliseconds(100))
 
         guard
             let imageData = await captureService.captureSelectionImageData(

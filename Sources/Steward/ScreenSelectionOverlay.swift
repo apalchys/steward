@@ -7,7 +7,7 @@ protocol ScreenSelectionPresenting: AnyObject {
         onSelectionFinished: @escaping (NSScreen, CGRect) -> Void,
         onSelectionCancelled: @escaping () -> Void
     )
-    func endSelection()
+    func endSelection() async
 }
 
 @MainActor
@@ -18,6 +18,12 @@ final class ScreenSelectionWindow: NSWindow {
 
 @MainActor
 final class ScreenSelectionOverlayView: NSView {
+    private enum UI {
+        static let instructionPadding = CGSize(width: 12, height: 8)
+        static let instructionMargin: CGFloat = 24
+        static let instructionCornerRadius: CGFloat = 10
+    }
+
     var onSelectionFinished: ((CGRect) -> Void)?
     var onSelectionCancelled: (() -> Void)?
 
@@ -25,6 +31,10 @@ final class ScreenSelectionOverlayView: NSView {
     private var currentPoint: NSPoint?
 
     override var acceptsFirstResponder: Bool { true }
+    override func isAccessibilityElement() -> Bool { true }
+    override func accessibilityLabel() -> String? {
+        "Screen selection overlay. Drag to select an area. Press Escape to cancel."
+    }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
@@ -90,6 +100,8 @@ final class ScreenSelectionOverlayView: NSView {
             borderPath.lineWidth = 2
             borderPath.stroke()
         }
+
+        drawInstructions()
     }
 
     func resetSelection() {
@@ -108,6 +120,36 @@ final class ScreenSelectionOverlayView: NSView {
             y: min(startPoint.y, currentPoint.y),
             width: abs(currentPoint.x - startPoint.x),
             height: abs(currentPoint.y - startPoint.y)
+        )
+    }
+
+    private func drawInstructions() {
+        let instructions = NSAttributedString(
+            string: "Drag to select an area. Press Escape to cancel.",
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 14, weight: .medium),
+                .foregroundColor: NSColor.white,
+            ]
+        )
+
+        let textSize = instructions.size()
+        let badgeRect = CGRect(
+            x: UI.instructionMargin,
+            y: bounds.height - textSize.height - (UI.instructionMargin * 1.5),
+            width: textSize.width + (UI.instructionPadding.width * 2),
+            height: textSize.height + (UI.instructionPadding.height * 2)
+        )
+
+        NSColor.black.withAlphaComponent(0.65).setFill()
+        NSBezierPath(
+            roundedRect: badgeRect,
+            xRadius: UI.instructionCornerRadius,
+            yRadius: UI.instructionCornerRadius
+        )
+        .fill()
+
+        instructions.draw(
+            in: badgeRect.insetBy(dx: UI.instructionPadding.width, dy: UI.instructionPadding.height)
         )
     }
 }
@@ -135,6 +177,7 @@ final class ScreenSelectionOverlayController: ScreenSelectionPresenting {
             window.backgroundColor = .clear
             window.isOpaque = false
             window.hasShadow = false
+            window.animationBehavior = .none
             window.level = NSWindow.Level(rawValue: NSWindow.Level.popUpMenu.rawValue + 1)
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
             window.contentView = ScreenSelectionOverlayView(frame: .zero)
@@ -172,7 +215,7 @@ final class ScreenSelectionOverlayController: ScreenSelectionPresenting {
         }
     }
 
-    func endSelection() {
+    func endSelection() async {
         NSCursor.pop()
 
         selectionWindows.forEach { window in
@@ -184,5 +227,11 @@ final class ScreenSelectionOverlayController: ScreenSelectionPresenting {
             }
             window.orderOut(nil)
         }
+
+        // Window removal is not visible to ScreenCaptureKit until the compositor
+        // has advanced. Waiting one event cycle plus a short bounded delay keeps
+        // the overlay out of the captured image without building a larger state machine.
+        await Task.yield()
+        try? await Task.sleep(for: .milliseconds(100))
     }
 }

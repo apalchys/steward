@@ -102,15 +102,46 @@ final class ScreenOCRCoordinatorTests: XCTestCase {
         XCTAssertTrue(selectionPresenter.didBeginSelection)
         XCTAssertTrue(selectionPresenter.didEndSelection)
     }
+
+    func testHandleHotKeyPressDismissesOverlayBeforeCapture() async throws {
+        guard let screen = NSScreen.screens.first else {
+            throw XCTSkip("No screen available in test environment")
+        }
+
+        let router = ScreenFakeRouter(result: .success(.text("ocr text")))
+        let textInteraction = ScreenFakeTextInteraction()
+        let selectionPresenter = FakeSelectionPresenter(
+            mode: .finish(screen: screen, rect: CGRect(x: 20, y: 20, width: 80, height: 60))
+        )
+        let captureService = FakeCaptureService(permissionGranted: true, imageData: Data("image".utf8)) {
+            XCTAssertTrue(selectionPresenter.didEndSelection)
+        }
+        let settingsStore = CoordinatorSettingsStore(settings: .empty(), customInstructions: "")
+        let coordinator = ScreenOCRCoordinator(
+            router: router,
+            textInteraction: textInteraction,
+            captureService: captureService,
+            selectionPresenter: selectionPresenter,
+            settingsStore: settingsStore
+        )
+
+        try await coordinator.handleHotKeyPress()
+
+        XCTAssertEqual(captureService.captureCallCount, 1)
+        XCTAssertTrue(selectionPresenter.didEndSelection)
+    }
 }
 
 private final class FakeCaptureService: ScreenCaptureProviding, @unchecked Sendable {
     let permissionGranted: Bool
     let imageData: Data?
+    let onCapture: (() -> Void)?
+    private(set) var captureCallCount = 0
 
-    init(permissionGranted: Bool, imageData: Data?) {
+    init(permissionGranted: Bool, imageData: Data?, onCapture: (() -> Void)? = nil) {
         self.permissionGranted = permissionGranted
         self.imageData = imageData
+        self.onCapture = onCapture
     }
 
     func ensureScreenCaptureAccess() -> Bool {
@@ -121,7 +152,9 @@ private final class FakeCaptureService: ScreenCaptureProviding, @unchecked Senda
         request: ScreenCaptureRequest,
         selectionRect: CGRect
     ) async -> Data? {
-        imageData
+        captureCallCount += 1
+        onCapture?()
+        return imageData
     }
 }
 
@@ -186,7 +219,7 @@ private final class FakeSelectionPresenter: ScreenSelectionPresenting {
         }
     }
 
-    func endSelection() {
+    func endSelection() async {
         didEndSelection = true
     }
 }
