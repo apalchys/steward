@@ -34,10 +34,9 @@
 
 ## Testing Guidelines
 
-- No test target currently. If adding tests, use XCTest:
-  - Create `Tests/StewardTests` and mirror module structure.
-  - Name tests `ThingTests.swift`, methods `test...`.
-  - Run with `swift test` and keep fast, deterministic tests.
+- Plan tests while writing code and favor designs that are easy to test in isolation; keep logic decoupled from UI, globals, and system side effects when practical.
+- Unit tests should be small, concise, efficient, and atomic; each test should verify one behavior and stay fast and deterministic.
+- All new code should include tests. Use XCTest under `Tests/StewardTests`, mirror the source module structure, name files `ThingTests.swift` with methods `test...`, and run them with `swift test`.
 
 ## Commit & Pull Request Guidelines
 
