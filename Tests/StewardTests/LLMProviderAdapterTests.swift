@@ -9,7 +9,7 @@ final class LLMProviderAdapterTests: XCTestCase {
         super.tearDown()
     }
 
-    func testOpenAIAdapterMapsGrammarTaskToOpenAIClient() {
+    func testOpenAIAdapterMapsGrammarTaskToOpenAIClient() async throws {
         URLProtocolStub.configure(handler: { request in
             XCTAssertEqual(request.httpMethod, "POST")
             XCTAssertEqual(request.url?.absoluteString, "https://api.openai.com/v1/responses")
@@ -27,26 +27,18 @@ final class LLMProviderAdapterTests: XCTestCase {
         })
 
         let provider = OpenAILLMProvider(
-            client: OpenAIClient(session: URLProtocolStub.makeSession(), callbackQueue: .main)
+            client: OpenAIClient(session: URLProtocolStub.makeSession())
         )
 
-        let result: Result<LLMResult, Error> = waitForValue { completion in
-            provider.perform(
-                task: .grammarCorrection(text: "bad text", customInstructions: ""),
-                configuration: LLMProviderConfiguration(apiKey: "sk-test", modelID: "gpt-5.4", baseURL: nil),
-                completion: completion
-            )
-        }
+        let result = try await provider.perform(
+            task: .grammarCorrection(text: "bad text", customInstructions: ""),
+            configuration: LLMProviderConfiguration(apiKey: "sk-test", modelID: "gpt-5.4", baseURL: nil)
+        )
 
-        switch result {
-        case .success(let llmResult):
-            XCTAssertEqual(llmResult.textValue, "good text")
-        case .failure(let error):
-            XCTFail("Expected success, got \(error)")
-        }
+        XCTAssertEqual(result.textValue, "good text")
     }
 
-    func testGeminiAdapterMapsOCRTaskToGeminiClient() {
+    func testGeminiAdapterMapsOCRTaskToGeminiClient() async throws {
         URLProtocolStub.configure(handler: { request in
             XCTAssertEqual(request.httpMethod, "POST")
             XCTAssertEqual(
@@ -62,34 +54,26 @@ final class LLMProviderAdapterTests: XCTestCase {
         })
 
         let provider = GeminiLLMProvider(
-            client: GeminiClient(session: URLProtocolStub.makeSession(), callbackQueue: .main)
+            client: GeminiClient(session: URLProtocolStub.makeSession())
         )
 
-        let result: Result<LLMResult, Error> = waitForValue { completion in
-            provider.perform(
-                task: .screenOCR(
-                    imageData: Data("image".utf8),
-                    mimeType: "image/png",
-                    customInstructions: ""
-                ),
-                configuration: LLMProviderConfiguration(
-                    apiKey: "test-key",
-                    modelID: GeminiClient.defaultModelID,
-                    baseURL: nil
-                ),
-                completion: completion
+        let result = try await provider.perform(
+            task: .screenOCR(
+                imageData: Data("image".utf8),
+                mimeType: "image/png",
+                customInstructions: ""
+            ),
+            configuration: LLMProviderConfiguration(
+                apiKey: "test-key",
+                modelID: GeminiClient.defaultModelID,
+                baseURL: nil
             )
-        }
+        )
 
-        switch result {
-        case .success(let llmResult):
-            XCTAssertEqual(llmResult.textValue, "Extracted")
-        case .failure(let error):
-            XCTFail("Expected success, got \(error)")
-        }
+        XCTAssertEqual(result.textValue, "Extracted")
     }
 
-    func testOpenAIAdapterMapsOCRTaskToOpenAIClient() {
+    func testOpenAIAdapterMapsOCRTaskToOpenAIClient() async throws {
         URLProtocolStub.configure(handler: { request in
             XCTAssertEqual(request.httpMethod, "POST")
             XCTAssertEqual(request.url?.absoluteString, "https://api.openai.com/v1/responses")
@@ -111,30 +95,22 @@ final class LLMProviderAdapterTests: XCTestCase {
         })
 
         let provider = OpenAILLMProvider(
-            client: OpenAIClient(session: URLProtocolStub.makeSession(), callbackQueue: .main)
+            client: OpenAIClient(session: URLProtocolStub.makeSession())
         )
 
-        let result: Result<LLMResult, Error> = waitForValue { completion in
-            provider.perform(
-                task: .screenOCR(
-                    imageData: Data("image".utf8),
-                    mimeType: "image/png",
-                    customInstructions: "Keep layout."
-                ),
-                configuration: LLMProviderConfiguration(apiKey: "sk-test", modelID: "gpt-5.4", baseURL: nil),
-                completion: completion
-            )
-        }
+        let result = try await provider.perform(
+            task: .screenOCR(
+                imageData: Data("image".utf8),
+                mimeType: "image/png",
+                customInstructions: "Keep layout."
+            ),
+            configuration: LLMProviderConfiguration(apiKey: "sk-test", modelID: "gpt-5.4", baseURL: nil)
+        )
 
-        switch result {
-        case .success(let llmResult):
-            XCTAssertEqual(llmResult.textValue, "Extracted")
-        case .failure(let error):
-            XCTFail("Expected success, got \(error)")
-        }
+        XCTAssertEqual(result.textValue, "Extracted")
     }
 
-    func testGeminiAdapterMapsGrammarTaskToGeminiClient() {
+    func testGeminiAdapterMapsGrammarTaskToGeminiClient() async throws {
         URLProtocolStub.configure(handler: { request in
             XCTAssertEqual(request.httpMethod, "POST")
             XCTAssertEqual(
@@ -156,26 +132,18 @@ final class LLMProviderAdapterTests: XCTestCase {
         })
 
         let provider = GeminiLLMProvider(
-            client: GeminiClient(session: URLProtocolStub.makeSession(), callbackQueue: .main)
+            client: GeminiClient(session: URLProtocolStub.makeSession())
         )
 
-        let result: Result<LLMResult, Error> = waitForValue { completion in
-            provider.perform(
-                task: .grammarCorrection(text: "bad text", customInstructions: "Be concise"),
-                configuration: LLMProviderConfiguration(
-                    apiKey: "test-key",
-                    modelID: GeminiClient.defaultModelID,
-                    baseURL: nil
-                ),
-                completion: completion
+        let result = try await provider.perform(
+            task: .grammarCorrection(text: "bad text", customInstructions: "Be concise"),
+            configuration: LLMProviderConfiguration(
+                apiKey: "test-key",
+                modelID: GeminiClient.defaultModelID,
+                baseURL: nil
             )
-        }
+        )
 
-        switch result {
-        case .success(let llmResult):
-            XCTAssertEqual(llmResult.textValue, "good text")
-        case .failure(let error):
-            XCTFail("Expected success, got \(error)")
-        }
+        XCTAssertEqual(result.textValue, "good text")
     }
 }

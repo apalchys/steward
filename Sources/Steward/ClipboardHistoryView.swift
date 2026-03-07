@@ -63,10 +63,10 @@ struct ClipboardHistoryView: View {
         .onAppear {
             synchronizeSelection(with: visibleRecords.map(\.id))
         }
-        .onChange(of: visibleRecords.map(\.id)) { newIDs in
+        .onChange(of: visibleRecords.map(\.id)) { _, newIDs in
             synchronizeSelection(with: newIDs)
         }
-        .onChange(of: selectedRecordID) { newSelection in
+        .onChange(of: selectedRecordID) { _, newSelection in
             guard !isProgrammaticSelectionChange,
                 let newestRecordID = visibleRecords.first?.id
             else {

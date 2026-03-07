@@ -39,14 +39,14 @@ final class ClipboardHistoryStore: ObservableObject, @unchecked Sendable {
         }
     }
 
-    func load(completion: (() -> Void)? = nil) {
+    func load(completion: (@Sendable () -> Void)? = nil) {
         ioQueue.async {
             self.loadFromDisk()
             self.notifyCompletion(completion)
         }
     }
 
-    func append(_ record: ClipboardHistoryRecord, completion: (() -> Void)? = nil) {
+    func append(_ record: ClipboardHistoryRecord, completion: (@Sendable () -> Void)? = nil) {
         ioQueue.async {
             self.queuedRecords.append(record)
             self.publish(records: self.queuedRecords, errorMessage: nil)
@@ -61,7 +61,7 @@ final class ClipboardHistoryStore: ObservableObject, @unchecked Sendable {
         }
     }
 
-    func deleteRecord(id: ClipboardHistoryRecord.ID, completion: (() -> Void)? = nil) {
+    func deleteRecord(id: ClipboardHistoryRecord.ID, completion: (@Sendable () -> Void)? = nil) {
         ioQueue.async {
             guard let index = self.queuedRecords.firstIndex(where: { $0.id == id }) else {
                 self.notifyCompletion(completion)
@@ -85,7 +85,7 @@ final class ClipboardHistoryStore: ObservableObject, @unchecked Sendable {
         }
     }
 
-    func clearAll(completion: (() -> Void)? = nil) {
+    func clearAll(completion: (@Sendable () -> Void)? = nil) {
         ioQueue.async {
             self.queuedRecords.removeAll()
             self.publish(records: self.queuedRecords, errorMessage: nil)
@@ -204,7 +204,7 @@ final class ClipboardHistoryStore: ObservableObject, @unchecked Sendable {
         }
     }
 
-    private func notifyCompletion(_ completion: (() -> Void)?) {
+    private func notifyCompletion(_ completion: (@Sendable () -> Void)?) {
         guard let completion else {
             return
         }

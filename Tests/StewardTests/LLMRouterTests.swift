@@ -3,9 +3,8 @@ import XCTest
 @testable import Steward
 
 final class LLMRouterTests: XCTestCase {
-    func testPerformUsesRequestedProviderForGrammar() {
-        var didCallOpenAI = false
-        var didCallGemini = false
+    func testPerformUsesRequestedProviderForGrammar() async throws {
+        let callTracker = CallTracker()
         let settingsStore = FakeSettingsStore(settings: makeSettings(configured: [.openAI, .gemini]))
         let router = makeRouter(
             settingsStore: settingsStore,
@@ -13,59 +12,47 @@ final class LLMRouterTests: XCTestCase {
                 FakeProvider(
                     id: .openAI,
                     capabilities: [.textCorrection],
-                    performHandler: { task, configuration, completion in
-                        didCallOpenAI = true
+                    performHandler: { task, configuration in
+                        callTracker.calledOpenAI = true
                         guard case let .grammarCorrection(text, _) = task else {
                             XCTFail("Expected grammar task")
-                            return
+                            throw FakeProviderError.unexpectedTask
                         }
                         XCTAssertEqual(text, "text")
                         XCTAssertEqual(configuration.apiKey, "key-openAI")
-                        completion(.success(.text("ok")))
+                        return .text("ok")
                     }
                 ),
                 FakeProvider(
                     id: .gemini,
                     capabilities: [.visionOCR],
-                    performHandler: { _, _, _ in
-                        didCallGemini = true
+                    performHandler: { _, _ in
+                        callTracker.calledGemini = true
+                        return .text("ignored")
                     }
                 ),
             ]
         )
 
-        let result: Result<LLMResult, Error> = waitForValue { completion in
-            router.perform(
-                LLMRequest(providerID: .openAI, task: .grammarCorrection(text: "text", customInstructions: "")),
-                completion: completion
-            )
-        }
+        let response = try await router.perform(
+            LLMRequest(providerID: .openAI, task: .grammarCorrection(text: "text", customInstructions: ""))
+        )
 
-        switch result {
-        case .success(let response):
-            XCTAssertEqual(response.textValue, "ok")
-            XCTAssertTrue(didCallOpenAI)
-            XCTAssertFalse(didCallGemini)
-        case .failure(let error):
-            XCTFail("Expected success, got \(error)")
-        }
+        XCTAssertEqual(response.textValue, "ok")
+        XCTAssertTrue(callTracker.calledOpenAI)
+        XCTAssertFalse(callTracker.calledGemini)
     }
 
-    func testPerformFailsWhenProviderIsNotRegistered() {
+    func testPerformFailsWhenProviderIsNotRegistered() async {
         let settingsStore = FakeSettingsStore(settings: makeSettings(configured: [.openAI]))
         let router = makeRouter(settingsStore: settingsStore, providers: [])
 
-        let result: Result<LLMResult, Error> = waitForValue { completion in
-            router.perform(
-                LLMRequest(providerID: .openAI, task: .grammarCorrection(text: "text", customInstructions: "")),
-                completion: completion
+        do {
+            _ = try await router.perform(
+                LLMRequest(providerID: .openAI, task: .grammarCorrection(text: "text", customInstructions: ""))
             )
-        }
-
-        switch result {
-        case .success:
             XCTFail("Expected registration error")
-        case .failure(let error):
+        } catch {
             guard case let LLMRouterError.providerNotRegistered(providerID) = error else {
                 XCTFail("Unexpected error: \(error)")
                 return
@@ -75,21 +62,16 @@ final class LLMRouterTests: XCTestCase {
         }
     }
 
-    func testPerformFailsWhenProviderIsNotConfigured() {
+    func testPerformFailsWhenProviderIsNotConfigured() async {
         let settingsStore = FakeSettingsStore(settings: makeSettings(configured: []))
         let router = makeRouter(settingsStore: settingsStore)
 
-        let result: Result<LLMResult, Error> = waitForValue { completion in
-            router.perform(
-                LLMRequest(providerID: .openAI, task: .grammarCorrection(text: "text", customInstructions: "")),
-                completion: completion
+        do {
+            _ = try await router.perform(
+                LLMRequest(providerID: .openAI, task: .grammarCorrection(text: "text", customInstructions: ""))
             )
-        }
-
-        switch result {
-        case .success:
             XCTFail("Expected configuration error")
-        case .failure(let error):
+        } catch {
             guard case let LLMRouterError.providerNotConfigured(providerID) = error else {
                 XCTFail("Unexpected error: \(error)")
                 return
@@ -99,24 +81,19 @@ final class LLMRouterTests: XCTestCase {
         }
     }
 
-    func testPerformFailsWhenRequestedProviderDoesNotSupportCapability() {
+    func testPerformFailsWhenRequestedProviderDoesNotSupportCapability() async {
         let settingsStore = FakeSettingsStore(settings: makeSettings(configured: [.openAI]))
         let router = makeRouter(
             settingsStore: settingsStore,
             providers: [FakeProvider(id: .openAI, capabilities: [.visionOCR])]
         )
 
-        let result: Result<LLMResult, Error> = waitForValue { completion in
-            router.perform(
-                LLMRequest(providerID: .openAI, task: .grammarCorrection(text: "text", customInstructions: "")),
-                completion: completion
+        do {
+            _ = try await router.perform(
+                LLMRequest(providerID: .openAI, task: .grammarCorrection(text: "text", customInstructions: ""))
             )
-        }
-
-        switch result {
-        case .success:
             XCTFail("Expected capability error")
-        case .failure(let error):
+        } catch {
             guard case let LLMRouterError.providerDoesNotSupportCapability(providerID, capability) = error else {
                 XCTFail("Unexpected error: \(error)")
                 return
@@ -126,24 +103,17 @@ final class LLMRouterTests: XCTestCase {
         }
     }
 
-    func testCheckAccessReturnsRequestedProviderHealth() {
+    func testCheckAccessReturnsRequestedProviderHealth() async throws {
         let settingsStore = FakeSettingsStore(settings: makeSettings(configured: [.openAI, .gemini]))
         let router = makeRouter(
             settingsStore: settingsStore,
             providers: [FakeProvider(id: .openAI, capabilities: [.textCorrection], checkAccessResult: true)]
         )
 
-        let result: Result<LLMProviderHealth, Error> = waitForValue { completion in
-            router.checkAccess(for: .openAI, completion: completion)
-        }
+        let health = try await router.checkAccess(for: .openAI)
 
-        switch result {
-        case .success(let health):
-            XCTAssertEqual(health.providerID, .openAI)
-            XCTAssertTrue(health.hasAccess)
-        case .failure(let error):
-            XCTFail("Expected success, got error: \(error)")
-        }
+        XCTAssertEqual(health.providerID, .openAI)
+        XCTAssertTrue(health.hasAccess)
     }
 
     private func makeRouter(
@@ -174,6 +144,15 @@ final class LLMRouterTests: XCTestCase {
     }
 }
 
+private final class CallTracker: @unchecked Sendable {
+    var calledOpenAI = false
+    var calledGemini = false
+}
+
+private enum FakeProviderError: Error {
+    case unexpectedTask
+}
+
 private final class FakeSettingsStore: LLMSettingsProviding {
     var settings: LLMSettings
 
@@ -198,17 +177,17 @@ private final class FakeSettingsStore: LLMSettingsProviding {
     func setCustomScreenshotInstructions(_ value: String) {}
 }
 
-private struct FakeProvider: LLMProvider {
+private struct FakeProvider: LLMProvider, @unchecked Sendable {
     let id: LLMProviderID
     let capabilities: Set<LLMCapability>
     let checkAccessResult: Bool
-    let performHandler: ((LLMTask, LLMProviderConfiguration, @escaping (Result<LLMResult, Error>) -> Void) -> Void)?
+    let performHandler: (@Sendable (LLMTask, LLMProviderConfiguration) async throws -> LLMResult)?
 
     init(
         id: LLMProviderID,
         capabilities: Set<LLMCapability>,
         checkAccessResult: Bool = true,
-        performHandler: ((LLMTask, LLMProviderConfiguration, @escaping (Result<LLMResult, Error>) -> Void) -> Void)? = nil
+        performHandler: (@Sendable (LLMTask, LLMProviderConfiguration) async throws -> LLMResult)? = nil
     ) {
         self.id = id
         self.capabilities = capabilities
@@ -216,20 +195,18 @@ private struct FakeProvider: LLMProvider {
         self.performHandler = performHandler
     }
 
-    func checkAccess(configuration: LLMProviderConfiguration, completion: @escaping (Bool) -> Void) {
-        completion(checkAccessResult)
+    func checkAccess(configuration: LLMProviderConfiguration) async -> Bool {
+        checkAccessResult
     }
 
     func perform(
         task: LLMTask,
-        configuration: LLMProviderConfiguration,
-        completion: @escaping (Result<LLMResult, Error>) -> Void
-    ) {
+        configuration: LLMProviderConfiguration
+    ) async throws -> LLMResult {
         if let performHandler {
-            performHandler(task, configuration, completion)
-            return
+            return try await performHandler(task, configuration)
         }
 
-        completion(.success(.text("ok")))
+        return .text("ok")
     }
 }

@@ -5,7 +5,7 @@ import XCTest
 
 @MainActor
 final class ScreenOCRCoordinatorTests: XCTestCase {
-    func testHandleHotKeyPressFailsWhenPermissionDenied() {
+    func testHandleHotKeyPressFailsWhenPermissionDenied() async {
         let router = ScreenFakeRouter(result: .success(.text("ok")))
         let textInteraction = ScreenFakeTextInteraction()
         let captureService = FakeCaptureService(permissionGranted: false, imageData: Data())
@@ -19,14 +19,10 @@ final class ScreenOCRCoordinatorTests: XCTestCase {
             settingsStore: settingsStore
         )
 
-        let result: Result<Void, Error> = waitForValue(timeout: 2) { completion in
-            coordinator.handleHotKeyPress(completion: completion)
-        }
-
-        switch result {
-        case .success:
+        do {
+            try await coordinator.handleHotKeyPress()
             XCTFail("Expected permission error")
-        case .failure(let error):
+        } catch {
             guard case ScreenOCRCoordinatorError.permissionDenied = error else {
                 XCTFail("Unexpected error: \(error)")
                 return
@@ -35,7 +31,7 @@ final class ScreenOCRCoordinatorTests: XCTestCase {
         }
     }
 
-    func testHandleHotKeyPressPropagatesCancellation() {
+    func testHandleHotKeyPressPropagatesCancellation() async {
         let router = ScreenFakeRouter(result: .success(.text("ok")))
         let textInteraction = ScreenFakeTextInteraction()
         let captureService = FakeCaptureService(permissionGranted: true, imageData: Data("image".utf8))
@@ -49,14 +45,10 @@ final class ScreenOCRCoordinatorTests: XCTestCase {
             settingsStore: settingsStore
         )
 
-        let result: Result<Void, Error> = waitForValue(timeout: 2) { completion in
-            coordinator.handleHotKeyPress(completion: completion)
-        }
-
-        switch result {
-        case .success:
+        do {
+            try await coordinator.handleHotKeyPress()
             XCTFail("Expected cancellation")
-        case .failure(let error):
+        } catch {
             guard case ScreenOCRCoordinatorError.cancelled = error else {
                 XCTFail("Unexpected error: \(error)")
                 return
@@ -66,7 +58,7 @@ final class ScreenOCRCoordinatorTests: XCTestCase {
         }
     }
 
-    func testHandleHotKeyPressSendsOCRTaskThroughRouterAndCopiesOutput() throws {
+    func testHandleHotKeyPressSendsOCRTaskThroughRouterAndCopiesOutput() async throws {
         guard let screen = NSScreen.screens.first else {
             throw XCTSkip("No screen available in test environment")
         }
@@ -93,33 +85,26 @@ final class ScreenOCRCoordinatorTests: XCTestCase {
             settingsStore: settingsStore
         )
 
-        let result: Result<Void, Error> = waitForValue(timeout: 2) { completion in
-            coordinator.handleHotKeyPress(completion: completion)
+        try await coordinator.handleHotKeyPress()
+
+        XCTAssertEqual(textInteraction.copiedText, "ocr text")
+        guard let request = router.lastRequest else {
+            XCTFail("Expected OCR request")
+            return
         }
 
-        switch result {
-        case .success:
-            XCTAssertEqual(textInteraction.copiedText, "ocr text")
-            guard let request = router.lastRequest else {
-                XCTFail("Expected OCR request")
-                return
-            }
-
-            guard case .screenOCR(_, _, let customInstructions) = request.task else {
-                XCTFail("Expected OCR task")
-                return
-            }
-            XCTAssertEqual(request.providerID, .openAI)
-            XCTAssertEqual(customInstructions, "Keep table structure.")
-            XCTAssertTrue(selectionPresenter.didBeginSelection)
-            XCTAssertTrue(selectionPresenter.didEndSelection)
-        case .failure(let error):
-            XCTFail("Expected success, got \(error)")
+        guard case .screenOCR(_, _, let customInstructions) = request.task else {
+            XCTFail("Expected OCR task")
+            return
         }
+        XCTAssertEqual(request.providerID, .openAI)
+        XCTAssertEqual(customInstructions, "Keep table structure.")
+        XCTAssertTrue(selectionPresenter.didBeginSelection)
+        XCTAssertTrue(selectionPresenter.didEndSelection)
     }
 }
 
-private final class FakeCaptureService: ScreenCaptureProviding {
+private final class FakeCaptureService: ScreenCaptureProviding, @unchecked Sendable {
     let permissionGranted: Bool
     let imageData: Data?
 
@@ -133,37 +118,33 @@ private final class FakeCaptureService: ScreenCaptureProviding {
     }
 
     func captureSelectionImageData(
-        on screen: NSScreen,
-        selectionRect: CGRect,
-        completion: @escaping (Data?) -> Void
-    ) {
-        completion(imageData)
+        request: ScreenCaptureRequest,
+        selectionRect: CGRect
+    ) async -> Data? {
+        imageData
     }
 }
 
-private final class ScreenFakeRouter: LLMRouting {
-    var supportedProviderIDs: [LLMProviderID] = [.gemini]
-    var result: Result<LLMResult, Error>
+private final class ScreenFakeRouter: LLMRouting, @unchecked Sendable {
+    let supportedProviderIDs: [LLMProviderID] = [.gemini]
+    let result: Result<LLMResult, Error>
     var lastRequest: LLMRequest?
 
     init(result: Result<LLMResult, Error>) {
         self.result = result
     }
 
-    func perform(_ request: LLMRequest, completion: @escaping (Result<LLMResult, Error>) -> Void) {
+    func perform(_ request: LLMRequest) async throws -> LLMResult {
         lastRequest = request
-        completion(result)
+        return try result.get()
     }
 
-    func checkAccess(
-        for providerID: LLMProviderID,
-        completion: @escaping (Result<LLMProviderHealth, Error>) -> Void
-    ) {
-        completion(.success(LLMProviderHealth(providerID: providerID, hasAccess: true)))
+    func checkAccess(for providerID: LLMProviderID) async throws -> LLMProviderHealth {
+        LLMProviderHealth(providerID: providerID, hasAccess: true)
     }
 }
 
-private final class ScreenFakeTextInteraction: TextInteractionPerforming {
+private final class ScreenFakeTextInteraction: TextInteractionPerforming, @unchecked Sendable {
     var copiedText: String?
 
     func getSelectedText() -> String? {

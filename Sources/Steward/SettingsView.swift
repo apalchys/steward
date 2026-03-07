@@ -44,15 +44,15 @@ struct SettingsView: View {
             grammarInstructions = settingsStore.customGrammarInstructions()
             screenshotInstructions = settingsStore.customScreenshotInstructions()
         }
-        .onChange(of: settings) { newSettings in
+        .onChange(of: settings) { _, newSettings in
             settingsStore.saveSettings(newSettings)
             onSettingsChanged?()
         }
-        .onChange(of: grammarInstructions) { newValue in
+        .onChange(of: grammarInstructions) { _, newValue in
             settingsStore.setCustomGrammarInstructions(newValue)
             onSettingsChanged?()
         }
-        .onChange(of: screenshotInstructions) { newValue in
+        .onChange(of: screenshotInstructions) { _, newValue in
             settingsStore.setCustomScreenshotInstructions(newValue)
             onSettingsChanged?()
         }

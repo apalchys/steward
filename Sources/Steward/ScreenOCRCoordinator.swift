@@ -11,6 +11,12 @@ final class ScreenOCRCoordinator {
     private let selectionPresenter: ScreenSelectionPresenting
     private let settingsStore: LLMSettingsProviding
 
+    // Temporary storage for the selection result, used to bridge the
+    // @MainActor selection presenter callback into structured concurrency
+    // without sending non-Sendable NSScreen across isolation boundaries.
+    private var pendingSelectionScreen: NSScreen?
+    private var pendingSelectionRect: CGRect?
+
     init(
         router: LLMRouting,
         textInteraction: TextInteractionPerforming,
@@ -25,80 +31,70 @@ final class ScreenOCRCoordinator {
         self.settingsStore = settingsStore
     }
 
-    func handleHotKeyPress(completion: @escaping (Result<Void, Error>) -> Void) {
+    func handleHotKeyPress() async throws {
         guard captureService.ensureScreenCaptureAccess() else {
-            completion(.failure(ScreenOCRCoordinatorError.permissionDenied))
-            return
+            throw ScreenOCRCoordinatorError.permissionDenied
         }
 
         onSelectionActivityChanged?(true)
 
-        selectionPresenter.beginSelection(
-            onSelectionFinished: { [weak self] screen, selectionRect in
-                guard let self else {
-                    return
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            selectionPresenter.beginSelection(
+                onSelectionFinished: { [weak self] screen, selectionRect in
+                    guard let self else { return }
+                    self.selectionPresenter.endSelection()
+                    self.onSelectionActivityChanged?(false)
+                    self.pendingSelectionScreen = screen
+                    self.pendingSelectionRect = selectionRect
+                    continuation.resume()
+                },
+                onSelectionCancelled: { [weak self] in
+                    guard let self else { return }
+                    self.selectionPresenter.endSelection()
+                    self.onSelectionActivityChanged?(false)
+                    continuation.resume(throwing: ScreenOCRCoordinatorError.cancelled)
                 }
-
-                self.selectionPresenter.endSelection()
-                self.onSelectionActivityChanged?(false)
-
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    self.extractText(on: screen, selectionRect: selectionRect, completion: completion)
-                }
-            },
-            onSelectionCancelled: { [weak self] in
-                guard let self else {
-                    return
-                }
-
-                self.selectionPresenter.endSelection()
-                self.onSelectionActivityChanged?(false)
-                completion(.failure(ScreenOCRCoordinatorError.cancelled))
-            }
-        )
-    }
-
-    private func extractText(
-        on screen: NSScreen, selectionRect: CGRect, completion: @escaping (Result<Void, Error>) -> Void
-    ) {
-        captureService.captureSelectionImageData(on: screen, selectionRect: selectionRect) { [weak self] imageData in
-            guard let self else {
-                return
-            }
-
-            guard let imageData else {
-                completion(.failure(ScreenOCRCoordinatorError.couldNotCaptureImage))
-                return
-            }
-
-            let settings = self.settingsStore.loadSettings()
-            let request = LLMRequest(
-                providerID: settings.screenshotProviderID,
-                task: .screenOCR(
-                    imageData: imageData,
-                    mimeType: "image/png",
-                    customInstructions: self.settingsStore.customScreenshotInstructions()
-                )
             )
-
-            self.router.perform(request) { [weak self] result in
-                guard let self else {
-                    return
-                }
-
-                switch result {
-                case .success(let llmResult):
-                    guard let extractedText = llmResult.textValue else {
-                        completion(.failure(ScreenOCRCoordinatorError.invalidProviderResponse))
-                        return
-                    }
-
-                    self.textInteraction.copyTextToClipboard(extractedText)
-                    completion(.success(()))
-                case .failure(let error):
-                    completion(.failure(error))
-                }
-            }
         }
+
+        guard let screen = pendingSelectionScreen, let selectionRect = pendingSelectionRect else {
+            throw ScreenOCRCoordinatorError.couldNotCaptureImage
+        }
+        pendingSelectionScreen = nil
+        pendingSelectionRect = nil
+
+        // Extract NSScreen properties into a Sendable struct on @MainActor
+        // before crossing into the async capture method.
+        guard let captureRequest = ScreenCaptureRequest(screen: screen) else {
+            throw ScreenOCRCoordinatorError.couldNotCaptureImage
+        }
+
+        // Brief delay to allow the overlay window to dismiss before capturing the screen.
+        try await Task.sleep(for: .milliseconds(100))
+
+        guard
+            let imageData = await captureService.captureSelectionImageData(
+                request: captureRequest, selectionRect: selectionRect)
+        else {
+            throw ScreenOCRCoordinatorError.couldNotCaptureImage
+        }
+
+        let settings = settingsStore.loadSettings()
+        let request = LLMRequest(
+            providerID: settings.screenshotProviderID,
+            task: .screenOCR(
+                imageData: imageData,
+                mimeType: "image/png",
+                customInstructions: settingsStore.customScreenshotInstructions()
+            )
+        )
+
+        let llmResult = try await router.perform(request)
+
+        guard let extractedText = llmResult.textValue else {
+            throw ScreenOCRCoordinatorError.invalidProviderResponse
+        }
+
+        textInteraction.copyTextToClipboard(extractedText)
     }
 }

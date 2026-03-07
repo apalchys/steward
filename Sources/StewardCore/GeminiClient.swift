@@ -1,9 +1,8 @@
 import Foundation
 
-public struct GeminiClient {
+public struct GeminiClient: Sendable {
     public static let defaultModelID = "gemini-3.1-flash-lite-preview"
     private let session: URLSession
-    private let callbackQueue: DispatchQueue
     private let apiBaseURL: String
 
     private static let ocrInstruction = """
@@ -120,32 +119,30 @@ public struct GeminiClient {
 
     public init(
         session: URLSession = .shared,
-        callbackQueue: DispatchQueue = .main,
         apiBaseURL: String = "https://generativelanguage.googleapis.com"
     ) {
         self.session = session
-        self.callbackQueue = callbackQueue
         self.apiBaseURL = apiBaseURL
     }
 
-    public func checkAccess(apiKey: String, modelID: String, completion: @escaping (Bool) -> Void) {
+    public func checkAccess(apiKey: String, modelID: String) async -> Bool {
         let encodedModelID = modelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? modelID
         guard
             let apiURL = makeURL(
                 path: "/v1beta/models/\(encodedModelID)",
                 queryItems: [URLQueryItem(name: "key", value: apiKey)])
         else {
-            complete(false, into: completion)
-            return
+            return false
         }
 
         var request = URLRequest(url: apiURL)
         request.httpMethod = "GET"
 
-        session.dataTask(with: request) { _, response, _ in
-            let hasAccess = (response as? HTTPURLResponse)?.statusCode == 200
-            complete(hasAccess, into: completion)
-        }.resume()
+        guard let (_, response) = try? await session.data(for: request) else {
+            return false
+        }
+
+        return (response as? HTTPURLResponse)?.statusCode == 200
     }
 
     public func extractMarkdownText(
@@ -153,9 +150,8 @@ public struct GeminiClient {
         modelID: String,
         imageData: Data,
         mimeType: String,
-        customInstructions: String = "",
-        completion: @escaping (Result<String, Error>) -> Void
-    ) {
+        customInstructions: String = ""
+    ) async throws -> String {
         let combinedInstructions = buildOCRInstructions(customInstructions: customInstructions)
         let requestBody = GenerateContentRequest(
             systemInstruction: .init(parts: [.init(text: combinedInstructions)]),
@@ -168,8 +164,7 @@ public struct GeminiClient {
         )
 
         guard let httpBody = try? JSONEncoder().encode(requestBody) else {
-            complete(.failure(ClientError.encodingFailed), into: completion)
-            return
+            throw ClientError.encodingFailed
         }
 
         let encodedModelID = modelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? modelID
@@ -178,8 +173,7 @@ public struct GeminiClient {
                 path: "/v1beta/models/\(encodedModelID):generateContent",
                 queryItems: [URLQueryItem(name: "key", value: apiKey)])
         else {
-            complete(.failure(ClientError.invalidURL), into: completion)
-            return
+            throw ClientError.invalidURL
         }
 
         var request = URLRequest(url: apiURL)
@@ -187,45 +181,32 @@ public struct GeminiClient {
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = httpBody
 
-        session.dataTask(with: request) { data, response, error in
-            if let error {
-                complete(.failure(error), into: completion)
-                return
-            }
+        let (data, response) = try await session.data(for: request)
 
-            if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
-                let message = errorMessage(from: data) ?? "Gemini request failed with HTTP \(httpResponse.statusCode)."
-                complete(.failure(ClientError.requestFailed(message)), into: completion)
-                return
-            }
+        if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
+            let message = errorMessage(from: data) ?? "Gemini request failed with HTTP \(httpResponse.statusCode)."
+            throw ClientError.requestFailed(message)
+        }
 
-            guard let data, !data.isEmpty else {
-                complete(.failure(ClientError.emptyResponse), into: completion)
-                return
-            }
+        guard !data.isEmpty else {
+            throw ClientError.emptyResponse
+        }
 
-            do {
-                let apiResponse = try JSONDecoder().decode(GenerateContentResponse.self, from: data)
+        let apiResponse = try JSONDecoder().decode(GenerateContentResponse.self, from: data)
 
-                guard let extractedText = apiResponse.outputText else {
-                    complete(.failure(ClientError.emptyOutput), into: completion)
-                    return
-                }
+        guard let extractedText = apiResponse.outputText else {
+            throw ClientError.emptyOutput
+        }
 
-                complete(.success(extractedText), into: completion)
-            } catch {
-                complete(.failure(error), into: completion)
-            }
-        }.resume()
+        return extractedText
     }
 
     public func correctGrammar(
         apiKey: String,
         modelID: String,
         customInstructions: String,
-        text: String,
-        completion: @escaping (Result<String, Error>) -> Void
-    ) {
+        text: String
+    ) async throws -> String {
         let requestBody = GenerateContentRequest(
             systemInstruction: .init(parts: [.init(text: buildGrammarPrompt(customInstructions: customInstructions))]),
             contents: [
@@ -236,8 +217,7 @@ public struct GeminiClient {
         )
 
         guard let httpBody = try? JSONEncoder().encode(requestBody) else {
-            complete(.failure(ClientError.encodingFailed), into: completion)
-            return
+            throw ClientError.encodingFailed
         }
 
         let encodedModelID = modelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? modelID
@@ -246,8 +226,7 @@ public struct GeminiClient {
                 path: "/v1beta/models/\(encodedModelID):generateContent",
                 queryItems: [URLQueryItem(name: "key", value: apiKey)])
         else {
-            complete(.failure(ClientError.invalidURL), into: completion)
-            return
+            throw ClientError.invalidURL
         }
 
         var request = URLRequest(url: apiURL)
@@ -255,36 +234,24 @@ public struct GeminiClient {
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = httpBody
 
-        session.dataTask(with: request) { data, response, error in
-            if let error {
-                complete(.failure(error), into: completion)
-                return
-            }
+        let (data, response) = try await session.data(for: request)
 
-            if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
-                let message = errorMessage(from: data) ?? "Gemini request failed with HTTP \(httpResponse.statusCode)."
-                complete(.failure(ClientError.requestFailed(message)), into: completion)
-                return
-            }
+        if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
+            let message = errorMessage(from: data) ?? "Gemini request failed with HTTP \(httpResponse.statusCode)."
+            throw ClientError.requestFailed(message)
+        }
 
-            guard let data, !data.isEmpty else {
-                complete(.failure(ClientError.emptyResponse), into: completion)
-                return
-            }
+        guard !data.isEmpty else {
+            throw ClientError.emptyResponse
+        }
 
-            do {
-                let apiResponse = try JSONDecoder().decode(GenerateContentResponse.self, from: data)
+        let apiResponse = try JSONDecoder().decode(GenerateContentResponse.self, from: data)
 
-                guard let correctedText = apiResponse.outputText else {
-                    complete(.failure(ClientError.emptyOutput), into: completion)
-                    return
-                }
+        guard let correctedText = apiResponse.outputText else {
+            throw ClientError.emptyOutput
+        }
 
-                complete(.success(correctedText), into: completion)
-            } catch {
-                complete(.failure(error), into: completion)
-            }
-        }.resume()
+        return correctedText
     }
 
     private var normalizedBaseURL: String {
@@ -334,12 +301,6 @@ public struct GeminiClient {
             Additional instructions to follow:
             \(trimmedCustomInstructions)
             """
-    }
-
-    private func complete<T>(_ value: T, into completion: @escaping (T) -> Void) {
-        callbackQueue.async {
-            completion(value)
-        }
     }
 }
 

@@ -1,29 +1,22 @@
 import Foundation
 import StewardCore
 
-protocol LLMProvider {
+protocol LLMProvider: Sendable {
     var id: LLMProviderID { get }
     var capabilities: Set<LLMCapability> { get }
 
-    func checkAccess(configuration: LLMProviderConfiguration, completion: @escaping (Bool) -> Void)
-    func perform(
-        task: LLMTask,
-        configuration: LLMProviderConfiguration,
-        completion: @escaping (Result<LLMResult, Error>) -> Void
-    )
+    func checkAccess(configuration: LLMProviderConfiguration) async -> Bool
+    func perform(task: LLMTask, configuration: LLMProviderConfiguration) async throws -> LLMResult
 }
 
-protocol LLMRouting {
+protocol LLMRouting: AnyObject, Sendable {
     var supportedProviderIDs: [LLMProviderID] { get }
 
-    func perform(_ request: LLMRequest, completion: @escaping (Result<LLMResult, Error>) -> Void)
-    func checkAccess(
-        for providerID: LLMProviderID,
-        completion: @escaping (Result<LLMProviderHealth, Error>) -> Void
-    )
+    func perform(_ request: LLMRequest) async throws -> LLMResult
+    func checkAccess(for providerID: LLMProviderID) async throws -> LLMProviderHealth
 }
 
-final class LLMRouter: LLMRouting {
+final class LLMRouter: LLMRouting, @unchecked Sendable {
     let supportedProviderIDs: [LLMProviderID]
 
     private let providers: [LLMProviderID: LLMProvider]
@@ -36,41 +29,29 @@ final class LLMRouter: LLMRouting {
         self.supportedProviderIDs = LLMProviderID.allCases.filter { providerMap[$0] != nil }
     }
 
-    func perform(_ request: LLMRequest, completion: @escaping (Result<LLMResult, Error>) -> Void) {
+    func perform(_ request: LLMRequest) async throws -> LLMResult {
         let settings = settingsStore.loadSettings()
 
-        do {
-            let providerID = request.providerID
-            let provider = try providerForID(providerID)
-            let configuration = try configuration(for: providerID, from: settings)
-            let capability = request.task.requiredCapability
+        let providerID = request.providerID
+        let provider = try providerForID(providerID)
+        let configuration = try configuration(for: providerID, from: settings)
+        let capability = request.task.requiredCapability
 
-            guard provider.capabilities.contains(capability) else {
-                throw LLMRouterError.providerDoesNotSupportCapability(providerID: providerID, capability: capability)
-            }
-
-            provider.perform(task: request.task, configuration: configuration, completion: completion)
-        } catch {
-            completion(.failure(error))
+        guard provider.capabilities.contains(capability) else {
+            throw LLMRouterError.providerDoesNotSupportCapability(providerID: providerID, capability: capability)
         }
+
+        return try await provider.perform(task: request.task, configuration: configuration)
     }
 
-    func checkAccess(
-        for providerID: LLMProviderID,
-        completion: @escaping (Result<LLMProviderHealth, Error>) -> Void
-    ) {
+    func checkAccess(for providerID: LLMProviderID) async throws -> LLMProviderHealth {
         let settings = settingsStore.loadSettings()
 
-        do {
-            let provider = try providerForID(providerID)
-            let configuration = try configuration(for: providerID, from: settings)
+        let provider = try providerForID(providerID)
+        let configuration = try configuration(for: providerID, from: settings)
 
-            provider.checkAccess(configuration: configuration) { hasAccess in
-                completion(.success(LLMProviderHealth(providerID: providerID, hasAccess: hasAccess)))
-            }
-        } catch {
-            completion(.failure(error))
-        }
+        let hasAccess = await provider.checkAccess(configuration: configuration)
+        return LLMProviderHealth(providerID: providerID, hasAccess: hasAccess)
     }
 
     private func providerForID(_ providerID: LLMProviderID) throws -> LLMProvider {
@@ -102,35 +83,29 @@ struct OpenAILLMProvider: LLMProvider {
         self.client = client
     }
 
-    func checkAccess(configuration: LLMProviderConfiguration, completion: @escaping (Bool) -> Void) {
-        client.checkAccess(apiKey: configuration.apiKey, modelID: configuration.modelID, completion: completion)
+    func checkAccess(configuration: LLMProviderConfiguration) async -> Bool {
+        await client.checkAccess(apiKey: configuration.apiKey, modelID: configuration.modelID)
     }
 
-    func perform(
-        task: LLMTask,
-        configuration: LLMProviderConfiguration,
-        completion: @escaping (Result<LLMResult, Error>) -> Void
-    ) {
+    func perform(task: LLMTask, configuration: LLMProviderConfiguration) async throws -> LLMResult {
         switch task {
         case .grammarCorrection(let text, let customInstructions):
-            client.correctGrammar(
+            let correctedText = try await client.correctGrammar(
                 apiKey: configuration.apiKey,
                 modelID: configuration.modelID,
                 customInstructions: customInstructions,
                 text: text
-            ) { result in
-                completion(result.map(LLMResult.text))
-            }
+            )
+            return .text(correctedText)
         case .screenOCR(let imageData, let mimeType, let customInstructions):
-            client.extractMarkdownText(
+            let extractedText = try await client.extractMarkdownText(
                 apiKey: configuration.apiKey,
                 modelID: configuration.modelID,
                 imageData: imageData,
                 mimeType: mimeType,
                 customInstructions: customInstructions
-            ) { result in
-                completion(result.map(LLMResult.text))
-            }
+            )
+            return .text(extractedText)
         }
     }
 }
@@ -145,35 +120,29 @@ struct GeminiLLMProvider: LLMProvider {
         self.client = client
     }
 
-    func checkAccess(configuration: LLMProviderConfiguration, completion: @escaping (Bool) -> Void) {
-        client.checkAccess(apiKey: configuration.apiKey, modelID: configuration.modelID, completion: completion)
+    func checkAccess(configuration: LLMProviderConfiguration) async -> Bool {
+        await client.checkAccess(apiKey: configuration.apiKey, modelID: configuration.modelID)
     }
 
-    func perform(
-        task: LLMTask,
-        configuration: LLMProviderConfiguration,
-        completion: @escaping (Result<LLMResult, Error>) -> Void
-    ) {
+    func perform(task: LLMTask, configuration: LLMProviderConfiguration) async throws -> LLMResult {
         switch task {
         case .screenOCR(let imageData, let mimeType, let customInstructions):
-            client.extractMarkdownText(
+            let extractedText = try await client.extractMarkdownText(
                 apiKey: configuration.apiKey,
                 modelID: configuration.modelID,
                 imageData: imageData,
                 mimeType: mimeType,
                 customInstructions: customInstructions
-            ) { result in
-                completion(result.map(LLMResult.text))
-            }
+            )
+            return .text(extractedText)
         case .grammarCorrection(let text, let customInstructions):
-            client.correctGrammar(
+            let correctedText = try await client.correctGrammar(
                 apiKey: configuration.apiKey,
                 modelID: configuration.modelID,
                 customInstructions: customInstructions,
                 text: text
-            ) { result in
-                completion(result.map(LLMResult.text))
-            }
+            )
+            return .text(correctedText)
         }
     }
 }

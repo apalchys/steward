@@ -8,7 +8,7 @@ protocol ClipboardChangeSuppressing: AnyObject {
 
 extension ClipboardMonitor: ClipboardChangeSuppressing {}
 
-protocol TextInteractionPerforming: AnyObject {
+protocol TextInteractionPerforming: AnyObject, Sendable {
     func getSelectedText() -> String?
     func replaceSelectedText(with newText: String)
     func copyTextToClipboard(_ text: String)
@@ -84,13 +84,25 @@ final class SystemTextInteractionService: TextInteractionPerforming, @unchecked 
     }
 }
 
-protocol ScreenCaptureProviding: AnyObject {
+struct ScreenCaptureRequest: Sendable {
+    let displayID: CGDirectDisplayID
+    let screenFrame: CGRect
+    let scaleFactor: CGFloat
+
+    @MainActor
+    init?(screen: NSScreen) {
+        guard let screenNumber = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else {
+            return nil
+        }
+        self.displayID = CGDirectDisplayID(screenNumber.uint32Value)
+        self.screenFrame = screen.frame
+        self.scaleFactor = max(screen.backingScaleFactor, 1)
+    }
+}
+
+protocol ScreenCaptureProviding: AnyObject, Sendable {
     func ensureScreenCaptureAccess() -> Bool
-    func captureSelectionImageData(
-        on screen: NSScreen,
-        selectionRect: CGRect,
-        completion: @escaping (Data?) -> Void
-    )
+    func captureSelectionImageData(request: ScreenCaptureRequest, selectionRect: CGRect) async -> Data?
 }
 
 final class SystemScreenCaptureService: ScreenCaptureProviding, @unchecked Sendable {
@@ -102,49 +114,50 @@ final class SystemScreenCaptureService: ScreenCaptureProviding, @unchecked Senda
         return CGRequestScreenCaptureAccess()
     }
 
-    func captureSelectionImageData(
-        on screen: NSScreen,
-        selectionRect: CGRect,
-        completion: @escaping (Data?) -> Void
-    ) {
-        guard let displayID = displayID(for: screen) else {
-            completion(nil)
-            return
-        }
+    func captureSelectionImageData(request: ScreenCaptureRequest, selectionRect: CGRect) async -> Data? {
+        let scaleFactor = request.scaleFactor
+        let screenFrame = request.screenFrame
+        let streamWidth = max(1, Int(screenFrame.width * scaleFactor))
+        let streamHeight = max(1, Int(screenFrame.height * scaleFactor))
+        let displayID = request.displayID
 
-        SCShareableContent.getCurrentProcessShareableContent { [weak self] shareableContent, error in
-            guard let self,
-                error == nil,
-                let shareableContent,
-                let display = shareableContent.displays.first(where: { $0.displayID == displayID })
-            else {
-                completion(nil)
-                return
-            }
-
-            let streamConfiguration = SCStreamConfiguration()
-            streamConfiguration.captureResolution = .best
-            streamConfiguration.showsCursor = false
-
-            let scaleFactor = max(screen.backingScaleFactor, 1)
-            streamConfiguration.width = max(1, Int(screen.frame.width * scaleFactor))
-            streamConfiguration.height = max(1, Int(screen.frame.height * scaleFactor))
-
-            let contentFilter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
-            SCScreenshotManager.captureImage(contentFilter: contentFilter, configuration: streamConfiguration) {
-                [weak self] image, captureError in
-                guard let self, captureError == nil, let image else {
-                    completion(nil)
+        return await withCheckedContinuation { continuation in
+            SCShareableContent.getCurrentProcessShareableContent { shareableContent, error in
+                guard error == nil,
+                    let shareableContent,
+                    let display = shareableContent.displays.first(where: { $0.displayID == displayID })
+                else {
+                    continuation.resume(returning: nil)
                     return
                 }
 
-                completion(self.croppedImageData(from: image, on: screen, selectionRect: selectionRect))
+                let streamConfiguration = SCStreamConfiguration()
+                streamConfiguration.captureResolution = .best
+                streamConfiguration.showsCursor = false
+                streamConfiguration.width = streamWidth
+                streamConfiguration.height = streamHeight
+
+                let contentFilter = SCContentFilter(
+                    display: display, excludingApplications: [], exceptingWindows: [])
+                SCScreenshotManager.captureImage(
+                    contentFilter: contentFilter, configuration: streamConfiguration
+                ) { image, captureError in
+                    guard captureError == nil, let image else {
+                        continuation.resume(returning: nil)
+                        return
+                    }
+
+                    let croppedData = Self.croppedImageData(
+                        from: image, screenFrame: screenFrame, selectionRect: selectionRect)
+                    continuation.resume(returning: croppedData)
+                }
             }
         }
     }
 
-    private func croppedImageData(from displayImage: CGImage, on screen: NSScreen, selectionRect: CGRect) -> Data? {
-        let screenFrame = screen.frame
+    private static func croppedImageData(
+        from displayImage: CGImage, screenFrame: CGRect, selectionRect: CGRect
+    ) -> Data? {
         let relativeRect = CGRect(
             x: selectionRect.minX - screenFrame.minX,
             y: screenFrame.maxY - selectionRect.maxY,
@@ -175,11 +188,4 @@ final class SystemScreenCaptureService: ScreenCaptureProviding, @unchecked Senda
         return bitmapRepresentation.representation(using: .png, properties: [:])
     }
 
-    private func displayID(for screen: NSScreen) -> CGDirectDisplayID? {
-        guard let screenNumber = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else {
-            return nil
-        }
-
-        return CGDirectDisplayID(screenNumber.uint32Value)
-    }
 }

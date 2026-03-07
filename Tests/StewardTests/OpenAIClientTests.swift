@@ -8,7 +8,7 @@ final class OpenAIClientTests: XCTestCase {
         super.tearDown()
     }
 
-    func testCheckAccessReturnsTrueOnHTTP200() {
+    func testCheckAccessReturnsTrueOnHTTP200() async {
         URLProtocolStub.configure(handler: { request in
             XCTAssertEqual(request.httpMethod, "GET")
             XCTAssertEqual(request.url?.absoluteString, "https://api.openai.com/v1/models/gpt-5.4")
@@ -19,23 +19,19 @@ final class OpenAIClientTests: XCTestCase {
         })
 
         let client = makeClient()
-        let hasAccess: Bool = waitForValue { completion in
-            client.checkAccess(apiKey: "sk-test", modelID: "gpt-5.4", completion: completion)
-        }
+        let hasAccess = await client.checkAccess(apiKey: "sk-test", modelID: "gpt-5.4")
 
         XCTAssertTrue(hasAccess)
     }
 
-    func testCheckAccessReturnsFalseForInvalidBaseURL() {
+    func testCheckAccessReturnsFalseForInvalidBaseURL() async {
         let client = makeClient(baseURL: "://invalid-url")
-        let hasAccess: Bool = waitForValue { completion in
-            client.checkAccess(apiKey: "sk-test", modelID: "gpt-5.4", completion: completion)
-        }
+        let hasAccess = await client.checkAccess(apiKey: "sk-test", modelID: "gpt-5.4")
 
         XCTAssertFalse(hasAccess)
     }
 
-    func testCorrectGrammarSuccessReturnsCorrectedTextAndSendsReasoningForGPT5() {
+    func testCorrectGrammarSuccessReturnsCorrectedTextAndSendsReasoningForGPT5() async throws {
         URLProtocolStub.configure(handler: { request in
             XCTAssertEqual(request.httpMethod, "POST")
             XCTAssertEqual(request.url?.absoluteString, "https://api.openai.com/v1/responses")
@@ -59,25 +55,17 @@ final class OpenAIClientTests: XCTestCase {
         })
 
         let client = makeClient()
-        let result: Result<String, Error> = waitForValue { completion in
-            client.correctGrammar(
-                apiKey: "sk-test",
-                modelID: "gpt-5.4",
-                customInstructions: "Use concise language.",
-                text: "This are bad grammar.",
-                completion: completion
-            )
-        }
+        let correctedText = try await client.correctGrammar(
+            apiKey: "sk-test",
+            modelID: "gpt-5.4",
+            customInstructions: "Use concise language.",
+            text: "This are bad grammar."
+        )
 
-        switch result {
-        case .success(let correctedText):
-            XCTAssertEqual(correctedText, "This is bad grammar.")
-        case .failure(let error):
-            XCTFail("Expected success but got error: \(error)")
-        }
+        XCTAssertEqual(correctedText, "This is bad grammar.")
     }
 
-    func testCorrectGrammarOmitsReasoningForNonGPT5Model() {
+    func testCorrectGrammarOmitsReasoningForNonGPT5Model() async throws {
         URLProtocolStub.configure(handler: { request in
             let requestBody = try XCTUnwrap(request.bodyData())
             let payload = try XCTUnwrap(try JSONSerialization.jsonObject(with: requestBody) as? [String: Any])
@@ -91,25 +79,17 @@ final class OpenAIClientTests: XCTestCase {
         })
 
         let client = makeClient()
-        let result: Result<String, Error> = waitForValue { completion in
-            client.correctGrammar(
-                apiKey: "sk-test",
-                modelID: "gpt-4.1-mini",
-                customInstructions: "",
-                text: "bad text",
-                completion: completion
-            )
-        }
+        let correctedText = try await client.correctGrammar(
+            apiKey: "sk-test",
+            modelID: "gpt-4.1-mini",
+            customInstructions: "",
+            text: "bad text"
+        )
 
-        switch result {
-        case .success(let correctedText):
-            XCTAssertEqual(correctedText, "ok")
-        case .failure(let error):
-            XCTFail("Expected success but got error: \(error)")
-        }
+        XCTAssertEqual(correctedText, "ok")
     }
 
-    func testCorrectGrammarReturnsAPIErrorMessageForNon2xx() {
+    func testCorrectGrammarReturnsAPIErrorMessageForNon2xx() async {
         URLProtocolStub.configure(handler: { request in
             let data = """
                 {"error":{"message":"Invalid API key."}}
@@ -119,60 +99,51 @@ final class OpenAIClientTests: XCTestCase {
         })
 
         let client = makeClient()
-        let result: Result<String, Error> = waitForValue { completion in
-            client.correctGrammar(
+        await assertThrowsErrorMessage("Invalid API key.") {
+            try await client.correctGrammar(
                 apiKey: "bad-key",
                 modelID: "gpt-5.4",
                 customInstructions: "",
-                text: "text",
-                completion: completion
+                text: "text"
             )
         }
-
-        assertFailureMessage(result, equals: "Invalid API key.")
     }
 
-    func testCorrectGrammarReturnsFallbackErrorMessageForNon2xxWithoutBody() {
+    func testCorrectGrammarReturnsFallbackErrorMessageForNon2xxWithoutBody() async {
         URLProtocolStub.configure(handler: { request in
             let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 503, httpVersion: nil, headerFields: nil)!
             return (response, nil)
         })
 
         let client = makeClient()
-        let result: Result<String, Error> = waitForValue { completion in
-            client.correctGrammar(
+        await assertThrowsErrorMessage("OpenAI request failed with HTTP 503.") {
+            try await client.correctGrammar(
                 apiKey: "sk-test",
                 modelID: "gpt-5.4",
                 customInstructions: "",
-                text: "text",
-                completion: completion
+                text: "text"
             )
         }
-
-        assertFailureMessage(result, equals: "OpenAI request failed with HTTP 503.")
     }
 
-    func testCorrectGrammarReturnsEmptyResponseErrorWhenDataIsMissing() {
+    func testCorrectGrammarReturnsEmptyResponseErrorWhenDataIsMissing() async {
         URLProtocolStub.configure(handler: { request in
             let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, nil)
         })
 
         let client = makeClient()
-        let result: Result<String, Error> = waitForValue { completion in
-            client.correctGrammar(
+        await assertThrowsErrorMessage("OpenAI returned an empty response.") {
+            try await client.correctGrammar(
                 apiKey: "sk-test",
                 modelID: "gpt-5.4",
                 customInstructions: "",
-                text: "text",
-                completion: completion
+                text: "text"
             )
         }
-
-        assertFailureMessage(result, equals: "OpenAI returned an empty response.")
     }
 
-    func testCorrectGrammarReturnsEmptyOutputErrorWhenNoOutputTextPresent() {
+    func testCorrectGrammarReturnsEmptyOutputErrorWhenNoOutputTextPresent() async {
         URLProtocolStub.configure(handler: { request in
             let data = """
                 {"output":[{"type":"message","content":[{"type":"input_text","text":"ignored"}]}]}
@@ -182,58 +153,47 @@ final class OpenAIClientTests: XCTestCase {
         })
 
         let client = makeClient()
-        let result: Result<String, Error> = waitForValue { completion in
-            client.correctGrammar(
+        await assertThrowsErrorMessage("OpenAI returned no corrected text.") {
+            try await client.correctGrammar(
                 apiKey: "sk-test",
                 modelID: "gpt-5.4",
                 customInstructions: "",
-                text: "text",
-                completion: completion
+                text: "text"
             )
         }
-
-        assertFailureMessage(result, equals: "OpenAI returned no corrected text.")
     }
 
-    func testCorrectGrammarPropagatesTransportError() {
+    func testCorrectGrammarPropagatesTransportError() async {
         URLProtocolStub.configure(stubError: URLError(.timedOut))
 
         let client = makeClient()
-        let result: Result<String, Error> = waitForValue { completion in
-            client.correctGrammar(
+        do {
+            _ = try await client.correctGrammar(
                 apiKey: "sk-test",
                 modelID: "gpt-5.4",
                 customInstructions: "",
-                text: "text",
-                completion: completion
+                text: "text"
             )
-        }
-
-        switch result {
-        case .success(let correctedText):
-            XCTFail("Expected failure but got success: \(correctedText)")
-        case .failure(let error):
+            XCTFail("Expected failure but got success")
+        } catch {
             let urlError = error as? URLError
             XCTAssertEqual(urlError?.code, .timedOut)
         }
     }
 
-    func testCorrectGrammarReturnsInvalidURLErrorWhenBaseURLIsInvalid() {
+    func testCorrectGrammarReturnsInvalidURLErrorWhenBaseURLIsInvalid() async {
         let client = makeClient(baseURL: "://invalid-url")
-        let result: Result<String, Error> = waitForValue { completion in
-            client.correctGrammar(
+        await assertThrowsErrorMessage("OpenAI request URL is invalid.") {
+            try await client.correctGrammar(
                 apiKey: "sk-test",
                 modelID: "gpt-5.4",
                 customInstructions: "",
-                text: "text",
-                completion: completion
+                text: "text"
             )
         }
-
-        assertFailureMessage(result, equals: "OpenAI request URL is invalid.")
     }
 
-    func testExtractMarkdownTextSuccessReturnsExtractedTextAndSendsImageInput() {
+    func testExtractMarkdownTextSuccessReturnsExtractedTextAndSendsImageInput() async throws {
         let imageData = Data("image-bytes".utf8)
 
         URLProtocolStub.configure(handler: { request in
@@ -261,55 +221,44 @@ final class OpenAIClientTests: XCTestCase {
         })
 
         let client = makeClient()
-        let result: Result<String, Error> = waitForValue { completion in
-            client.extractMarkdownText(
-                apiKey: "sk-test",
-                modelID: "gpt-5.4",
-                imageData: imageData,
-                mimeType: "image/png",
-                customInstructions: "",
-                completion: completion
-            )
-        }
+        let extractedText = try await client.extractMarkdownText(
+            apiKey: "sk-test",
+            modelID: "gpt-5.4",
+            imageData: imageData,
+            mimeType: "image/png",
+            customInstructions: ""
+        )
 
-        switch result {
-        case .success(let extractedText):
-            XCTAssertEqual(extractedText, "Extracted text")
-        case .failure(let error):
-            XCTFail("Expected success but got error: \(error)")
-        }
+        XCTAssertEqual(extractedText, "Extracted text")
     }
 
-    func testExtractMarkdownTextReturnsInvalidURLErrorWhenBaseURLIsInvalid() {
+    func testExtractMarkdownTextReturnsInvalidURLErrorWhenBaseURLIsInvalid() async {
         let client = makeClient(baseURL: "://invalid-url")
-        let result: Result<String, Error> = waitForValue { completion in
-            client.extractMarkdownText(
+        await assertThrowsErrorMessage("OpenAI request URL is invalid.") {
+            try await client.extractMarkdownText(
                 apiKey: "sk-test",
                 modelID: "gpt-5.4",
                 imageData: Data("image".utf8),
                 mimeType: "image/png",
-                customInstructions: "",
-                completion: completion
+                customInstructions: ""
             )
         }
-
-        assertFailureMessage(result, equals: "OpenAI request URL is invalid.")
     }
 
     private func makeClient(baseURL: String = "https://api.openai.com") -> OpenAIClient {
-        OpenAIClient(session: URLProtocolStub.makeSession(), callbackQueue: .main, apiBaseURL: baseURL)
+        OpenAIClient(session: URLProtocolStub.makeSession(), apiBaseURL: baseURL)
     }
 
-    private func assertFailureMessage(
-        _ result: Result<String, Error>,
-        equals expectedMessage: String,
+    private func assertThrowsErrorMessage(
+        _ expectedMessage: String,
         file: StaticString = #filePath,
-        line: UInt = #line
-    ) {
-        switch result {
-        case .success(let correctedText):
-            XCTFail("Expected failure but got success: \(correctedText)", file: file, line: line)
-        case .failure(let error):
+        line: UInt = #line,
+        _ operation: () async throws -> some Any
+    ) async {
+        do {
+            _ = try await operation()
+            XCTFail("Expected failure but got success", file: file, line: line)
+        } catch {
             XCTAssertEqual(error.localizedDescription, expectedMessage, file: file, line: line)
         }
     }

@@ -2,8 +2,9 @@ import Foundation
 import XCTest
 @testable import Steward
 
+@MainActor
 final class GrammarCoordinatorTests: XCTestCase {
-    func testHandleHotKeyPressSendsRequestThroughRouterAndReplacesTextOnSuccess() {
+    func testHandleHotKeyPressSendsRequestThroughRouterAndReplacesTextOnSuccess() async throws {
         let router = FakeRouter(result: .success(.text("corrected")))
         let textInteraction = FakeTextInteraction(selectedText: "bad")
         let settingsStore = CoordinatorSettingsStore(
@@ -22,46 +23,35 @@ final class GrammarCoordinatorTests: XCTestCase {
 
         let coordinator = GrammarCoordinator(router: router, textInteraction: textInteraction, settingsStore: settingsStore)
 
-        let result: Result<Void, Error> = waitForValue { completion in
-            coordinator.handleHotKeyPress(completion: completion)
+        try await coordinator.handleHotKeyPress()
+
+        XCTAssertEqual(textInteraction.replacedText, "corrected")
+        guard let request = router.lastRequest else {
+            XCTFail("Expected request to be routed")
+            return
         }
 
-        switch result {
-        case .success:
-            XCTAssertEqual(textInteraction.replacedText, "corrected")
-            guard let request = router.lastRequest else {
-                XCTFail("Expected request to be routed")
-                return
-            }
-
-            guard case let .grammarCorrection(text, customInstructions) = request.task else {
-                XCTFail("Expected grammar task")
-                return
-            }
-
-            XCTAssertEqual(request.providerID, .gemini)
-            XCTAssertEqual(text, "bad")
-            XCTAssertEqual(customInstructions, "Use concise language")
-        case .failure(let error):
-            XCTFail("Expected success, got \(error)")
+        guard case let .grammarCorrection(text, customInstructions) = request.task else {
+            XCTFail("Expected grammar task")
+            return
         }
+
+        XCTAssertEqual(request.providerID, .gemini)
+        XCTAssertEqual(text, "bad")
+        XCTAssertEqual(customInstructions, "Use concise language")
     }
 
-    func testHandleHotKeyPressFailsWhenNoSelectedText() {
+    func testHandleHotKeyPressFailsWhenNoSelectedText() async {
         let router = FakeRouter(result: .success(.text("ignored")))
         let textInteraction = FakeTextInteraction(selectedText: nil)
         let settingsStore = CoordinatorSettingsStore(settings: .empty(), customInstructions: "")
 
         let coordinator = GrammarCoordinator(router: router, textInteraction: textInteraction, settingsStore: settingsStore)
 
-        let result: Result<Void, Error> = waitForValue { completion in
-            coordinator.handleHotKeyPress(completion: completion)
-        }
-
-        switch result {
-        case .success:
+        do {
+            try await coordinator.handleHotKeyPress()
             XCTFail("Expected failure")
-        case .failure(let error):
+        } catch {
             guard case GrammarCoordinatorError.noSelectedText = error else {
                 XCTFail("Unexpected error: \(error)")
                 return
@@ -71,7 +61,7 @@ final class GrammarCoordinatorTests: XCTestCase {
         }
     }
 
-    func testHandleHotKeyPressPropagatesRouterError() {
+    func testHandleHotKeyPressPropagatesRouterError() async {
         enum TestError: Error {
             case failed
         }
@@ -82,14 +72,10 @@ final class GrammarCoordinatorTests: XCTestCase {
 
         let coordinator = GrammarCoordinator(router: router, textInteraction: textInteraction, settingsStore: settingsStore)
 
-        let result: Result<Void, Error> = waitForValue { completion in
-            coordinator.handleHotKeyPress(completion: completion)
-        }
-
-        switch result {
-        case .success:
+        do {
+            try await coordinator.handleHotKeyPress()
             XCTFail("Expected failure")
-        case .failure(let error):
+        } catch {
             guard case TestError.failed = error else {
                 XCTFail("Unexpected error: \(error)")
                 return
@@ -99,29 +85,26 @@ final class GrammarCoordinatorTests: XCTestCase {
     }
 }
 
-private final class FakeRouter: LLMRouting {
-    var supportedProviderIDs: [LLMProviderID] = [.openAI]
+private final class FakeRouter: LLMRouting, @unchecked Sendable {
+    let supportedProviderIDs: [LLMProviderID] = [.openAI]
     var lastRequest: LLMRequest?
-    var result: Result<LLMResult, Error>
+    let result: Result<LLMResult, Error>
 
     init(result: Result<LLMResult, Error>) {
         self.result = result
     }
 
-    func perform(_ request: LLMRequest, completion: @escaping (Result<LLMResult, Error>) -> Void) {
+    func perform(_ request: LLMRequest) async throws -> LLMResult {
         lastRequest = request
-        completion(result)
+        return try result.get()
     }
 
-    func checkAccess(
-        for providerID: LLMProviderID,
-        completion: @escaping (Result<LLMProviderHealth, Error>) -> Void
-    ) {
-        completion(.success(LLMProviderHealth(providerID: providerID, hasAccess: true)))
+    func checkAccess(for providerID: LLMProviderID) async throws -> LLMProviderHealth {
+        LLMProviderHealth(providerID: providerID, hasAccess: true)
     }
 }
 
-private final class FakeTextInteraction: TextInteractionPerforming {
+private final class FakeTextInteraction: TextInteractionPerforming, @unchecked Sendable {
     var selectedText: String?
     var replacedText: String?
     var copiedText: String?

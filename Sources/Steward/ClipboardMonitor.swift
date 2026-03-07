@@ -8,7 +8,7 @@ protocol ClipboardTextReading {
 
 extension NSPasteboard: ClipboardTextReading {}
 
-final class ClipboardMonitor {
+final class ClipboardMonitor: @unchecked Sendable {
     static let defaultPollInterval: TimeInterval = 0.75
 
     private let pasteboard: ClipboardTextReading

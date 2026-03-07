@@ -164,27 +164,21 @@ final class AppState: ObservableObject {
         grammarStatus = .processing(providerID: providerID)
         refreshStatusUI()
 
-        llmRouter.checkAccess(for: providerID) { [weak self] result in
-            DispatchQueue.main.async {
-                guard let self else {
-                    return
-                }
-
-                switch result {
-                case .success(let health):
-                    self.grammarStatus =
-                        health.hasAccess
-                        ? .ok(providerID: health.providerID)
-                        : .error(providerID: health.providerID, message: "Access check failed")
-                case .failure(let error):
-                    self.grammarStatus = .error(
-                        providerID: providerID,
-                        message: error.localizedDescription
-                    )
-                }
-
-                self.refreshStatusUI()
+        Task {
+            do {
+                let health = try await llmRouter.checkAccess(for: providerID)
+                self.grammarStatus =
+                    health.hasAccess
+                    ? .ok(providerID: health.providerID)
+                    : .error(providerID: health.providerID, message: "Access check failed")
+            } catch {
+                self.grammarStatus = .error(
+                    providerID: providerID,
+                    message: error.localizedDescription
+                )
             }
+
+            self.refreshStatusUI()
         }
     }
 
@@ -193,27 +187,21 @@ final class AppState: ObservableObject {
         ocrStatus = .processing(providerID: providerID)
         refreshStatusUI()
 
-        llmRouter.checkAccess(for: providerID) { [weak self] result in
-            DispatchQueue.main.async {
-                guard let self else {
-                    return
-                }
-
-                switch result {
-                case .success(let health):
-                    self.ocrStatus =
-                        health.hasAccess
-                        ? .ok(providerID: health.providerID)
-                        : .error(providerID: health.providerID, message: "Access check failed")
-                case .failure(let error):
-                    self.ocrStatus = .error(
-                        providerID: providerID,
-                        message: error.localizedDescription
-                    )
-                }
-
-                self.refreshStatusUI()
+        Task {
+            do {
+                let health = try await llmRouter.checkAccess(for: providerID)
+                self.ocrStatus =
+                    health.hasAccess
+                    ? .ok(providerID: health.providerID)
+                    : .error(providerID: health.providerID, message: "Access check failed")
+            } catch {
+                self.ocrStatus = .error(
+                    providerID: providerID,
+                    message: error.localizedDescription
+                )
             }
+
+            self.refreshStatusUI()
         }
     }
 
@@ -253,33 +241,27 @@ final class AppState: ObservableObject {
         grammarStatus = .processing(providerID: currentGrammarProviderID())
         refreshStatusUI()
 
-        grammarCoordinator.handleHotKeyPress { [weak self] result in
-            DispatchQueue.main.async {
-                guard let self else {
-                    return
-                }
-
-                switch result {
-                case .success:
+        Task {
+            do {
+                try await grammarCoordinator.handleHotKeyPress()
+                self.lastOperationFailed = false
+                self.markGrammarStatusFromCurrentConfiguration(asError: false, message: nil)
+            } catch {
+                if case GrammarCoordinatorError.noSelectedText = error {
                     self.lastOperationFailed = false
-                    self.markGrammarStatusFromCurrentConfiguration(asError: false, message: nil)
-                case .failure(let error):
-                    if case GrammarCoordinatorError.noSelectedText = error {
-                        self.lastOperationFailed = false
-                    } else {
-                        self.lastOperationFailed = true
-                        self.markGrammarStatusFromCurrentConfiguration(
-                            asError: true, message: error.localizedDescription)
-                        if self.shouldOpenSettings(for: error) {
-                            self.openSettingsWindow()
-                        }
-                        print("Grammar error: \(error.localizedDescription)")
+                } else {
+                    self.lastOperationFailed = true
+                    self.markGrammarStatusFromCurrentConfiguration(
+                        asError: true, message: error.localizedDescription)
+                    if self.shouldOpenSettings(for: error) {
+                        self.openSettingsWindow()
                     }
+                    print("Grammar error: \(error.localizedDescription)")
                 }
-
-                self.isProcessing = false
-                self.refreshStatusUI()
             }
+
+            self.isProcessing = false
+            self.refreshStatusUI()
         }
     }
 
@@ -294,32 +276,26 @@ final class AppState: ObservableObject {
         ocrStatus = .processing(providerID: currentScreenshotProviderID())
         refreshStatusUI()
 
-        screenOCRCoordinator.handleHotKeyPress { [weak self] result in
-            DispatchQueue.main.async {
-                guard let self else {
-                    return
-                }
-
-                switch result {
-                case .success:
+        Task {
+            do {
+                try await screenOCRCoordinator.handleHotKeyPress()
+                self.lastOperationFailed = false
+                self.markOCRStatusFromCurrentConfiguration(asError: false, message: nil)
+            } catch {
+                if case ScreenOCRCoordinatorError.cancelled = error {
                     self.lastOperationFailed = false
-                    self.markOCRStatusFromCurrentConfiguration(asError: false, message: nil)
-                case .failure(let error):
-                    if case ScreenOCRCoordinatorError.cancelled = error {
-                        self.lastOperationFailed = false
-                    } else {
-                        self.lastOperationFailed = true
-                        self.markOCRStatusFromCurrentConfiguration(asError: true, message: error.localizedDescription)
-                        if self.shouldOpenSettings(for: error) {
-                            self.openSettingsWindow()
-                        }
-                        print("OCR error: \(error.localizedDescription)")
+                } else {
+                    self.lastOperationFailed = true
+                    self.markOCRStatusFromCurrentConfiguration(asError: true, message: error.localizedDescription)
+                    if self.shouldOpenSettings(for: error) {
+                        self.openSettingsWindow()
                     }
+                    print("OCR error: \(error.localizedDescription)")
                 }
-
-                self.isProcessing = false
-                self.refreshStatusUI()
             }
+
+            self.isProcessing = false
+            self.refreshStatusUI()
         }
     }
 

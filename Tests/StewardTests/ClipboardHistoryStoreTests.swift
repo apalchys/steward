@@ -143,7 +143,7 @@ final class ClipboardHistoryStoreTests: XCTestCase {
         )
     }
 
-    private func waitForStoreOperation(_ description: String, operation: (@escaping () -> Void) -> Void) {
+    private func waitForStoreOperation(_ description: String, operation: (@escaping @Sendable () -> Void) -> Void) {
         let completionExpectation = expectation(description: description)
         operation {
             completionExpectation.fulfill()

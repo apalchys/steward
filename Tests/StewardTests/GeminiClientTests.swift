@@ -8,7 +8,7 @@ final class GeminiClientTests: XCTestCase {
         super.tearDown()
     }
 
-    func testCheckAccessReturnsTrueOnHTTP200() {
+    func testCheckAccessReturnsTrueOnHTTP200() async {
         URLProtocolStub.configure(handler: { request in
             XCTAssertEqual(request.httpMethod, "GET")
             XCTAssertEqual(
@@ -21,23 +21,19 @@ final class GeminiClientTests: XCTestCase {
         })
 
         let client = makeClient()
-        let hasAccess: Bool = waitForValue { completion in
-            client.checkAccess(apiKey: "test-key", modelID: "gemini-3.1-flash-lite-preview", completion: completion)
-        }
+        let hasAccess = await client.checkAccess(apiKey: "test-key", modelID: "gemini-3.1-flash-lite-preview")
 
         XCTAssertTrue(hasAccess)
     }
 
-    func testCheckAccessReturnsFalseForInvalidBaseURL() {
+    func testCheckAccessReturnsFalseForInvalidBaseURL() async {
         let client = makeClient(baseURL: "://invalid-url")
-        let hasAccess: Bool = waitForValue { completion in
-            client.checkAccess(apiKey: "test-key", modelID: "gemini-3.1-flash-lite-preview", completion: completion)
-        }
+        let hasAccess = await client.checkAccess(apiKey: "test-key", modelID: "gemini-3.1-flash-lite-preview")
 
         XCTAssertFalse(hasAccess)
     }
 
-    func testExtractMarkdownTextSuccessParsesAndTrimsOutput() {
+    func testExtractMarkdownTextSuccessParsesAndTrimsOutput() async throws {
         let imageData = Data("image-bytes".utf8)
 
         URLProtocolStub.configure(handler: { request in
@@ -78,25 +74,17 @@ final class GeminiClientTests: XCTestCase {
         })
 
         let client = makeClient()
-        let result: Result<String, Error> = waitForValue { completion in
-            client.extractMarkdownText(
-                apiKey: "test-key",
-                modelID: "gemini-3.1-flash-lite-preview",
-                imageData: imageData,
-                mimeType: "image/png",
-                completion: completion
-            )
-        }
+        let text = try await client.extractMarkdownText(
+            apiKey: "test-key",
+            modelID: "gemini-3.1-flash-lite-preview",
+            imageData: imageData,
+            mimeType: "image/png"
+        )
 
-        switch result {
-        case .success(let text):
-            XCTAssertEqual(text, "Heading\nBody text")
-        case .failure(let error):
-            XCTFail("Expected success but got error: \(error)")
-        }
+        XCTAssertEqual(text, "Heading\nBody text")
     }
 
-    func testExtractMarkdownTextReturnsAPIErrorMessageForNon2xx() {
+    func testExtractMarkdownTextReturnsAPIErrorMessageForNon2xx() async {
         URLProtocolStub.configure(handler: { request in
             let data = """
                 {"error":{"message":"Quota exceeded."}}
@@ -106,60 +94,51 @@ final class GeminiClientTests: XCTestCase {
         })
 
         let client = makeClient()
-        let result: Result<String, Error> = waitForValue { completion in
-            client.extractMarkdownText(
+        await assertThrowsErrorMessage("Quota exceeded.") {
+            try await client.extractMarkdownText(
                 apiKey: "test-key",
                 modelID: "gemini-3.1-flash-lite-preview",
                 imageData: Data("image".utf8),
-                mimeType: "image/png",
-                completion: completion
+                mimeType: "image/png"
             )
         }
-
-        assertFailureMessage(result, equals: "Quota exceeded.")
     }
 
-    func testExtractMarkdownTextReturnsFallbackErrorMessageForNon2xxWithoutBody() {
+    func testExtractMarkdownTextReturnsFallbackErrorMessageForNon2xxWithoutBody() async {
         URLProtocolStub.configure(handler: { request in
             let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 500, httpVersion: nil, headerFields: nil)!
             return (response, nil)
         })
 
         let client = makeClient()
-        let result: Result<String, Error> = waitForValue { completion in
-            client.extractMarkdownText(
+        await assertThrowsErrorMessage("Gemini request failed with HTTP 500.") {
+            try await client.extractMarkdownText(
                 apiKey: "test-key",
                 modelID: "gemini-3.1-flash-lite-preview",
                 imageData: Data("image".utf8),
-                mimeType: "image/png",
-                completion: completion
+                mimeType: "image/png"
             )
         }
-
-        assertFailureMessage(result, equals: "Gemini request failed with HTTP 500.")
     }
 
-    func testExtractMarkdownTextReturnsEmptyResponseErrorWhenDataIsMissing() {
+    func testExtractMarkdownTextReturnsEmptyResponseErrorWhenDataIsMissing() async {
         URLProtocolStub.configure(handler: { request in
             let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, nil)
         })
 
         let client = makeClient()
-        let result: Result<String, Error> = waitForValue { completion in
-            client.extractMarkdownText(
+        await assertThrowsErrorMessage("Gemini returned an empty response.") {
+            try await client.extractMarkdownText(
                 apiKey: "test-key",
                 modelID: "gemini-3.1-flash-lite-preview",
                 imageData: Data("image".utf8),
-                mimeType: "image/png",
-                completion: completion
+                mimeType: "image/png"
             )
         }
-
-        assertFailureMessage(result, equals: "Gemini returned an empty response.")
     }
 
-    func testExtractMarkdownTextReturnsEmptyOutputErrorWhenTextIsBlank() {
+    func testExtractMarkdownTextReturnsEmptyOutputErrorWhenTextIsBlank() async {
         URLProtocolStub.configure(handler: { request in
             let data = """
                 {"candidates":[{"content":{"parts":[{"text":"   "} ]}}]}
@@ -169,58 +148,47 @@ final class GeminiClientTests: XCTestCase {
         })
 
         let client = makeClient()
-        let result: Result<String, Error> = waitForValue { completion in
-            client.extractMarkdownText(
+        await assertThrowsErrorMessage("Gemini returned no extracted text.") {
+            try await client.extractMarkdownText(
                 apiKey: "test-key",
                 modelID: "gemini-3.1-flash-lite-preview",
                 imageData: Data("image".utf8),
-                mimeType: "image/png",
-                completion: completion
+                mimeType: "image/png"
             )
         }
-
-        assertFailureMessage(result, equals: "Gemini returned no extracted text.")
     }
 
-    func testExtractMarkdownTextPropagatesTransportError() {
+    func testExtractMarkdownTextPropagatesTransportError() async {
         URLProtocolStub.configure(stubError: URLError(.notConnectedToInternet))
 
         let client = makeClient()
-        let result: Result<String, Error> = waitForValue { completion in
-            client.extractMarkdownText(
+        do {
+            _ = try await client.extractMarkdownText(
                 apiKey: "test-key",
                 modelID: "gemini-3.1-flash-lite-preview",
                 imageData: Data("image".utf8),
-                mimeType: "image/png",
-                completion: completion
+                mimeType: "image/png"
             )
-        }
-
-        switch result {
-        case .success(let text):
-            XCTFail("Expected failure but got success: \(text)")
-        case .failure(let error):
+            XCTFail("Expected failure but got success")
+        } catch {
             let urlError = error as? URLError
             XCTAssertEqual(urlError?.code, .notConnectedToInternet)
         }
     }
 
-    func testExtractMarkdownTextReturnsInvalidURLErrorWhenBaseURLIsInvalid() {
+    func testExtractMarkdownTextReturnsInvalidURLErrorWhenBaseURLIsInvalid() async {
         let client = makeClient(baseURL: "://invalid-url")
-        let result: Result<String, Error> = waitForValue { completion in
-            client.extractMarkdownText(
+        await assertThrowsErrorMessage("Gemini request URL is invalid.") {
+            try await client.extractMarkdownText(
                 apiKey: "test-key",
                 modelID: "gemini-3.1-flash-lite-preview",
                 imageData: Data("image".utf8),
-                mimeType: "image/png",
-                completion: completion
+                mimeType: "image/png"
             )
         }
-
-        assertFailureMessage(result, equals: "Gemini request URL is invalid.")
     }
 
-    func testCorrectGrammarSuccessParsesOutput() {
+    func testCorrectGrammarSuccessParsesOutput() async throws {
         URLProtocolStub.configure(handler: { request in
             XCTAssertEqual(request.httpMethod, "POST")
             XCTAssertEqual(
@@ -242,53 +210,42 @@ final class GeminiClientTests: XCTestCase {
         })
 
         let client = makeClient()
-        let result: Result<String, Error> = waitForValue { completion in
-            client.correctGrammar(
-                apiKey: "test-key",
-                modelID: "gemini-3.1-flash-lite-preview",
-                customInstructions: "Keep concise",
-                text: "bad text",
-                completion: completion
-            )
-        }
+        let text = try await client.correctGrammar(
+            apiKey: "test-key",
+            modelID: "gemini-3.1-flash-lite-preview",
+            customInstructions: "Keep concise",
+            text: "bad text"
+        )
 
-        switch result {
-        case .success(let text):
-            XCTAssertEqual(text, "good text")
-        case .failure(let error):
-            XCTFail("Expected success but got error: \(error)")
-        }
+        XCTAssertEqual(text, "good text")
     }
 
-    func testCorrectGrammarReturnsInvalidURLErrorWhenBaseURLIsInvalid() {
+    func testCorrectGrammarReturnsInvalidURLErrorWhenBaseURLIsInvalid() async {
         let client = makeClient(baseURL: "://invalid-url")
-        let result: Result<String, Error> = waitForValue { completion in
-            client.correctGrammar(
+        await assertThrowsErrorMessage("Gemini request URL is invalid.") {
+            try await client.correctGrammar(
                 apiKey: "test-key",
                 modelID: "gemini-3.1-flash-lite-preview",
                 customInstructions: "",
-                text: "bad text",
-                completion: completion
+                text: "bad text"
             )
         }
-
-        assertFailureMessage(result, equals: "Gemini request URL is invalid.")
     }
 
     private func makeClient(baseURL: String = "https://generativelanguage.googleapis.com") -> GeminiClient {
-        GeminiClient(session: URLProtocolStub.makeSession(), callbackQueue: .main, apiBaseURL: baseURL)
+        GeminiClient(session: URLProtocolStub.makeSession(), apiBaseURL: baseURL)
     }
 
-    private func assertFailureMessage(
-        _ result: Result<String, Error>,
-        equals expectedMessage: String,
+    private func assertThrowsErrorMessage(
+        _ expectedMessage: String,
         file: StaticString = #filePath,
-        line: UInt = #line
-    ) {
-        switch result {
-        case .success(let text):
-            XCTFail("Expected failure but got success: \(text)", file: file, line: line)
-        case .failure(let error):
+        line: UInt = #line,
+        _ operation: () async throws -> some Any
+    ) async {
+        do {
+            _ = try await operation()
+            XCTFail("Expected failure but got success", file: file, line: line)
+        } catch {
             XCTAssertEqual(error.localizedDescription, expectedMessage, file: file, line: line)
         }
     }

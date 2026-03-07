@@ -1,9 +1,8 @@
 import Foundation
 
-public struct OpenAIClient {
+public struct OpenAIClient: Sendable {
     public static let defaultModelID = "gpt-5.4"
     private let session: URLSession
-    private let callbackQueue: DispatchQueue
     private let apiBaseURL: String
     private static let ocrInstruction = """
         You are an OCR assistant. Extract all visible text from the provided image and return only the extracted text in Markdown.
@@ -117,39 +116,36 @@ public struct OpenAIClient {
 
     public init(
         session: URLSession = .shared,
-        callbackQueue: DispatchQueue = .main,
         apiBaseURL: String = "https://api.openai.com"
     ) {
         self.session = session
-        self.callbackQueue = callbackQueue
         self.apiBaseURL = apiBaseURL
     }
 
-    public func checkAccess(apiKey: String, modelID: String, completion: @escaping (Bool) -> Void) {
+    public func checkAccess(apiKey: String, modelID: String) async -> Bool {
         let encodedModelID = modelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? modelID
 
         guard let apiURL = makeURL(path: "/v1/models/\(encodedModelID)") else {
-            complete(false, into: completion)
-            return
+            return false
         }
 
         var request = URLRequest(url: apiURL)
         request.httpMethod = "GET"
         request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
 
-        session.dataTask(with: request) { _, response, _ in
-            let hasAccess = (response as? HTTPURLResponse)?.statusCode == 200
-            complete(hasAccess, into: completion)
-        }.resume()
+        guard let (_, response) = try? await session.data(for: request) else {
+            return false
+        }
+
+        return (response as? HTTPURLResponse)?.statusCode == 200
     }
 
     public func correctGrammar(
         apiKey: String,
         modelID: String,
         customInstructions: String,
-        text: String,
-        completion: @escaping (Result<String, Error>) -> Void
-    ) {
+        text: String
+    ) async throws -> String {
         let requestBody = ResponsesRequest(
             model: modelID,
             instructions: buildGrammarPrompt(customInstructions: customInstructions),
@@ -158,13 +154,11 @@ public struct OpenAIClient {
         )
 
         guard let httpBody = try? JSONEncoder().encode(requestBody) else {
-            complete(.failure(ClientError.encodingFailed), into: completion)
-            return
+            throw ClientError.encodingFailed
         }
 
         guard let apiURL = makeURL(path: "/v1/responses") else {
-            complete(.failure(ClientError.invalidURL), into: completion)
-            return
+            throw ClientError.invalidURL
         }
 
         var request = URLRequest(url: apiURL)
@@ -173,36 +167,24 @@ public struct OpenAIClient {
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = httpBody
 
-        session.dataTask(with: request) { data, response, error in
-            if let error {
-                complete(.failure(error), into: completion)
-                return
-            }
+        let (data, response) = try await session.data(for: request)
 
-            if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
-                let message = errorMessage(from: data) ?? "OpenAI request failed with HTTP \(httpResponse.statusCode)."
-                complete(.failure(ClientError.requestFailed(message)), into: completion)
-                return
-            }
+        if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
+            let message = errorMessage(from: data) ?? "OpenAI request failed with HTTP \(httpResponse.statusCode)."
+            throw ClientError.requestFailed(message)
+        }
 
-            guard let data, !data.isEmpty else {
-                complete(.failure(ClientError.emptyResponse), into: completion)
-                return
-            }
+        guard !data.isEmpty else {
+            throw ClientError.emptyResponse
+        }
 
-            do {
-                let apiResponse = try JSONDecoder().decode(ResponsesResponse.self, from: data)
+        let apiResponse = try JSONDecoder().decode(ResponsesResponse.self, from: data)
 
-                guard let correctedText = apiResponse.outputText else {
-                    complete(.failure(ClientError.emptyOutput), into: completion)
-                    return
-                }
+        guard let correctedText = apiResponse.outputText else {
+            throw ClientError.emptyOutput
+        }
 
-                complete(.success(correctedText), into: completion)
-            } catch {
-                complete(.failure(error), into: completion)
-            }
-        }.resume()
+        return correctedText
     }
 
     public func extractMarkdownText(
@@ -210,9 +192,8 @@ public struct OpenAIClient {
         modelID: String,
         imageData: Data,
         mimeType: String,
-        customInstructions: String = "",
-        completion: @escaping (Result<String, Error>) -> Void
-    ) {
+        customInstructions: String = ""
+    ) async throws -> String {
         let imageDataURL = "data:\(mimeType);base64,\(imageData.base64EncodedString())"
         let requestBody = ResponsesVisionRequest(
             model: modelID,
@@ -230,13 +211,11 @@ public struct OpenAIClient {
         )
 
         guard let httpBody = try? JSONEncoder().encode(requestBody) else {
-            complete(.failure(ClientError.encodingFailed), into: completion)
-            return
+            throw ClientError.encodingFailed
         }
 
         guard let apiURL = makeURL(path: "/v1/responses") else {
-            complete(.failure(ClientError.invalidURL), into: completion)
-            return
+            throw ClientError.invalidURL
         }
 
         var request = URLRequest(url: apiURL)
@@ -245,36 +224,24 @@ public struct OpenAIClient {
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = httpBody
 
-        session.dataTask(with: request) { data, response, error in
-            if let error {
-                complete(.failure(error), into: completion)
-                return
-            }
+        let (data, response) = try await session.data(for: request)
 
-            if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
-                let message = errorMessage(from: data) ?? "OpenAI request failed with HTTP \(httpResponse.statusCode)."
-                complete(.failure(ClientError.requestFailed(message)), into: completion)
-                return
-            }
+        if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
+            let message = errorMessage(from: data) ?? "OpenAI request failed with HTTP \(httpResponse.statusCode)."
+            throw ClientError.requestFailed(message)
+        }
 
-            guard let data, !data.isEmpty else {
-                complete(.failure(ClientError.emptyResponse), into: completion)
-                return
-            }
+        guard !data.isEmpty else {
+            throw ClientError.emptyResponse
+        }
 
-            do {
-                let apiResponse = try JSONDecoder().decode(ResponsesResponse.self, from: data)
+        let apiResponse = try JSONDecoder().decode(ResponsesResponse.self, from: data)
 
-                guard let extractedText = apiResponse.outputText else {
-                    complete(.failure(ClientError.emptyOutput), into: completion)
-                    return
-                }
+        guard let extractedText = apiResponse.outputText else {
+            throw ClientError.emptyOutput
+        }
 
-                complete(.success(extractedText), into: completion)
-            } catch {
-                complete(.failure(error), into: completion)
-            }
-        }.resume()
+        return extractedText
     }
 
     private var normalizedBaseURL: String {
@@ -324,12 +291,6 @@ public struct OpenAIClient {
             Additional instructions to follow:
             \(trimmedCustomInstructions)
             """
-    }
-
-    private func complete<T>(_ value: T, into completion: @escaping (T) -> Void) {
-        callbackQueue.async {
-            completion(value)
-        }
     }
 }
 
