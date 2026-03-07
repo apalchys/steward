@@ -1,5 +1,10 @@
 # Steward
 
+<img height="300" alt="image" src="https://github.com/user-attachments/assets/06395f67-1ad1-4b72-88df-ed6e7faa3e23" />
+
+<img height="300" alt="image" src="https://github.com/user-attachments/assets/de00d44b-bd28-4fcf-9b9b-2698fbb376cd" />
+
+
 Steward is a macOS menu bar app that helps you be more productive with three features:
 
 - Fix grammar in selected text with a hotkey
