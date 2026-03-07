@@ -52,7 +52,7 @@
 
 ## Coding Style & Naming Conventions
 
-- Language: Swift 5.7+, macOS 13+.
+- Language: Swift 6.0+, macOS 15+.
 - Prefer SwiftUI for UI and AppKit/Cocoa where platform APIs are required.
 - Indentation: 4 spaces; line length target ~120 chars.
 - Naming: `UpperCamelCase` for types, `lowerCamelCase` for members.

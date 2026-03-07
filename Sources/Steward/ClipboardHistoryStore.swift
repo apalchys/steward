@@ -1,7 +1,7 @@
 import Combine
 import Foundation
 
-final class ClipboardHistoryStore: ObservableObject {
+final class ClipboardHistoryStore: ObservableObject, @unchecked Sendable {
     static let maxRecordSize = 4096
 
     @Published private(set) var records: [ClipboardHistoryRecord] = []
@@ -209,9 +209,7 @@ final class ClipboardHistoryStore: ObservableObject {
             return
         }
 
-        DispatchQueue.main.async {
-            completion()
-        }
+        completion()
     }
 
     private enum StoreError: Error {

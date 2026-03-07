@@ -55,8 +55,8 @@ private struct AppMenuView: View {
                 NSApp.activate(ignoringOtherApps: true)
             }
 
-            Button("Preferences...") {
-                appState.openPreferences()
+            SettingsLink {
+                Text("Preferences...")
             }
 
             Divider()

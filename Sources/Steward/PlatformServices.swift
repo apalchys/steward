@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import ScreenCaptureKit
 
 protocol ClipboardChangeSuppressing: AnyObject {
     func suppressNextClipboardChanges(_ count: Int)
@@ -13,7 +14,7 @@ protocol TextInteractionPerforming: AnyObject {
     func copyTextToClipboard(_ text: String)
 }
 
-final class SystemTextInteractionService: TextInteractionPerforming {
+final class SystemTextInteractionService: TextInteractionPerforming, @unchecked Sendable {
     private let pasteboard: NSPasteboard
     private weak var suppression: ClipboardChangeSuppressing?
 
@@ -85,10 +86,14 @@ final class SystemTextInteractionService: TextInteractionPerforming {
 
 protocol ScreenCaptureProviding: AnyObject {
     func ensureScreenCaptureAccess() -> Bool
-    func captureSelectionImageData(on screen: NSScreen, selectionRect: CGRect) -> Data?
+    func captureSelectionImageData(
+        on screen: NSScreen,
+        selectionRect: CGRect,
+        completion: @escaping (Data?) -> Void
+    )
 }
 
-final class SystemScreenCaptureService: ScreenCaptureProviding {
+final class SystemScreenCaptureService: ScreenCaptureProviding, @unchecked Sendable {
     func ensureScreenCaptureAccess() -> Bool {
         if CGPreflightScreenCaptureAccess() {
             return true
@@ -97,13 +102,48 @@ final class SystemScreenCaptureService: ScreenCaptureProviding {
         return CGRequestScreenCaptureAccess()
     }
 
-    func captureSelectionImageData(on screen: NSScreen, selectionRect: CGRect) -> Data? {
-        guard let displayID = displayID(for: screen),
-            let displayImage = CGDisplayCreateImage(displayID)
-        else {
-            return nil
+    func captureSelectionImageData(
+        on screen: NSScreen,
+        selectionRect: CGRect,
+        completion: @escaping (Data?) -> Void
+    ) {
+        guard let displayID = displayID(for: screen) else {
+            completion(nil)
+            return
         }
 
+        SCShareableContent.getCurrentProcessShareableContent { [weak self] shareableContent, error in
+            guard let self,
+                error == nil,
+                let shareableContent,
+                let display = shareableContent.displays.first(where: { $0.displayID == displayID })
+            else {
+                completion(nil)
+                return
+            }
+
+            let streamConfiguration = SCStreamConfiguration()
+            streamConfiguration.captureResolution = .best
+            streamConfiguration.showsCursor = false
+
+            let scaleFactor = max(screen.backingScaleFactor, 1)
+            streamConfiguration.width = max(1, Int(screen.frame.width * scaleFactor))
+            streamConfiguration.height = max(1, Int(screen.frame.height * scaleFactor))
+
+            let contentFilter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
+            SCScreenshotManager.captureImage(contentFilter: contentFilter, configuration: streamConfiguration) {
+                [weak self] image, captureError in
+                guard let self, captureError == nil, let image else {
+                    completion(nil)
+                    return
+                }
+
+                completion(self.croppedImageData(from: image, on: screen, selectionRect: selectionRect))
+            }
+        }
+    }
+
+    private func croppedImageData(from displayImage: CGImage, on screen: NSScreen, selectionRect: CGRect) -> Data? {
         let screenFrame = screen.frame
         let relativeRect = CGRect(
             x: selectionRect.minX - screenFrame.minX,

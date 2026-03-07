@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 
+@MainActor
 protocol ScreenSelectionPresenting: AnyObject {
     func beginSelection(
         onSelectionFinished: @escaping (NSScreen, CGRect) -> Void,
@@ -9,11 +10,13 @@ protocol ScreenSelectionPresenting: AnyObject {
     func endSelection()
 }
 
+@MainActor
 final class ScreenSelectionWindow: NSWindow {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
 }
 
+@MainActor
 final class ScreenSelectionOverlayView: NSView {
     var onSelectionFinished: ((CGRect) -> Void)?
     var onSelectionCancelled: (() -> Void)?
@@ -109,6 +112,7 @@ final class ScreenSelectionOverlayView: NSView {
     }
 }
 
+@MainActor
 final class ScreenSelectionOverlayController: ScreenSelectionPresenting {
     private var selectionWindows: [NSWindow] = []
 

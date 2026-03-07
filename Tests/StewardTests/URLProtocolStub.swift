@@ -1,13 +1,13 @@
 import Foundation
 
 final class URLProtocolStub: URLProtocol {
-    typealias Handler = (URLRequest) throws -> (HTTPURLResponse, Data?)
-    typealias Observer = (URLRequest) -> Void
+    typealias Handler = @Sendable (URLRequest) throws -> (HTTPURLResponse, Data?)
+    typealias Observer = @Sendable (URLRequest) -> Void
 
     private static let lock = NSLock()
-    private static var handler: Handler?
-    private static var observer: Observer?
-    private static var stubError: Error?
+    nonisolated(unsafe) private static var handler: Handler?
+    nonisolated(unsafe) private static var observer: Observer?
+    nonisolated(unsafe) private static var stubError: Error?
 
     static func configure(
         handler: Handler? = nil,

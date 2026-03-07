@@ -26,8 +26,8 @@ It supports OpenAI and Gemini, with provider choice configured per feature.
 
 ## Requirements
 
-- macOS 13.0+
-- Xcode command line tools / Swift toolchain
+- macOS 15.0+
+- Xcode command line tools / Swift 6.0 toolchain
 - At least one provider API key:
   - OpenAI: [https://platform.openai.com/](https://platform.openai.com/)
   - Gemini: [https://aistudio.google.com/](https://aistudio.google.com/)

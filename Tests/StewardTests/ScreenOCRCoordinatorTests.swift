@@ -3,6 +3,7 @@ import Foundation
 import XCTest
 @testable import Steward
 
+@MainActor
 final class ScreenOCRCoordinatorTests: XCTestCase {
     func testHandleHotKeyPressFailsWhenPermissionDenied() {
         let router = ScreenFakeRouter(result: .success(.text("ok")))
@@ -131,8 +132,12 @@ private final class FakeCaptureService: ScreenCaptureProviding {
         permissionGranted
     }
 
-    func captureSelectionImageData(on screen: NSScreen, selectionRect: CGRect) -> Data? {
-        imageData
+    func captureSelectionImageData(
+        on screen: NSScreen,
+        selectionRect: CGRect,
+        completion: @escaping (Data?) -> Void
+    ) {
+        completion(imageData)
     }
 }
 

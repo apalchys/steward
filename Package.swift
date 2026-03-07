@@ -1,10 +1,10 @@
-// swift-tools-version:5.7
+// swift-tools-version:6.0
 import PackageDescription
 
 let package = Package(
     name: "Steward",
     platforms: [
-        .macOS(.v13)
+        .macOS(.v15)
     ],
     products: [
         .library(name: "StewardCore", targets: ["StewardCore"]),
@@ -33,5 +33,6 @@ let package = Package(
             name: "StewardTests",
             dependencies: ["StewardCore", "Steward"]
         ),
-    ]
+    ],
+    swiftLanguageModes: [.v6]
 )

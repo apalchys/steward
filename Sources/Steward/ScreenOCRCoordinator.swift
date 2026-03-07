@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 
+@MainActor
 final class ScreenOCRCoordinator {
     var onSelectionActivityChanged: ((Bool) -> Void)?
 
@@ -60,37 +61,43 @@ final class ScreenOCRCoordinator {
     private func extractText(
         on screen: NSScreen, selectionRect: CGRect, completion: @escaping (Result<Void, Error>) -> Void
     ) {
-        guard let imageData = captureService.captureSelectionImageData(on: screen, selectionRect: selectionRect) else {
-            completion(.failure(ScreenOCRCoordinatorError.couldNotCaptureImage))
-            return
-        }
-
-        let settings = settingsStore.loadSettings()
-        let request = LLMRequest(
-            providerID: settings.screenshotProviderID,
-            task: .screenOCR(
-                imageData: imageData,
-                mimeType: "image/png",
-                customInstructions: settingsStore.customScreenshotInstructions()
-            )
-        )
-
-        router.perform(request) { [weak self] result in
+        captureService.captureSelectionImageData(on: screen, selectionRect: selectionRect) { [weak self] imageData in
             guard let self else {
                 return
             }
 
-            switch result {
-            case .success(let llmResult):
-                guard let extractedText = llmResult.textValue else {
-                    completion(.failure(ScreenOCRCoordinatorError.invalidProviderResponse))
+            guard let imageData else {
+                completion(.failure(ScreenOCRCoordinatorError.couldNotCaptureImage))
+                return
+            }
+
+            let settings = self.settingsStore.loadSettings()
+            let request = LLMRequest(
+                providerID: settings.screenshotProviderID,
+                task: .screenOCR(
+                    imageData: imageData,
+                    mimeType: "image/png",
+                    customInstructions: self.settingsStore.customScreenshotInstructions()
+                )
+            )
+
+            self.router.perform(request) { [weak self] result in
+                guard let self else {
                     return
                 }
 
-                self.textInteraction.copyTextToClipboard(extractedText)
-                completion(.success(()))
-            case .failure(let error):
-                completion(.failure(error))
+                switch result {
+                case .success(let llmResult):
+                    guard let extractedText = llmResult.textValue else {
+                        completion(.failure(ScreenOCRCoordinatorError.invalidProviderResponse))
+                        return
+                    }
+
+                    self.textInteraction.copyTextToClipboard(extractedText)
+                    completion(.success(()))
+                case .failure(let error):
+                    completion(.failure(error))
+                }
             }
         }
     }

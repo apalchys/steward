@@ -334,8 +334,8 @@ final class AppState: ObservableObject {
 
     private func openSettingsWindow() {
         DispatchQueue.main.async {
-            _ = NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
             NSApp.activate(ignoringOtherApps: true)
+            _ = NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
         }
     }
 

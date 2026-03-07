@@ -54,7 +54,7 @@ cat > Steward.app/Contents/Info.plist << EOF
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.productivity</string>
     <key>LSMinimumSystemVersion</key>
-    <string>13.0</string>
+    <string>15.0</string>
     <key>NSHumanReadableCopyright</key>
     <string>Copyright © 2025. All rights reserved.</string>
     <key>NSPrincipalClass</key>
