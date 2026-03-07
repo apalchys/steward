@@ -2,12 +2,30 @@
 
 ## Project Structure & Module Organization
 
-- Source code lives in `Sources/Steward` (SwiftUI/Cocoa app entry in `Steward.swift`).
+- Source code lives in `Sources/Steward` (app entry in `Steward.swift`) and `Sources/StewardCore` (API clients + shared grammar helpers).
 - Build output goes to `.build/` (managed by SwiftPM).
 - `Makefile` provides shorthand developer commands that delegate to the scripts in `scripts/`.
 - App bundle is assembled into `Steward.app/` by `make build`.
 - Assets and icons: `Assets/`, `AppIcon.icns`.
 - Top-level docs and config: `README.md`, `BUILD_INSTRUCTIONS.md`, `Package.swift`, `Info.plist`.
+
+## Architecture
+
+- Style: modular monolith with two SwiftPM targets (`Steward`, `StewardCore`).
+- App shell (`AppShell.swift`): lifecycle, menu bar, hotkeys, status, coordinator wiring.
+- Feature coordinators: `GrammarCoordinator`, `ScreenOCRCoordinator`, `HistoryCoordinator`, `PreferencesCoordinator`.
+- Platform services: side-effect wrappers for text selection/replacement, clipboard writes, screen capture, and selection overlay UI.
+- LLM layer:
+  - Contracts in `LLMModels.swift` (`LLMProviderID`, `LLMCapability`, `LLMTask`, `LLMRequest`, `LLMResult`).
+  - Routing in `LLMRouter.swift` with deterministic provider resolution:
+    1) feature override, 2) global default, 3) first configured capable provider.
+  - Provider adapters: OpenAI, Gemini, OpenAI-compatible endpoint.
+- Settings/config:
+  - `LLMSettings.swift` stores provider profiles (`apiKey`, `modelID`, optional `baseURL`) plus global and per-feature overrides.
+  - Legacy `openAIApiKey`/`geminiAPIKey` settings are migrated once into provider profiles.
+- Dependency direction:
+  - `AppShell -> Coordinators -> LLMRouter/PlatformServices -> StewardCore clients`.
+  - Feature code must not call provider-specific clients directly.
 
 ## Build, Test, and Development Commands
 
@@ -47,6 +65,7 @@
 
 ## Security & Configuration Tips
 
-- The app requires an OpenAI API key and a Gemini API key; it's stored locally via app preferences/UserDefaults and only used for API calls.
+- API keys and models are stored locally in UserDefaults as provider profiles and used only for outbound provider API calls.
+- Supported providers currently: OpenAI, Gemini, OpenAI-compatible endpoint (custom base URL).
 - Do not hardcode keys. Users should set keys via Preferences.
-- Note: App needs macOS Accessibility permission to read/replace selected text and Screen Recording permission to extract text from the screen.
+- Note: app needs macOS Accessibility permission to read/replace selected text and Screen Recording permission for OCR capture.
