@@ -1,7 +1,10 @@
 import Foundation
 
-struct GeminiClient {
-    static let defaultModelID = "gemini-3.1-flash-lite-preview"
+public struct GeminiClient {
+    public static let defaultModelID = "gemini-3.1-flash-lite-preview"
+    private let session: URLSession
+    private let callbackQueue: DispatchQueue
+    private let apiBaseURL: String
 
     private static let ocrInstruction = """
         You are an OCR assistant. Extract all visible text from the provided image and return only the extracted text in Markdown.
@@ -115,13 +118,23 @@ struct GeminiClient {
         }
     }
 
-    func checkAccess(apiKey: String, modelID: String, completion: @escaping (Bool) -> Void) {
-        let encodedModelID = modelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? modelID
-        var components = URLComponents(
-            string: "https://generativelanguage.googleapis.com/v1beta/models/\(encodedModelID)")
-        components?.queryItems = [URLQueryItem(name: "key", value: apiKey)]
+    public init(
+        session: URLSession = .shared,
+        callbackQueue: DispatchQueue = .main,
+        apiBaseURL: String = "https://generativelanguage.googleapis.com"
+    ) {
+        self.session = session
+        self.callbackQueue = callbackQueue
+        self.apiBaseURL = apiBaseURL
+    }
 
-        guard let apiURL = components?.url else {
+    public func checkAccess(apiKey: String, modelID: String, completion: @escaping (Bool) -> Void) {
+        let encodedModelID = modelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? modelID
+        guard
+            let apiURL = makeURL(
+                path: "/v1beta/models/\(encodedModelID)",
+                queryItems: [URLQueryItem(name: "key", value: apiKey)])
+        else {
             complete(false, into: completion)
             return
         }
@@ -129,13 +142,13 @@ struct GeminiClient {
         var request = URLRequest(url: apiURL)
         request.httpMethod = "GET"
 
-        URLSession.shared.dataTask(with: request) { _, response, _ in
+        session.dataTask(with: request) { _, response, _ in
             let hasAccess = (response as? HTTPURLResponse)?.statusCode == 200
             complete(hasAccess, into: completion)
         }.resume()
     }
 
-    func extractMarkdownText(
+    public func extractMarkdownText(
         apiKey: String,
         modelID: String,
         imageData: Data,
@@ -158,12 +171,11 @@ struct GeminiClient {
         }
 
         let encodedModelID = modelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? modelID
-        var components = URLComponents(
-            string: "https://generativelanguage.googleapis.com/v1beta/models/\(encodedModelID):generateContent"
-        )
-        components?.queryItems = [URLQueryItem(name: "key", value: apiKey)]
-
-        guard let apiURL = components?.url else {
+        guard
+            let apiURL = makeURL(
+                path: "/v1beta/models/\(encodedModelID):generateContent",
+                queryItems: [URLQueryItem(name: "key", value: apiKey)])
+        else {
             complete(.failure(ClientError.invalidURL), into: completion)
             return
         }
@@ -173,7 +185,7 @@ struct GeminiClient {
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = httpBody
 
-        URLSession.shared.dataTask(with: request) { data, response, error in
+        session.dataTask(with: request) { data, response, error in
             if let error {
                 complete(.failure(error), into: completion)
                 return
@@ -185,7 +197,7 @@ struct GeminiClient {
                 return
             }
 
-            guard let data else {
+            guard let data, !data.isEmpty else {
                 complete(.failure(ClientError.emptyResponse), into: completion)
                 return
             }
@@ -205,6 +217,33 @@ struct GeminiClient {
         }.resume()
     }
 
+    private var normalizedBaseURL: String {
+        apiBaseURL.hasSuffix("/") ? String(apiBaseURL.dropLast()) : apiBaseURL
+    }
+
+    private func makeURL(path: String, queryItems: [URLQueryItem]) -> URL? {
+        guard let baseURL = validatedBaseURL(),
+            let url = URL(string: path, relativeTo: baseURL)?.absoluteURL,
+            var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        else {
+            return nil
+        }
+
+        components.queryItems = queryItems
+        return components.url
+    }
+
+    private func validatedBaseURL() -> URL? {
+        guard let baseURL = URL(string: normalizedBaseURL),
+            let scheme = baseURL.scheme, !scheme.isEmpty,
+            let host = baseURL.host, !host.isEmpty
+        else {
+            return nil
+        }
+
+        return baseURL
+    }
+
     private func errorMessage(from data: Data?) -> String? {
         guard let data else {
             return nil
@@ -214,7 +253,7 @@ struct GeminiClient {
     }
 
     private func complete<T>(_ value: T, into completion: @escaping (T) -> Void) {
-        DispatchQueue.main.async {
+        callbackQueue.async {
             completion(value)
         }
     }

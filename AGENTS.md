@@ -36,7 +36,7 @@
 
 - Plan tests while writing code and favor designs that are easy to test in isolation; keep logic decoupled from UI, globals, and system side effects when practical.
 - Unit tests should be small, concise, efficient, and atomic; each test should verify one behavior and stay fast and deterministic.
-- All new code should include tests. Use XCTest under `Tests/StewardTests`, mirror the source module structure, name files `ThingTests.swift` with methods `test...`, and run them with `swift test`.
+- All new code should include tests. Use XCTest under `Tests/StewardTests`, mirror the source module structure, name files `ThingTests.swift` with methods `test...`, run them with `swift test`, and make sure the full test suite is green before finishing.
 
 ## Commit & Pull Request Guidelines
 

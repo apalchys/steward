@@ -1,7 +1,10 @@
 import Foundation
 
-struct OpenAIClient {
-    static let defaultModelID = "gpt-5.4"
+public struct OpenAIClient {
+    public static let defaultModelID = "gpt-5.4"
+    private let session: URLSession
+    private let callbackQueue: DispatchQueue
+    private let apiBaseURL: String
 
     private struct ResponsesRequest: Encodable {
         struct Reasoning: Encodable {
@@ -71,10 +74,20 @@ struct OpenAIClient {
         }
     }
 
-    func checkAccess(apiKey: String, modelID: String, completion: @escaping (Bool) -> Void) {
+    public init(
+        session: URLSession = .shared,
+        callbackQueue: DispatchQueue = .main,
+        apiBaseURL: String = "https://api.openai.com"
+    ) {
+        self.session = session
+        self.callbackQueue = callbackQueue
+        self.apiBaseURL = apiBaseURL
+    }
+
+    public func checkAccess(apiKey: String, modelID: String, completion: @escaping (Bool) -> Void) {
         let encodedModelID = modelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? modelID
 
-        guard let apiURL = URL(string: "https://api.openai.com/v1/models/\(encodedModelID)") else {
+        guard let apiURL = makeURL(path: "/v1/models/\(encodedModelID)") else {
             complete(false, into: completion)
             return
         }
@@ -83,13 +96,13 @@ struct OpenAIClient {
         request.httpMethod = "GET"
         request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
 
-        URLSession.shared.dataTask(with: request) { _, response, _ in
+        session.dataTask(with: request) { _, response, _ in
             let hasAccess = (response as? HTTPURLResponse)?.statusCode == 200
             complete(hasAccess, into: completion)
         }.resume()
     }
 
-    func correctGrammar(
+    public func correctGrammar(
         apiKey: String,
         modelID: String,
         customRules: String,
@@ -108,7 +121,7 @@ struct OpenAIClient {
             return
         }
 
-        guard let apiURL = URL(string: "https://api.openai.com/v1/responses") else {
+        guard let apiURL = makeURL(path: "/v1/responses") else {
             complete(.failure(ClientError.invalidURL), into: completion)
             return
         }
@@ -119,7 +132,7 @@ struct OpenAIClient {
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = httpBody
 
-        URLSession.shared.dataTask(with: request) { data, response, error in
+        session.dataTask(with: request) { data, response, error in
             if let error {
                 complete(.failure(error), into: completion)
                 return
@@ -131,7 +144,7 @@ struct OpenAIClient {
                 return
             }
 
-            guard let data else {
+            guard let data, !data.isEmpty else {
                 complete(.failure(ClientError.emptyResponse), into: completion)
                 return
             }
@@ -151,6 +164,29 @@ struct OpenAIClient {
         }.resume()
     }
 
+    private var normalizedBaseURL: String {
+        apiBaseURL.hasSuffix("/") ? String(apiBaseURL.dropLast()) : apiBaseURL
+    }
+
+    private func makeURL(path: String) -> URL? {
+        guard let baseURL = validatedBaseURL() else {
+            return nil
+        }
+
+        return URL(string: path, relativeTo: baseURL)?.absoluteURL
+    }
+
+    private func validatedBaseURL() -> URL? {
+        guard let baseURL = URL(string: normalizedBaseURL),
+            let scheme = baseURL.scheme, !scheme.isEmpty,
+            let host = baseURL.host, !host.isEmpty
+        else {
+            return nil
+        }
+
+        return baseURL
+    }
+
     private func reasoningEffort(for modelID: String) -> String? {
         return modelID.lowercased().hasPrefix("gpt-5") ? "none" : nil
     }
@@ -164,7 +200,7 @@ struct OpenAIClient {
     }
 
     private func complete<T>(_ value: T, into completion: @escaping (T) -> Void) {
-        DispatchQueue.main.async {
+        callbackQueue.async {
             completion(value)
         }
     }
