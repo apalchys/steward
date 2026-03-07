@@ -29,13 +29,3 @@
    - Leaving model IDs empty falls back to `gpt-5.4` for OpenAI and `gemini-3.1-flash-lite-preview` for Gemini
 5. To fix grammar, select text in any application and press `Command+Shift+F`
 6. To extract screen text, press `Command+Shift+R`, drag to select an area, and wait for the Markdown text to land in your clipboard
-
-## API Key Information
-
-The application requires an OpenAI API key for grammar correction and a Gemini API key for screen OCR. Your API keys and model IDs:
-- API keys are stored securely in the macOS Keychain
-- Non-secret settings like model IDs and custom instructions are stored locally in UserDefaults
-- Are only sent to the corresponding model provider when that feature runs
-- Can be updated at any time through the Preferences menu
-
-You can obtain API keys at https://platform.openai.com/ and https://aistudio.google.com/
