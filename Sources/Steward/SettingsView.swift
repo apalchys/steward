@@ -37,7 +37,7 @@ struct SettingsView: View {
 
             screenshotTab
                 .tabItem {
-                    Label("Screenshot", systemImage: "photo.on.rectangle")
+                    Label("Screen Text", systemImage: "photo.on.rectangle")
                 }
 
             historyTab

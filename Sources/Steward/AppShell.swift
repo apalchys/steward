@@ -32,7 +32,7 @@ final class AppState: ObservableObject {
             case .grammar:
                 return "Grammar"
             case .ocr:
-                return "OCR"
+                return "Screen Text"
             }
         }
 

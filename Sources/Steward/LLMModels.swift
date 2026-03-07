@@ -111,13 +111,13 @@ enum ScreenOCRCoordinatorError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .permissionDenied:
-            return "Screen Recording permission is required for OCR."
+            return "Screen Recording permission is required for Screen Text."
         case .cancelled:
-            return "Screen OCR was cancelled."
+            return "Screen Text capture was cancelled."
         case .couldNotCaptureImage:
             return "Could not capture the selected screen region."
         case .invalidProviderResponse:
-            return "Provider returned an invalid OCR response."
+            return "Provider returned an invalid Screen Text response."
         }
     }
 }
