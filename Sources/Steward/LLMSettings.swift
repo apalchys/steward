@@ -28,8 +28,6 @@ struct LLMSettings: Equatable {
     static let screenshotProvider = LLMProviderID.gemini
 
     var providerProfiles: [LLMProviderID: LLMProviderProfile]
-    var grammarProviderID: LLMProviderID
-    var screenshotProviderID: LLMProviderID
     var grammarCustomInstructions: String
     var screenshotCustomInstructions: String
     var clipboardHistory: ClipboardHistorySettings
@@ -37,19 +35,10 @@ struct LLMSettings: Equatable {
     static func empty() -> LLMSettings {
         LLMSettings(
             providerProfiles: [:],
-            grammarProviderID: grammarProvider,
-            screenshotProviderID: screenshotProvider,
             grammarCustomInstructions: "",
             screenshotCustomInstructions: "",
             clipboardHistory: .default
         )
-    }
-
-    func normalizedProviders() -> LLMSettings {
-        var copy = self
-        copy.grammarProviderID = Self.grammarProvider
-        copy.screenshotProviderID = Self.screenshotProvider
-        return copy
     }
 
     func profile(for providerID: LLMProviderID) -> LLMProviderProfile {
@@ -117,8 +106,6 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
     static let supportedProviders: [LLMProviderID] = [.openAI, .gemini]
 
     private struct Keys {
-        let grammarProviderID: Defaults.Key<String>
-        let screenshotProviderID: Defaults.Key<String>
         let customGrammarInstructions: Defaults.Key<String>
         let customScreenshotInstructions: Defaults.Key<String>
         let clipboardHistoryEnabled: Defaults.Key<Bool>
@@ -127,16 +114,6 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
 
         init(userDefaults: UserDefaults) {
             self.userDefaults = userDefaults
-            grammarProviderID = Defaults.Key<String>(
-                "llmProvider_grammar",
-                default: LLMProviderID.openAI.rawValue,
-                suite: userDefaults
-            )
-            screenshotProviderID = Defaults.Key<String>(
-                "llmProvider_screenshot",
-                default: LLMProviderID.gemini.rawValue,
-                suite: userDefaults
-            )
             customGrammarInstructions = Defaults.Key<String>(
                 "customGrammarInstructions",
                 default: "",
@@ -195,8 +172,6 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
 
         return LLMSettings(
             providerProfiles: profiles,
-            grammarProviderID: LLMSettings.grammarProvider,
-            screenshotProviderID: LLMSettings.screenshotProvider,
             grammarCustomInstructions: Defaults[keys.customGrammarInstructions],
             screenshotCustomInstructions: Defaults[keys.customScreenshotInstructions],
             clipboardHistory: ClipboardHistorySettings(
@@ -204,14 +179,11 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
                 maxStoredRecords: Defaults[keys.clipboardHistoryMaxStoredRecords]
             )
         )
-        .normalizedProviders()
     }
 
     func saveSettings(_ settings: LLMSettings) {
-        let normalizedSettings = settings.normalizedProviders()
-
         for providerID in Self.supportedProviders {
-            let profile = normalizedSettings.profile(for: providerID)
+            let profile = settings.profile(for: providerID)
 
             secretsStore.setAPIKey(profile.apiKey, for: providerID)
 
@@ -220,11 +192,9 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
                 normalizedModelID.isEmpty ? providerID.defaultModelID : normalizedModelID
         }
 
-        Defaults[keys.grammarProviderID] = LLMSettings.grammarProvider.rawValue
-        Defaults[keys.screenshotProviderID] = LLMSettings.screenshotProvider.rawValue
-        Defaults[keys.customGrammarInstructions] = normalizedSettings.grammarCustomInstructions
-        Defaults[keys.customScreenshotInstructions] = normalizedSettings.screenshotCustomInstructions
-        Defaults[keys.clipboardHistoryEnabled] = normalizedSettings.clipboardHistory.isEnabled
-        Defaults[keys.clipboardHistoryMaxStoredRecords] = normalizedSettings.clipboardHistory.maxStoredRecords
+        Defaults[keys.customGrammarInstructions] = settings.grammarCustomInstructions
+        Defaults[keys.customScreenshotInstructions] = settings.screenshotCustomInstructions
+        Defaults[keys.clipboardHistoryEnabled] = settings.clipboardHistory.isEnabled
+        Defaults[keys.clipboardHistoryMaxStoredRecords] = settings.clipboardHistory.maxStoredRecords
     }
 }

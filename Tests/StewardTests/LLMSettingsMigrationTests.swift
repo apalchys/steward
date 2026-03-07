@@ -44,8 +44,6 @@ final class LLMSettingsMigrationTests: XCTestCase {
             apiKey: "gemini-key",
             modelID: "gemini-3.1-flash-lite-preview"
         )
-        settings.grammarProviderID = .gemini
-        settings.screenshotProviderID = .openAI
         settings.grammarCustomInstructions = "Rule 1\nRule 2"
         settings.screenshotCustomInstructions = "Keep bullet lists"
         settings.clipboardHistory = ClipboardHistorySettings(isEnabled: true, maxStoredRecords: 250)
@@ -55,8 +53,6 @@ final class LLMSettingsMigrationTests: XCTestCase {
 
         XCTAssertEqual(loaded.profile(for: .openAI).apiKey, "openai-key")
         XCTAssertEqual(loaded.profile(for: .gemini).apiKey, "gemini-key")
-        XCTAssertEqual(loaded.grammarProviderID, .openAI)
-        XCTAssertEqual(loaded.screenshotProviderID, .gemini)
         XCTAssertEqual(loaded.grammarCustomInstructions, "Rule 1\nRule 2")
         XCTAssertEqual(loaded.screenshotCustomInstructions, "Keep bullet lists")
         XCTAssertEqual(loaded.clipboardHistory, ClipboardHistorySettings(isEnabled: true, maxStoredRecords: 250))
