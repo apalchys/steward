@@ -24,7 +24,7 @@ let package = Package(
         ),
         .testTarget(
             name: "StewardTests",
-            dependencies: ["StewardCore"]
+            dependencies: ["StewardCore", "Steward"]
         ),
     ]
 )

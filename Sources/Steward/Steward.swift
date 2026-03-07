@@ -326,6 +326,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
     private var statusItem: NSStatusItem!
     private let openAIClient = OpenAIClient()
     private let geminiClient = GeminiClient()
+    private let clipboardHistoryStore = ClipboardHistoryStore()
+    private lazy var clipboardMonitor = ClipboardMonitor { [weak self] record in
+        self?.clipboardHistoryStore.append(record)
+    }
     private var grammarHotKey: HotKey?
     private var screenOCRHotKey: HotKey?
     private var selectionWindows: [NSWindow] = []
@@ -380,6 +384,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
 
         setupMenu()
         setupHotKeys()
+        clipboardMonitor.start()
 
         // Register for notifications to check service status
         NotificationCenter.default.addObserver(
@@ -401,6 +406,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
             self?.checkOpenAIStatus()
             self?.checkGeminiStatus()
         }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        clipboardMonitor.stop()
     }
 
     private func updateStatusItemIcon() {
@@ -451,7 +460,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         menu.addItem(geminiStatusItem)
 
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Preferences...", action: #selector(openPreferences), keyEquivalent: ","))
+        let historyMenuItem = NSMenuItem(title: "History", action: #selector(openHistory), keyEquivalent: "")
+        historyMenuItem.target = self
+        menu.addItem(historyMenuItem)
+
+        let preferencesMenuItem = NSMenuItem(
+            title: "Preferences...", action: #selector(openPreferences), keyEquivalent: ",")
+        preferencesMenuItem.target = self
+        menu.addItem(preferencesMenuItem)
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(quitApp), keyEquivalent: "q"))
 
@@ -823,6 +839,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         // This method uses pasteboard and keyboard shortcuts to get selected text from any app
         // We need to save the current pasteboard content to restore it later
         let oldPasteboardContent = NSPasteboard.general.string(forType: .string)
+        clipboardMonitor.suppressNextClipboardChanges(1)
 
         // Simulate Command+C to copy selected text using CGEvent (Core Graphics)
         // Virtual key 0x08 corresponds to 'c' on the keyboard
@@ -846,6 +863,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
 
         // If there was content in the pasteboard before, restore it
         if let oldContent = oldPasteboardContent {
+            clipboardMonitor.suppressNextClipboardChanges(2)
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(oldContent, forType: .string)
         }
@@ -858,6 +876,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         let oldPasteboardContent = NSPasteboard.general.string(forType: .string)
 
         // Set the corrected text to pasteboard
+        clipboardMonitor.suppressNextClipboardChanges(2)
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(newText, forType: .string)
 
@@ -878,6 +897,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         // Delay ensures paste operation completes before restoring clipboard
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             if let oldContent = oldPasteboardContent {
+                self.clipboardMonitor.suppressNextClipboardChanges(2)
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(oldContent, forType: .string)
             }
@@ -937,6 +957,35 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
 
     // Store a reference to our settings window to prevent it from being deallocated
     private var preferencesWindow: NSWindow?
+    private var historyWindow: NSWindow?
+
+    @objc private func openHistory() {
+        if let existingWindow = historyWindow, existingWindow.isVisible {
+            existingWindow.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        let historyWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 860, height: 520),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        historyWindow.isReleasedWhenClosed = false
+        historyWindow.hidesOnDeactivate = false
+        historyWindow.canHide = true
+        historyWindow.title = "History"
+        historyWindow.center()
+        historyWindow.delegate = self
+        historyWindow.contentViewController = NSHostingController(
+            rootView: ClipboardHistoryView(store: clipboardHistoryStore)
+        )
+
+        self.historyWindow = historyWindow
+        historyWindow.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
 
     @objc private func openPreferences() {
         // If we already have a window, just bring it to front
@@ -993,6 +1042,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Observable
         {
             // Release the window reference when it's closed
             preferencesWindow = nil
+        } else if let closingWindow = notification.object as? NSWindow,
+            closingWindow === historyWindow
+        {
+            historyWindow = nil
         }
     }
 }
