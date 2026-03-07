@@ -74,7 +74,7 @@ if [ -f "AppIcon.icns" ]; then
   cp -f AppIcon.icns Steward.app/Contents/Resources/
   echo "✅ Found and copied app icon"
 else
-  echo "⚠️ No AppIcon.icns found. Create one using ./scripts/create_icon.sh your_image.png"
+  echo "⚠️ No AppIcon.icns found. Create one using \"make icon\""
   touch Steward.app/Contents/Resources/AppIcon.icns
 fi
 
