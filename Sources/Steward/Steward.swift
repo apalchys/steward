@@ -11,6 +11,7 @@ struct StewardApp: App {
                 .environmentObject(appState)
         } label: {
             Image(nsImage: appState.statusBarIconImage)
+                .accessibilityLabel("Steward")
         }
         .menuBarExtraStyle(.menu)
 
@@ -33,8 +34,15 @@ private struct AppMenuView: View {
 
     var body: some View {
         Group {
-            Text("Grammar Check (⌘⇧F)")
-            Text("Screen Text Capture (⌘⇧R)")
+            Button("Grammar Check") {
+                appState.runGrammarAction()
+            }
+            .keyboardShortcut("f", modifiers: [.command, .shift])
+
+            Button("Screen Text Capture") {
+                appState.runScreenOCRAction()
+            }
+            .keyboardShortcut("r", modifiers: [.command, .shift])
 
             Divider()
 

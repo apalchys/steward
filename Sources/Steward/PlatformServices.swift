@@ -67,7 +67,8 @@ final class SystemTextInteractionService: TextInteractionPerforming, @unchecked 
         keyDown?.post(tap: .cghidEventTap)
         keyUp?.post(tap: .cghidEventTap)
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+        Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(500))
             guard let self, let oldPasteboardContent else {
                 return
             }
@@ -121,36 +122,37 @@ final class SystemScreenCaptureService: ScreenCaptureProviding, @unchecked Senda
         let streamHeight = max(1, Int(screenFrame.height * scaleFactor))
         let displayID = request.displayID
 
+        let shareableContent: SCShareableContent
+        do {
+            shareableContent = try await SCShareableContent.currentProcess
+        } catch {
+            return nil
+        }
+
+        guard let display = shareableContent.displays.first(where: { $0.displayID == displayID }) else {
+            return nil
+        }
+
         return await withCheckedContinuation { continuation in
-            SCShareableContent.getCurrentProcessShareableContent { shareableContent, error in
-                guard error == nil,
-                    let shareableContent,
-                    let display = shareableContent.displays.first(where: { $0.displayID == displayID })
-                else {
+            let streamConfiguration = SCStreamConfiguration()
+            streamConfiguration.captureResolution = .best
+            streamConfiguration.showsCursor = false
+            streamConfiguration.width = streamWidth
+            streamConfiguration.height = streamHeight
+
+            let contentFilter = SCContentFilter(
+                display: display, excludingApplications: [], exceptingWindows: [])
+            SCScreenshotManager.captureImage(
+                contentFilter: contentFilter, configuration: streamConfiguration
+            ) { image, captureError in
+                guard captureError == nil, let image else {
                     continuation.resume(returning: nil)
                     return
                 }
 
-                let streamConfiguration = SCStreamConfiguration()
-                streamConfiguration.captureResolution = .best
-                streamConfiguration.showsCursor = false
-                streamConfiguration.width = streamWidth
-                streamConfiguration.height = streamHeight
-
-                let contentFilter = SCContentFilter(
-                    display: display, excludingApplications: [], exceptingWindows: [])
-                SCScreenshotManager.captureImage(
-                    contentFilter: contentFilter, configuration: streamConfiguration
-                ) { image, captureError in
-                    guard captureError == nil, let image else {
-                        continuation.resume(returning: nil)
-                        return
-                    }
-
-                    let croppedData = Self.croppedImageData(
-                        from: image, screenFrame: screenFrame, selectionRect: selectionRect)
-                    continuation.resume(returning: croppedData)
-                }
+                let croppedData = Self.croppedImageData(
+                    from: image, screenFrame: screenFrame, selectionRect: selectionRect)
+                continuation.resume(returning: croppedData)
             }
         }
     }

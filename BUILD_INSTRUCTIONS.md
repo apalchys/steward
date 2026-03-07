@@ -31,7 +31,8 @@
 ## API Key Information
 
 The application requires an OpenAI API key for grammar correction and a Gemini API key for screen OCR. Your API keys and model IDs:
-- Are stored locally in UserDefaults
+- API keys are stored securely in macOS Keychain via Valet
+- Non-secret settings like model IDs and provider selection are stored locally in UserDefaults
 - Are only sent to the corresponding model provider when that feature runs
 - Can be updated at any time through the Preferences menu
 

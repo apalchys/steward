@@ -224,7 +224,8 @@ struct ClipboardHistoryView: View {
         isProgrammaticSelectionChange = true
         selectedRecordID = id
 
-        DispatchQueue.main.async {
+        Task { @MainActor in
+            await Task.yield()
             isProgrammaticSelectionChange = false
         }
     }
