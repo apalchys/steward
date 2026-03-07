@@ -1,7 +1,10 @@
 import Defaults
 import Foundation
+import OSLog
 import StewardCore
 import Valet
+
+private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.steward", category: "settings")
 
 struct LLMProviderProfile: Equatable {
     var apiKey: String
@@ -88,7 +91,7 @@ final class ValetLLMSecretsStore: LLMSecretsStoring {
                 try valet.setString(normalizedValue, forKey: key)
             }
         } catch {
-            print("ValetLLMSecretsStore write failed for \(providerID.rawValue): \(error)")
+            logger.error("ValetLLMSecretsStore write failed for \(providerID.rawValue): \(error)")
         }
     }
 

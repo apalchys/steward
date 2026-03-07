@@ -135,7 +135,7 @@ final class ScreenSelectionOverlayController: ScreenSelectionPresenting {
             window.backgroundColor = .clear
             window.isOpaque = false
             window.hasShadow = false
-            window.level = .screenSaver
+            window.level = NSWindow.Level(rawValue: NSWindow.Level.popUpMenu.rawValue + 1)
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
             window.contentView = ScreenSelectionOverlayView(frame: .zero)
             selectionWindows.append(window)

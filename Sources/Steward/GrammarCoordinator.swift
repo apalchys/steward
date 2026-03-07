@@ -13,7 +13,7 @@ final class GrammarCoordinator {
     }
 
     func handleHotKeyPress() async throws {
-        guard let selectedText = textInteraction.getSelectedText(), !selectedText.isEmpty else {
+        guard let selectedText = await textInteraction.getSelectedText(), !selectedText.isEmpty else {
             throw GrammarCoordinatorError.noSelectedText
         }
 

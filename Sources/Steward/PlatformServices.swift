@@ -9,7 +9,7 @@ protocol ClipboardChangeSuppressing: AnyObject {
 extension ClipboardMonitor: ClipboardChangeSuppressing {}
 
 protocol TextInteractionPerforming: AnyObject, Sendable {
-    func getSelectedText() -> String?
+    func getSelectedText() async -> String?
     func replaceSelectedText(with newText: String)
     func copyTextToClipboard(_ text: String)
 }
@@ -23,7 +23,7 @@ final class SystemTextInteractionService: TextInteractionPerforming, @unchecked 
         self.suppression = suppression
     }
 
-    func getSelectedText() -> String? {
+    func getSelectedText() async -> String? {
         let oldPasteboardContent = pasteboard.string(forType: .string)
         suppression?.suppressNextClipboardChanges(1)
 
@@ -37,7 +37,7 @@ final class SystemTextInteractionService: TextInteractionPerforming, @unchecked 
         keyDown?.post(tap: .cghidEventTap)
         keyUp?.post(tap: .cghidEventTap)
 
-        Thread.sleep(forTimeInterval: 0.2)
+        try? await Task.sleep(for: .milliseconds(200))
 
         let selectedText = pasteboard.string(forType: .string)
 

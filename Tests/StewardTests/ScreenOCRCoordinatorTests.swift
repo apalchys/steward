@@ -147,7 +147,7 @@ private final class ScreenFakeRouter: LLMRouting, @unchecked Sendable {
 private final class ScreenFakeTextInteraction: TextInteractionPerforming, @unchecked Sendable {
     var copiedText: String?
 
-    func getSelectedText() -> String? {
+    func getSelectedText() async -> String? {
         nil
     }
 

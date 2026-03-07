@@ -1,7 +1,10 @@
 import AppKit
 import Foundation
 import HotKey
+import OSLog
 import SwiftUI
+
+private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.steward", category: "app")
 
 @MainActor
 final class AppState: ObservableObject {
@@ -67,7 +70,7 @@ final class AppState: ObservableObject {
         self.settingsStore = settingsStore
         self.clipboardHistoryStore = clipboardHistoryStore
 
-        DispatchQueue.main.async { [weak self] in
+        Task { [weak self] in
             self?.start()
         }
     }
@@ -121,7 +124,7 @@ final class AppState: ObservableObject {
         clipboardMonitor.start()
 
         screenOCRCoordinator.onSelectionActivityChanged = { [weak self] isActive in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 guard let self else {
                     return
                 }
@@ -141,7 +144,8 @@ final class AppState: ObservableObject {
             }
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+        Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(500))
             guard let self else {
                 return
             }
@@ -217,14 +221,14 @@ final class AppState: ObservableObject {
     private func setupHotKeys() {
         grammarHotKey = HotKey(key: .f, modifiers: [.command, .shift])
         grammarHotKey?.keyDownHandler = { [weak self] in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self?.handleGrammarHotKeyPress()
             }
         }
 
         screenOCRHotKey = HotKey(key: .r, modifiers: [.command, .shift])
         screenOCRHotKey?.keyDownHandler = { [weak self] in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self?.handleScreenOCRHotKeyPress()
             }
         }
@@ -256,7 +260,7 @@ final class AppState: ObservableObject {
                     if self.shouldOpenSettings(for: error) {
                         self.openSettingsWindow()
                     }
-                    print("Grammar error: \(error.localizedDescription)")
+                    logger.error("Grammar error: \(error.localizedDescription)")
                 }
             }
 
@@ -290,7 +294,7 @@ final class AppState: ObservableObject {
                     if self.shouldOpenSettings(for: error) {
                         self.openSettingsWindow()
                     }
-                    print("OCR error: \(error.localizedDescription)")
+                    logger.error("OCR error: \(error.localizedDescription)")
                 }
             }
 
@@ -309,10 +313,8 @@ final class AppState: ObservableObject {
     }
 
     private func openSettingsWindow() {
-        DispatchQueue.main.async {
-            NSApp.activate(ignoringOtherApps: true)
-            _ = NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-        }
+        NSApp.activate(ignoringOtherApps: true)
+        _ = NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
     }
 
     private func markGrammarStatusFromCurrentConfiguration(asError: Bool, message: String?) {

@@ -1,5 +1,8 @@
 import Combine
 import Foundation
+import OSLog
+
+private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.steward", category: "clipboard")
 
 final class ClipboardHistoryStore: ObservableObject, @unchecked Sendable {
     static let maxRecordSize = 4096
@@ -138,7 +141,7 @@ final class ClipboardHistoryStore: ObservableObject, @unchecked Sendable {
         } catch {
             queuedRecords = []
             publish(records: [], errorMessage: nil)
-            print("ClipboardHistoryStore load failed: \(error)")
+            logger.error("ClipboardHistoryStore load failed: \(error)")
         }
     }
 
@@ -192,14 +195,14 @@ final class ClipboardHistoryStore: ObservableObject, @unchecked Sendable {
     }
 
     private func publish(records: [ClipboardHistoryRecord], errorMessage: String?) {
-        DispatchQueue.main.async {
+        Task { @MainActor in
             self.records = records
             self.lastErrorMessage = errorMessage
         }
     }
 
     private func publishError(_ message: String) {
-        DispatchQueue.main.async {
+        Task { @MainActor in
             self.lastErrorMessage = message
         }
     }
