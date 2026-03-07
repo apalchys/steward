@@ -19,14 +19,15 @@ final class StatusBarIconTests: XCTestCase {
         XCTAssertEqual(image.size, StatusBarIcon.pointSize)
     }
 
-    func testReadyImageLoadsFromCurrentWorkingDirectory() throws {
+    func testReadyImageLoadsFromAssetsDirectoryInCurrentWorkingDirectory() throws {
         let fileManager = FileManager.default
         let originalDirectory = fileManager.currentDirectoryPath
         let tempDirectory = fileManager.temporaryDirectory
             .appendingPathComponent("StatusBarIconTests-\(UUID().uuidString)", isDirectory: true)
+        let assetsDirectory = tempDirectory.appendingPathComponent("Assets", isDirectory: true)
 
-        try fileManager.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
-        try Self.samplePNGData.write(to: tempDirectory.appendingPathComponent("status-icon.png"))
+        try fileManager.createDirectory(at: assetsDirectory, withIntermediateDirectories: true)
+        try Self.samplePNGData.write(to: assetsDirectory.appendingPathComponent("status-icon.png"))
 
         XCTAssertTrue(fileManager.changeCurrentDirectoryPath(tempDirectory.path))
         defer {

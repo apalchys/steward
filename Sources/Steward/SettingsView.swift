@@ -213,8 +213,11 @@ struct SettingsView: View {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 80, height: 80)
-            } else if let iconImage = Bundle.main.decodedImage(named: "icon") {
-                iconImage
+            } else if let iconURL = Bundle.main.url(forResource: "icon", withExtension: "png")
+                ?? Bundle.main.resourceURL?.appendingPathComponent("icon.png"),
+                let iconImage = NSImage(contentsOf: iconURL)
+            {
+                Image(nsImage: iconImage)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 80, height: 80)
@@ -256,18 +259,5 @@ struct SettingsView: View {
                 settings.providerProfiles[providerID] = profile
             }
         )
-    }
-
-}
-
-extension Bundle {
-    func decodedImage(named name: String) -> Image? {
-        if let path = Bundle.main.path(forResource: name, ofType: "png"),
-            let nsImage = NSImage(contentsOfFile: path)
-        {
-            return Image(nsImage: nsImage)
-        }
-
-        return nil
     }
 }

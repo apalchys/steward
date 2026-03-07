@@ -19,7 +19,6 @@ enum StatusBarIcon {
         let candidates = [
             bundle.url(forResource: name, withExtension: "png"),
             bundle.resourceURL?.appendingPathComponent("\(name).png"),
-            URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("\(name).png"),
             URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("Assets/\(name).png"),
         ]
 
