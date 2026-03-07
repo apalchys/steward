@@ -134,11 +134,78 @@ final class ClipboardHistoryStoreTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: historyFileURL.path))
     }
 
-    private func makeStore() -> ClipboardHistoryStore {
+    func testAppendTrimsOldestRecordsWhenRetentionLimitIsReached() {
+        let store = makeStore(maxStoredRecords: 2)
+        waitForStoreOperation("load") { done in store.load(completion: done) }
+
+        let firstRecord = ClipboardHistoryRecord(
+            id: UUID(),
+            capturedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            text: "first"
+        )
+        let secondRecord = ClipboardHistoryRecord(
+            id: UUID(),
+            capturedAt: Date(timeIntervalSince1970: 1_700_000_001),
+            text: "second"
+        )
+        let thirdRecord = ClipboardHistoryRecord(
+            id: UUID(),
+            capturedAt: Date(timeIntervalSince1970: 1_700_000_002),
+            text: "third"
+        )
+
+        waitForStoreOperation("append first") { done in
+            store.append(firstRecord, completion: done)
+        }
+        waitForStoreOperation("append second") { done in
+            store.append(secondRecord, completion: done)
+        }
+        waitForStoreOperation("append third") { done in
+            store.append(thirdRecord, completion: done)
+        }
+
+        XCTAssertEqual(store.records, [secondRecord, thirdRecord])
+
+        let reloadedStore = makeStore(maxStoredRecords: 2)
+        waitForStoreOperation("reload") { done in reloadedStore.load(completion: done) }
+        XCTAssertEqual(reloadedStore.records, [secondRecord, thirdRecord])
+    }
+
+    func testUpdateMaxStoredRecordsTrimsExistingHistory() {
+        let store = makeStore(maxStoredRecords: 4)
+        waitForStoreOperation("load") { done in store.load(completion: done) }
+
+        let records = (0..<3).map { index in
+            ClipboardHistoryRecord(
+                id: UUID(),
+                capturedAt: Date(timeIntervalSince1970: 1_700_000_000 + TimeInterval(index)),
+                text: "record-\(index)"
+            )
+        }
+
+        for (index, record) in records.enumerated() {
+            waitForStoreOperation("append \(index)") { done in
+                store.append(record, completion: done)
+            }
+        }
+
+        waitForStoreOperation("trim to two") { done in
+            store.updateMaxStoredRecords(2, completion: done)
+        }
+
+        XCTAssertEqual(store.records, Array(records.suffix(2)))
+
+        let reloadedStore = makeStore(maxStoredRecords: 2)
+        waitForStoreOperation("reload") { done in reloadedStore.load(completion: done) }
+        XCTAssertEqual(reloadedStore.records, Array(records.suffix(2)))
+    }
+
+    private func makeStore(maxStoredRecords: Int = ClipboardHistorySettings.default.maxStoredRecords) -> ClipboardHistoryStore {
         ClipboardHistoryStore(
             fileManager: .default,
             historyFileURL: historyFileURL,
             ioQueue: DispatchQueue(label: "StewardTests.ClipboardHistoryStore.\(UUID().uuidString)"),
+            maxStoredRecords: maxStoredRecords,
             autoLoad: false
         )
     }

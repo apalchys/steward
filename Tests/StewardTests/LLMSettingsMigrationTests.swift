@@ -72,6 +72,35 @@ final class LLMSettingsMigrationTests: XCTestCase {
         XCTAssertEqual(store.customGrammarInstructions(), "Rule 1\nRule 2")
         XCTAssertEqual(store.customScreenshotInstructions(), "Keep bullet lists")
     }
+
+    func testClipboardHistorySettingsDefaultToDisabled() {
+        let suiteName = "LLMSettingsStoreTests.\(UUID().uuidString)"
+        let defaults = try! XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defer {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let store = UserDefaultsLLMSettingsStore(userDefaults: defaults, secretsStore: InMemoryLLMSecretsStore())
+
+        XCTAssertEqual(store.clipboardHistorySettings(), .default)
+    }
+
+    func testClipboardHistorySettingsRoundTrip() {
+        let suiteName = "LLMSettingsStoreTests.\(UUID().uuidString)"
+        let defaults = try! XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defer {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let store = UserDefaultsLLMSettingsStore(userDefaults: defaults, secretsStore: InMemoryLLMSecretsStore())
+        let settings = ClipboardHistorySettings(isEnabled: true, maxStoredRecords: 250)
+
+        store.setClipboardHistorySettings(settings)
+
+        XCTAssertEqual(store.clipboardHistorySettings(), settings)
+    }
 }
 
 private final class InMemoryLLMSecretsStore: LLMSecretsStoring {

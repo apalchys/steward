@@ -21,7 +21,10 @@ struct StewardApp: App {
         .defaultSize(width: 860, height: 520)
 
         Settings {
-            SettingsView(settingsStore: appState.settingsStore) {
+            SettingsView(
+                settingsStore: appState.settingsStore,
+                clipboardHistoryStore: appState.clipboardHistoryStore
+            ) {
                 appState.settingsDidChange()
             }
         }

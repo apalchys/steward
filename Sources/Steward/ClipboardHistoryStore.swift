@@ -15,6 +15,7 @@ final class ClipboardHistoryStore: ObservableObject, @unchecked Sendable {
     private let ioQueue: DispatchQueue
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
+    private var maxStoredRecords: Int
 
     // Access only from ioQueue.
     private var queuedRecords: [ClipboardHistoryRecord] = []
@@ -23,11 +24,13 @@ final class ClipboardHistoryStore: ObservableObject, @unchecked Sendable {
         fileManager: FileManager = .default,
         historyFileURL: URL? = nil,
         ioQueue: DispatchQueue? = nil,
+        maxStoredRecords: Int = ClipboardHistorySettings.default.maxStoredRecords,
         autoLoad: Bool = true
     ) {
         self.fileManager = fileManager
         self.historyFileURL = historyFileURL ?? Self.defaultHistoryFileURL(fileManager: fileManager)
         self.ioQueue = ioQueue ?? DispatchQueue(label: "Steward.ClipboardHistoryStore", qos: .utility)
+        self.maxStoredRecords = ClipboardHistorySettings.sanitizedMaxStoredRecords(maxStoredRecords)
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -52,10 +55,15 @@ final class ClipboardHistoryStore: ObservableObject, @unchecked Sendable {
     func append(_ record: ClipboardHistoryRecord, completion: (@Sendable () -> Void)? = nil) {
         ioQueue.async {
             self.queuedRecords.append(record)
+            let didTrim = self.trimQueuedRecordsIfNeeded()
             self.publish(records: self.queuedRecords, errorMessage: nil)
 
             do {
-                try self.appendRecordToDisk(record)
+                if didTrim {
+                    try self.rewriteOrClearHistoryFile()
+                } else {
+                    try self.appendRecordToDisk(record)
+                }
             } catch {
                 self.publishError("Could not save clipboard history.")
             }
@@ -103,6 +111,27 @@ final class ClipboardHistoryStore: ObservableObject, @unchecked Sendable {
         }
     }
 
+    func updateMaxStoredRecords(_ maxStoredRecords: Int, completion: (@Sendable () -> Void)? = nil) {
+        ioQueue.async {
+            self.maxStoredRecords = ClipboardHistorySettings.sanitizedMaxStoredRecords(maxStoredRecords)
+            let didTrim = self.trimQueuedRecordsIfNeeded()
+            self.publish(records: self.queuedRecords, errorMessage: nil)
+
+            guard didTrim else {
+                self.notifyCompletion(completion)
+                return
+            }
+
+            do {
+                try self.rewriteOrClearHistoryFile()
+            } catch {
+                self.publishError("Could not update clipboard history.")
+            }
+
+            self.notifyCompletion(completion)
+        }
+    }
+
     private func loadFromDisk() {
         do {
             try ensureParentDirectoryExists()
@@ -136,6 +165,9 @@ final class ClipboardHistoryStore: ObservableObject, @unchecked Sendable {
                 loadedRecords.append(record)
             }
 
+            if loadedRecords.count > maxStoredRecords {
+                loadedRecords.removeFirst(loadedRecords.count - maxStoredRecords)
+            }
             queuedRecords = loadedRecords
             publish(records: loadedRecords, errorMessage: nil)
         } catch {
@@ -175,6 +207,14 @@ final class ClipboardHistoryStore: ObservableObject, @unchecked Sendable {
         try fileData.write(to: historyFileURL, options: .atomic)
     }
 
+    private func rewriteOrClearHistoryFile() throws {
+        if queuedRecords.isEmpty {
+            try clearHistoryFile()
+        } else {
+            try rewriteHistoryFile()
+        }
+    }
+
     private func clearHistoryFile() throws {
         guard fileManager.fileExists(atPath: historyFileURL.path) else {
             return
@@ -192,6 +232,15 @@ final class ClipboardHistoryStore: ObservableObject, @unchecked Sendable {
         var line = try encoder.encode(record)
         line.append(0x0A)
         return line
+    }
+
+    private func trimQueuedRecordsIfNeeded() -> Bool {
+        guard queuedRecords.count > maxStoredRecords else {
+            return false
+        }
+
+        queuedRecords.removeFirst(queuedRecords.count - maxStoredRecords)
+        return true
     }
 
     private func publish(records: [ClipboardHistoryRecord], errorMessage: String?) {

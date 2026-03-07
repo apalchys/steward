@@ -12,9 +12,10 @@ It supports OpenAI and Gemini, with provider choice configured per feature.
 - Global hotkeys:
   - Grammar check: `Command+Shift+F`
   - Screenshot to Markdown: `Command+Shift+R`
-- Three-tab preferences UI:
+- Four-tab preferences UI:
   - Grammar
   - Screenshot
+  - History
   - About
 - Per-feature provider selection (OpenAI or Gemini) with per-provider API key/model
 - Per-feature custom instructions:
@@ -22,6 +23,7 @@ It supports OpenAI and Gemini, with provider choice configured per feature.
   - screenshot instructions
 - Provider health checks from the menu (click Grammar/OCR status rows to re-check)
 - Clipboard history window with search, detail view, delete, and clear-all
+- Clipboard history is opt-in and capped with a configurable max entry count
 - Status icon/title states for ready, processing, and error
 
 ## Requirements
@@ -78,13 +80,15 @@ Screenshot to Markdown:
 Clipboard history:
 1. Open menu bar app.
 2. Click `History`.
-3. Search/view/delete records as needed.
+3. Enable recording in `Preferences... > History`.
+4. Search/view/delete records as needed.
 
 ## Storage and Privacy
 
 - API keys are stored in macOS Keychain via `Square/Valet`.
 - Non-secret settings (model IDs, selected providers, custom instructions) are stored with `Defaults` (`UserDefaults`).
 - Clipboard history is stored locally as JSONL at `~/Library/Application Support/Steward/clipboard-history.jsonl`.
+- Clipboard history is disabled by default and only records new entries after you enable it.
 - Data is sent only to the provider you configure for the feature being run.
 
 ## Dependencies

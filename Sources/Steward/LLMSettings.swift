@@ -48,6 +48,23 @@ struct LLMSettings: Equatable {
     }
 }
 
+struct ClipboardHistorySettings: Equatable {
+    static let defaultMaxStoredRecords = 100
+    static let `default` = ClipboardHistorySettings()
+
+    var isEnabled: Bool
+    var maxStoredRecords: Int
+
+    init(isEnabled: Bool = false, maxStoredRecords: Int = ClipboardHistorySettings.defaultMaxStoredRecords) {
+        self.isEnabled = isEnabled
+        self.maxStoredRecords = Self.sanitizedMaxStoredRecords(maxStoredRecords)
+    }
+
+    static func sanitizedMaxStoredRecords(_ value: Int) -> Int {
+        max(1, value)
+    }
+}
+
 protocol LLMSettingsProviding {
     func loadSettings() -> LLMSettings
     func saveSettings(_ settings: LLMSettings)
@@ -56,6 +73,11 @@ protocol LLMSettingsProviding {
     func setCustomGrammarInstructions(_ value: String)
     func customScreenshotInstructions() -> String
     func setCustomScreenshotInstructions(_ value: String)
+}
+
+protocol ClipboardHistorySettingsProviding {
+    func clipboardHistorySettings() -> ClipboardHistorySettings
+    func setClipboardHistorySettings(_ settings: ClipboardHistorySettings)
 }
 
 protocol LLMSecretsStoring {
@@ -118,6 +140,8 @@ final class UserDefaultsLLMSettingsStore: LLMSettingsProviding {
         let screenshotProviderID: Defaults.Key<String>
         let customGrammarInstructions: Defaults.Key<String>
         let customScreenshotInstructions: Defaults.Key<String>
+        let clipboardHistoryEnabled: Defaults.Key<Bool>
+        let clipboardHistoryMaxStoredRecords: Defaults.Key<Int>
         let userDefaults: UserDefaults
 
         init(userDefaults: UserDefaults) {
@@ -140,6 +164,16 @@ final class UserDefaultsLLMSettingsStore: LLMSettingsProviding {
             customScreenshotInstructions = Defaults.Key<String>(
                 "customScreenshotInstructions",
                 default: "",
+                suite: userDefaults
+            )
+            clipboardHistoryEnabled = Defaults.Key<Bool>(
+                "clipboardHistoryEnabled",
+                default: ClipboardHistorySettings.default.isEnabled,
+                suite: userDefaults
+            )
+            clipboardHistoryMaxStoredRecords = Defaults.Key<Int>(
+                "clipboardHistoryMaxStoredRecords",
+                default: ClipboardHistorySettings.default.maxStoredRecords,
                 suite: userDefaults
             )
         }
@@ -247,5 +281,19 @@ final class UserDefaultsLLMSettingsStore: LLMSettingsProviding {
         }
 
         return providerID
+    }
+}
+
+extension UserDefaultsLLMSettingsStore: ClipboardHistorySettingsProviding {
+    func clipboardHistorySettings() -> ClipboardHistorySettings {
+        ClipboardHistorySettings(
+            isEnabled: Defaults[keys.clipboardHistoryEnabled],
+            maxStoredRecords: Defaults[keys.clipboardHistoryMaxStoredRecords]
+        )
+    }
+
+    func setClipboardHistorySettings(_ settings: ClipboardHistorySettings) {
+        Defaults[keys.clipboardHistoryEnabled] = settings.isEnabled
+        Defaults[keys.clipboardHistoryMaxStoredRecords] = settings.maxStoredRecords
     }
 }

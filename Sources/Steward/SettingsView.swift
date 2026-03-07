@@ -2,20 +2,26 @@ import AppKit
 import SwiftUI
 
 struct SettingsView: View {
+    @ObservedObject private var clipboardHistoryStore: ClipboardHistoryStore
     @State private var settings: LLMSettings
+    @State private var clipboardHistorySettings: ClipboardHistorySettings
     @State private var grammarInstructions: String
     @State private var screenshotInstructions: String
+    @State private var showClearHistoryConfirmation = false
 
-    private let settingsStore: any LLMSettingsProviding
+    private let settingsStore: any LLMSettingsProviding & ClipboardHistorySettingsProviding
     private let onSettingsChanged: (() -> Void)?
 
     init(
-        settingsStore: any LLMSettingsProviding = UserDefaultsLLMSettingsStore(),
+        settingsStore: any LLMSettingsProviding & ClipboardHistorySettingsProviding = UserDefaultsLLMSettingsStore(),
+        clipboardHistoryStore: ClipboardHistoryStore = ClipboardHistoryStore(autoLoad: false),
         onSettingsChanged: (() -> Void)? = nil
     ) {
         self.settingsStore = settingsStore
         self.onSettingsChanged = onSettingsChanged
+        _clipboardHistoryStore = ObservedObject(wrappedValue: clipboardHistoryStore)
         _settings = State(initialValue: settingsStore.loadSettings())
+        _clipboardHistorySettings = State(initialValue: settingsStore.clipboardHistorySettings())
         _grammarInstructions = State(initialValue: settingsStore.customGrammarInstructions())
         _screenshotInstructions = State(initialValue: settingsStore.customScreenshotInstructions())
     }
@@ -32,6 +38,11 @@ struct SettingsView: View {
                     Label("Screenshot", systemImage: "photo.on.rectangle")
                 }
 
+            historyTab
+                .tabItem {
+                    Label("History", systemImage: "clipboard")
+                }
+
             aboutTab
                 .tabItem {
                     Label("About", systemImage: "info.circle")
@@ -41,6 +52,7 @@ struct SettingsView: View {
         .onAppear {
             settingsStore.migrateLegacySettingsIfNeeded()
             settings = settingsStore.loadSettings()
+            clipboardHistorySettings = settingsStore.clipboardHistorySettings()
             grammarInstructions = settingsStore.customGrammarInstructions()
             screenshotInstructions = settingsStore.customScreenshotInstructions()
         }
@@ -55,6 +67,18 @@ struct SettingsView: View {
         .onChange(of: screenshotInstructions) { _, newValue in
             settingsStore.setCustomScreenshotInstructions(newValue)
             onSettingsChanged?()
+        }
+        .onChange(of: clipboardHistorySettings) { _, newValue in
+            settingsStore.setClipboardHistorySettings(newValue)
+            onSettingsChanged?()
+        }
+        .alert("Clear clipboard history?", isPresented: $showClearHistoryConfirmation) {
+            Button("Clear History", role: .destructive) {
+                clipboardHistoryStore.clearAll()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This permanently deletes all locally stored clipboard history.")
         }
     }
 
@@ -147,6 +171,58 @@ struct SettingsView: View {
                 Text("Used as additional guidance when extracting text from screenshots.")
                     .font(.caption)
                     .foregroundColor(.secondary)
+            }
+            .padding(20)
+        }
+    }
+
+    private var historyTab: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Clipboard History")
+                    .font(.headline)
+
+                Toggle("Enable clipboard history", isOn: $clipboardHistorySettings.isEnabled)
+
+                Text("Clipboard history is stored only on this Mac and is disabled by default.")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Stepper(
+                        value: $clipboardHistorySettings.maxStoredRecords,
+                        in: 25...500,
+                        step: 25
+                    ) {
+                        Text("Keep up to \(clipboardHistorySettings.maxStoredRecords) entries")
+                    }
+
+                    Text("Older entries are removed automatically when the limit is reached.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .disabled(!clipboardHistorySettings.isEnabled)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Storage")
+                        .font(.subheadline)
+
+                    Text(ClipboardHistoryStore.defaultHistoryFileURL().path)
+                        .font(.system(.caption, design: .monospaced))
+                        .textSelection(.enabled)
+                        .foregroundColor(.secondary)
+                }
+
+                Button("Clear Stored History", role: .destructive) {
+                    showClearHistoryConfirmation = true
+                }
+                .disabled(clipboardHistoryStore.records.isEmpty)
+
+                Text(
+                    "When disabled, Steward stops recording new clipboard entries immediately. Existing history remains until you clear it."
+                )
+                .font(.caption)
+                .foregroundColor(.secondary)
             }
             .padding(20)
         }

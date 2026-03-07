@@ -19,7 +19,7 @@ final class AppState: ObservableObject {
     private static let processingImage = StatusBarIcon.symbolImage(named: StatusSymbolName.processing)
     private static let errorImage = StatusBarIcon.symbolImage(named: StatusSymbolName.error)
 
-    let settingsStore: any LLMSettingsProviding
+    let settingsStore: any LLMSettingsProviding & ClipboardHistorySettingsProviding
     let clipboardHistoryStore: ClipboardHistoryStore
 
     @Published private(set) var activityStatus: ActivityStatus = .ready
@@ -64,7 +64,7 @@ final class AppState: ObservableObject {
     private var lastOperationFailed = false
 
     init(
-        settingsStore: any LLMSettingsProviding = UserDefaultsLLMSettingsStore(),
+        settingsStore: any LLMSettingsProviding & ClipboardHistorySettingsProviding = UserDefaultsLLMSettingsStore(),
         clipboardHistoryStore: ClipboardHistoryStore = ClipboardHistoryStore()
     ) {
         self.settingsStore = settingsStore
@@ -121,7 +121,7 @@ final class AppState: ObservableObject {
         NSApp.setActivationPolicy(.accessory)
 
         setupHotKeys()
-        clipboardMonitor.start()
+        applyClipboardHistorySettings()
 
         screenOCRCoordinator.onSelectionActivityChanged = { [weak self] isActive in
             Task { @MainActor in
@@ -210,6 +210,7 @@ final class AppState: ObservableObject {
     }
 
     func settingsDidChange() {
+        applyClipboardHistorySettings()
         checkGrammarProviderStatus()
         checkOCRProviderStatus()
     }
@@ -365,6 +366,17 @@ final class AppState: ObservableObject {
         }
 
         return false
+    }
+
+    private func applyClipboardHistorySettings() {
+        let clipboardHistorySettings = settingsStore.clipboardHistorySettings()
+        clipboardHistoryStore.updateMaxStoredRecords(clipboardHistorySettings.maxStoredRecords)
+
+        if clipboardHistorySettings.isEnabled {
+            clipboardMonitor.start()
+        } else {
+            clipboardMonitor.stop()
+        }
     }
 
     private func providerStatusTitle(prefix: String, status: ProviderStatus) -> String {

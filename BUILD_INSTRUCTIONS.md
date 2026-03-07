@@ -24,6 +24,7 @@
    - Select "Preferences..." (or press Command+,)
    - Enter your OpenAI API key and optional model ID for grammar correction
    - Enter your Gemini API key and optional model ID for screen text extraction
+   - Clipboard history is optional and can be enabled in the History tab
    - Leaving model IDs empty falls back to `gpt-5.4` and `gemini-3.1-flash-lite-preview`
 5. To fix grammar, select text in any application and press `Command+Shift+F`
 6. To extract screen text, press `Command+Shift+R`, drag to select an area, and wait for the Markdown text to land in your clipboard
