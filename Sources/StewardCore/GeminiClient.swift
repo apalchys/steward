@@ -2,13 +2,8 @@ import Foundation
 
 public struct GeminiClient: Sendable {
     public static let defaultModelID = "gemini-3.1-flash-lite-preview"
+    private static let provider = "Gemini"
     private let session: URLSession
-
-    private static let ocrInstruction = """
-        You are an OCR assistant. Extract all visible text from the provided image and return only the extracted text in Markdown.
-        Preserve headings, paragraphs, lists, tables, and code blocks when they are visually clear.
-        Do not add explanations, summaries, or commentary.
-        """
 
     private struct GenerateContentRequest: Encodable {
         struct Content: Encodable {
@@ -85,34 +80,6 @@ public struct GeminiClient: Sendable {
         }
     }
 
-    private struct APIErrorResponse: Decodable {
-        struct APIError: Decodable {
-            let message: String
-        }
-
-        let error: APIError
-    }
-
-    private enum ClientError: LocalizedError {
-        case encodingFailed
-        case requestFailed(String)
-        case emptyResponse
-        case emptyOutput
-
-        var errorDescription: String? {
-            switch self {
-            case .encodingFailed:
-                return "Failed to encode the Gemini request."
-            case .requestFailed(let message):
-                return message
-            case .emptyResponse:
-                return "Gemini returned an empty response."
-            case .emptyOutput:
-                return "Gemini returned no extracted text."
-            }
-        }
-    }
-
     public init(session: URLSession = .shared) {
         self.session = session
     }
@@ -131,14 +98,15 @@ public struct GeminiClient: Sendable {
         request.httpMethod = "GET"
 
         do {
-            let (_, response) = try await performDataRequest(request)
+            let (_, response) = try await performLLMDataRequest(request, session: session)
             guard let httpResponse = response as? HTTPURLResponse else {
                 return LLMHealthCheckResult(status: .unknown, message: "Gemini returned an unexpected response.")
             }
 
-            return healthCheckResult(for: httpResponse.statusCode)
+            return llmHealthCheckResult(for: httpResponse.statusCode, provider: Self.provider)
         } catch let error as URLError {
-            return LLMHealthCheckResult(status: .networkIssue, message: networkErrorMessage(for: error))
+            return LLMHealthCheckResult(
+                status: .networkIssue, message: llmNetworkErrorMessage(for: error, provider: Self.provider))
         } catch {
             return LLMHealthCheckResult(status: .unknown, message: error.localizedDescription)
         }
@@ -151,7 +119,7 @@ public struct GeminiClient: Sendable {
         mimeType: String,
         customInstructions: String = ""
     ) async throws -> String {
-        let combinedInstructions = buildOCRInstructions(customInstructions: customInstructions)
+        let combinedInstructions = buildOCRPrompt(customInstructions: customInstructions)
         let requestBody = GenerateContentRequest(
             systemInstruction: .init(parts: [.init(text: combinedInstructions)]),
             contents: [
@@ -163,7 +131,7 @@ public struct GeminiClient: Sendable {
         )
 
         guard let httpBody = try? JSONEncoder().encode(requestBody) else {
-            throw ClientError.encodingFailed
+            throw LLMClientError.encodingFailed(provider: Self.provider)
         }
 
         let encodedModelID = modelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? modelID
@@ -172,7 +140,7 @@ public struct GeminiClient: Sendable {
                 path: "/v1beta/models/\(encodedModelID):generateContent",
                 queryItems: [URLQueryItem(name: "key", value: apiKey)])
         else {
-            throw ClientError.requestFailed("Gemini model identifier is invalid.")
+            throw LLMClientError.requestFailed("Gemini model identifier is invalid.")
         }
 
         var request = URLRequest(url: apiURL)
@@ -180,20 +148,21 @@ public struct GeminiClient: Sendable {
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = httpBody
 
-        let (data, response) = try await performDataRequest(request)
+        let (data, response) = try await performLLMDataRequest(request, session: session)
 
         if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
-            throw ClientError.requestFailed(requestFailureMessage(statusCode: httpResponse.statusCode, data: data))
+            throw LLMClientError.requestFailed(
+                llmRequestFailureMessage(statusCode: httpResponse.statusCode, data: data, provider: Self.provider))
         }
 
         guard !data.isEmpty else {
-            throw ClientError.emptyResponse
+            throw LLMClientError.emptyResponse(provider: Self.provider)
         }
 
         let apiResponse = try JSONDecoder().decode(GenerateContentResponse.self, from: data)
 
         guard let extractedText = apiResponse.outputText else {
-            throw ClientError.emptyOutput
+            throw LLMClientError.emptyOutput(provider: Self.provider, detail: "Gemini returned no extracted text.")
         }
 
         return extractedText
@@ -215,7 +184,7 @@ public struct GeminiClient: Sendable {
         )
 
         guard let httpBody = try? JSONEncoder().encode(requestBody) else {
-            throw ClientError.encodingFailed
+            throw LLMClientError.encodingFailed(provider: Self.provider)
         }
 
         let encodedModelID = modelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? modelID
@@ -224,7 +193,7 @@ public struct GeminiClient: Sendable {
                 path: "/v1beta/models/\(encodedModelID):generateContent",
                 queryItems: [URLQueryItem(name: "key", value: apiKey)])
         else {
-            throw ClientError.requestFailed("Gemini model identifier is invalid.")
+            throw LLMClientError.requestFailed("Gemini model identifier is invalid.")
         }
 
         var request = URLRequest(url: apiURL)
@@ -232,20 +201,21 @@ public struct GeminiClient: Sendable {
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = httpBody
 
-        let (data, response) = try await performDataRequest(request)
+        let (data, response) = try await performLLMDataRequest(request, session: session)
 
         if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
-            throw ClientError.requestFailed(requestFailureMessage(statusCode: httpResponse.statusCode, data: data))
+            throw LLMClientError.requestFailed(
+                llmRequestFailureMessage(statusCode: httpResponse.statusCode, data: data, provider: Self.provider))
         }
 
         guard !data.isEmpty else {
-            throw ClientError.emptyResponse
+            throw LLMClientError.emptyResponse(provider: Self.provider)
         }
 
         let apiResponse = try JSONDecoder().decode(GenerateContentResponse.self, from: data)
 
         guard let correctedText = apiResponse.outputText else {
-            throw ClientError.emptyOutput
+            throw LLMClientError.emptyOutput(provider: Self.provider, detail: "Gemini returned no corrected text.")
         }
 
         return correctedText
@@ -261,121 +231,6 @@ public struct GeminiClient: Sendable {
 
         components.queryItems = queryItems
         return components.url
-    }
-
-    private func requestFailureMessage(statusCode: Int, data: Data?) -> String {
-        switch statusCode {
-        case 400:
-            return apiErrorMessage(from: data) ?? "Gemini rejected the request."
-        case 401, 403:
-            return "Gemini API key is invalid."
-        case 404:
-            return "Gemini model was not found."
-        case 429:
-            return "Gemini is rate limiting requests."
-        case 500, 502, 503, 504:
-            return "Gemini is temporarily unavailable."
-        default:
-            return apiErrorMessage(from: data) ?? "Gemini request failed with HTTP \(statusCode)."
-        }
-    }
-
-    private func apiErrorMessage(from data: Data?) -> String? {
-        guard let data else {
-            return nil
-        }
-
-        let message = try? JSONDecoder().decode(APIErrorResponse.self, from: data).error.message
-        return message?.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private func performDataRequest(_ request: URLRequest) async throws -> (Data, URLResponse) {
-        var attempt = 0
-        var retryDelayMilliseconds = 200
-
-        while true {
-            do {
-                let response = try await session.data(for: request)
-                if let httpResponse = response.1 as? HTTPURLResponse,
-                    shouldRetry(statusCode: httpResponse.statusCode),
-                    attempt < 2
-                {
-                    attempt += 1
-                    try? await Task.sleep(for: .milliseconds(retryDelayMilliseconds))
-                    retryDelayMilliseconds *= 2
-                    continue
-                }
-
-                return response
-            } catch let error as URLError {
-                guard shouldRetry(error: error), attempt < 2 else {
-                    throw error
-                }
-
-                attempt += 1
-                try? await Task.sleep(for: .milliseconds(retryDelayMilliseconds))
-                retryDelayMilliseconds *= 2
-            }
-        }
-    }
-
-    private func healthCheckResult(for statusCode: Int) -> LLMHealthCheckResult {
-        switch statusCode {
-        case 200:
-            return LLMHealthCheckResult(status: .available, message: "Gemini is configured.")
-        case 401, 403:
-            return LLMHealthCheckResult(status: .invalidCredentials, message: "Gemini API key is invalid.")
-        case 404:
-            return LLMHealthCheckResult(status: .invalidModel, message: "Gemini model was not found.")
-        case 429:
-            return LLMHealthCheckResult(status: .rateLimited, message: "Gemini is rate limiting requests.")
-        case 500, 502, 503, 504:
-            return LLMHealthCheckResult(status: .serviceIssue, message: "Gemini is temporarily unavailable.")
-        default:
-            return LLMHealthCheckResult(
-                status: .unknown,
-                message: "Gemini access check failed with HTTP \(statusCode)."
-            )
-        }
-    }
-
-    private func shouldRetry(statusCode: Int) -> Bool {
-        [429, 500, 502, 503, 504].contains(statusCode)
-    }
-
-    private func shouldRetry(error: URLError) -> Bool {
-        switch error.code {
-        case .timedOut, .networkConnectionLost, .notConnectedToInternet, .cannotConnectToHost, .cannotFindHost,
-            .dnsLookupFailed:
-            return true
-        default:
-            return false
-        }
-    }
-
-    private func networkErrorMessage(for error: URLError) -> String {
-        switch error.code {
-        case .notConnectedToInternet:
-            return "No internet connection."
-        case .timedOut:
-            return "Gemini request timed out."
-        default:
-            return "Gemini could not be reached."
-        }
-    }
-
-    private func buildOCRInstructions(customInstructions: String) -> String {
-        let trimmedCustomInstructions = customInstructions.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedCustomInstructions.isEmpty else {
-            return Self.ocrInstruction
-        }
-
-        return """
-            \(Self.ocrInstruction)
-
-            Additional instructions to follow:
-            \(trimmedCustomInstructions)
-            """
     }
 }
 
