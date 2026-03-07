@@ -16,6 +16,13 @@ extension ClipboardMonitor: ClipboardMonitoring {}
 
 @MainActor
 final class AppState: ObservableObject {
+    private struct AppShortcut {
+        let title: String
+        let key: Key
+        let modifiers: NSEvent.ModifierFlags
+        let displayValue: String
+    }
+
     private enum StatusSymbolName {
         static let readyFallback = "pencil.and.outline"
         static let error = "exclamationmark.triangle"
@@ -33,11 +40,17 @@ final class AppState: ObservableObject {
     @Published private(set) var activityStatus: ActivityStatus = .ready
     @Published private(set) var grammarStatus: ProviderStatus = .error(providerID: nil, message: "Not checked")
     @Published private(set) var ocrStatus: ProviderStatus = .error(providerID: nil, message: "Not checked")
+    @Published private(set) var accessibilityPermissionGranted = false
+    @Published private(set) var screenRecordingPermissionGranted = false
+    @Published private(set) var shortcutRegistrationMessage: String?
 
     private let clipboardMonitor: any ClipboardMonitoring
     private let llmRouter: any LLMRouting
     private let grammarCoordinator: any GrammarCoordinating
     private let screenOCRCoordinator: any ScreenOCRCoordinating
+    private let permissionStatusProvider: PermissionStatusProviding
+    private let shortcutAvailabilityChecker: ShortcutAvailabilityChecking
+    private let systemSettingsOpener: SystemSettingsOpening
 
     private var grammarHotKey: HotKey?
     private var screenOCRHotKey: HotKey?
@@ -57,7 +70,10 @@ final class AppState: ObservableObject {
         clipboardMonitor: any ClipboardMonitoring,
         llmRouter: any LLMRouting,
         grammarCoordinator: any GrammarCoordinating,
-        screenOCRCoordinator: any ScreenOCRCoordinating
+        screenOCRCoordinator: any ScreenOCRCoordinating,
+        permissionStatusProvider: PermissionStatusProviding,
+        shortcutAvailabilityChecker: ShortcutAvailabilityChecking,
+        systemSettingsOpener: SystemSettingsOpening
     ) {
         self.settingsStore = settingsStore
         self.clipboardHistoryStore = clipboardHistoryStore
@@ -65,6 +81,9 @@ final class AppState: ObservableObject {
         self.llmRouter = llmRouter
         self.grammarCoordinator = grammarCoordinator
         self.screenOCRCoordinator = screenOCRCoordinator
+        self.permissionStatusProvider = permissionStatusProvider
+        self.shortcutAvailabilityChecker = shortcutAvailabilityChecker
+        self.systemSettingsOpener = systemSettingsOpener
 
         Task { [weak self] in
             self?.start()
@@ -107,6 +126,14 @@ final class AppState: ObservableObject {
         providerStatusTitle(prefix: "OCR", status: ocrStatus)
     }
 
+    var accessibilityStatusTitle: String {
+        accessibilityPermissionGranted ? "Accessibility: Granted" : "Accessibility: Open Privacy Settings"
+    }
+
+    var screenRecordingStatusTitle: String {
+        screenRecordingPermissionGranted ? "Screen Recording: Granted" : "Screen Recording: Open Privacy Settings"
+    }
+
     func start() {
         guard !hasStarted else {
             return
@@ -116,6 +143,7 @@ final class AppState: ObservableObject {
         settingsStore.migrateLegacySettingsIfNeeded()
         NSApp.setActivationPolicy(.accessory)
 
+        refreshPermissionStatuses()
         setupHotKeys()
         applyClipboardHistorySettings()
 
@@ -240,20 +268,58 @@ final class AppState: ObservableObject {
         openSettingsWindow()
     }
 
+    func refreshPermissionStatuses() {
+        accessibilityPermissionGranted = permissionStatusProvider.isAccessibilityPermissionGranted()
+        screenRecordingPermissionGranted = permissionStatusProvider.isScreenRecordingPermissionGranted()
+    }
+
+    func openAccessibilityPrivacySettings() {
+        systemSettingsOpener.openAccessibilityPrivacySettings()
+    }
+
+    func openScreenRecordingPrivacySettings() {
+        systemSettingsOpener.openScreenRecordingPrivacySettings()
+    }
+
     private func setupHotKeys() {
-        grammarHotKey = HotKey(key: .f, modifiers: [.command, .shift])
-        grammarHotKey?.keyDownHandler = { [weak self] in
-            Task { @MainActor in
+        let grammarShortcut = AppShortcut(
+            title: "Grammar Check",
+            key: .f,
+            modifiers: [.command, .shift],
+            displayValue: "Command-Shift-F"
+        )
+        let screenOCRShortcut = AppShortcut(
+            title: "Screen Text Capture",
+            key: .r,
+            modifiers: [.command, .shift],
+            displayValue: "Command-Shift-R"
+        )
+
+        var unavailableShortcuts: [AppShortcut] = []
+
+        if let hotKey = makeHotKey(
+            for: grammarShortcut,
+            action: { [weak self] in
                 self?.handleGrammarHotKeyPress()
-            }
+            })
+        {
+            grammarHotKey = hotKey
+        } else {
+            unavailableShortcuts.append(grammarShortcut)
         }
 
-        screenOCRHotKey = HotKey(key: .r, modifiers: [.command, .shift])
-        screenOCRHotKey?.keyDownHandler = { [weak self] in
-            Task { @MainActor in
+        if let hotKey = makeHotKey(
+            for: screenOCRShortcut,
+            action: { [weak self] in
                 self?.handleScreenOCRHotKeyPress()
-            }
+            })
+        {
+            screenOCRHotKey = hotKey
+        } else {
+            unavailableShortcuts.append(screenOCRShortcut)
         }
+
+        shortcutRegistrationMessage = shortcutConflictMessage(for: unavailableShortcuts)
     }
 
     private func handleGrammarHotKeyPress() {
@@ -335,8 +401,7 @@ final class AppState: ObservableObject {
     }
 
     private func openSettingsWindow() {
-        NSApp.activate(ignoringOtherApps: true)
-        _ = NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        systemSettingsOpener.openApplicationSettings()
     }
 
     private func markGrammarStatusFromCurrentConfiguration(asError: Bool, message: String?) {
@@ -424,6 +489,53 @@ final class AppState: ObservableObject {
             return .ok(providerID: health.providerID)
         }
 
-        return .error(providerID: health.providerID, message: health.message)
+        return .error(providerID: health.providerID, message: providerStatusMessage(for: health))
+    }
+
+    private func providerStatusMessage(for health: LLMProviderHealth) -> String {
+        switch health.state {
+        case .available:
+            return "Ready"
+        case .notConfigured:
+            return "Needs setup in Preferences"
+        case .invalidCredentials:
+            return "Check API key"
+        case .invalidModel:
+            return "Check model"
+        case .networkIssue:
+            return "Network issue"
+        case .rateLimited:
+            return "Rate limited"
+        case .serviceIssue:
+            return "Service unavailable"
+        case .unknown:
+            return health.message
+        }
+    }
+
+    private func makeHotKey(for shortcut: AppShortcut, action: @escaping @MainActor () -> Void) -> HotKey? {
+        guard shortcutAvailabilityChecker.isShortcutAvailable(key: shortcut.key, modifiers: shortcut.modifiers) else {
+            logger.error("Shortcut unavailable: \(shortcut.displayValue, privacy: .public)")
+            return nil
+        }
+
+        let hotKey = HotKey(key: shortcut.key, modifiers: shortcut.modifiers)
+        hotKey.keyDownHandler = {
+            Task { @MainActor in
+                action()
+            }
+        }
+        return hotKey
+    }
+
+    private func shortcutConflictMessage(for shortcuts: [AppShortcut]) -> String? {
+        guard !shortcuts.isEmpty else {
+            return nil
+        }
+
+        let descriptions = shortcuts.map { "\($0.title) (\($0.displayValue))" }
+        let summary = descriptions.joined(separator: ", ")
+        let verb = shortcuts.count == 1 ? "is" : "are"
+        return "Shortcut unavailable: \(summary) \(verb) already in use by another app."
     }
 }

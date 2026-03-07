@@ -1,4 +1,5 @@
 import AppKit
+import HotKey
 import XCTest
 @testable import Steward
 
@@ -14,13 +15,19 @@ final class AppStateTests: XCTestCase {
         let router = FakeAppRouter()
         let grammarCoordinator = FakeGrammarCoordinator()
         let screenOCRCoordinator = FakeScreenOCRCoordinator()
+        let permissionStatusProvider = FakePermissionStatusProvider()
+        let shortcutAvailabilityChecker = FakeShortcutAvailabilityChecker()
+        let systemSettingsOpener = FakeSystemSettingsOpener()
         let appState = AppState(
             settingsStore: settingsStore,
             clipboardHistoryStore: clipboardHistoryStore,
             clipboardMonitor: clipboardMonitor,
             llmRouter: router,
             grammarCoordinator: grammarCoordinator,
-            screenOCRCoordinator: screenOCRCoordinator
+            screenOCRCoordinator: screenOCRCoordinator,
+            permissionStatusProvider: permissionStatusProvider,
+            shortcutAvailabilityChecker: shortcutAvailabilityChecker,
+            systemSettingsOpener: systemSettingsOpener
         )
 
         appState.start()
@@ -28,6 +35,76 @@ final class AppStateTests: XCTestCase {
         await Task.yield()
 
         XCTAssertEqual(clipboardMonitor.startCallCount, 1)
+    }
+
+    func testStartRefreshesPermissionStatuses() async {
+        _ = NSApplication.shared
+        let permissionStatusProvider = FakePermissionStatusProvider(
+            accessibilityPermissionGranted: true,
+            screenRecordingPermissionGranted: false
+        )
+        let appState = AppState(
+            settingsStore: FakeAppSettingsStore(),
+            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
+            clipboardMonitor: FakeClipboardMonitor(),
+            llmRouter: FakeAppRouter(),
+            grammarCoordinator: FakeGrammarCoordinator(),
+            screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            permissionStatusProvider: permissionStatusProvider,
+            shortcutAvailabilityChecker: FakeShortcutAvailabilityChecker(),
+            systemSettingsOpener: FakeSystemSettingsOpener()
+        )
+
+        appState.start()
+        await Task.yield()
+
+        XCTAssertTrue(appState.accessibilityPermissionGranted)
+        XCTAssertFalse(appState.screenRecordingPermissionGranted)
+        XCTAssertEqual(appState.screenRecordingStatusTitle, "Screen Recording: Open Privacy Settings")
+    }
+
+    func testStartPublishesShortcutConflictMessageWhenShortcutIsUnavailable() async {
+        _ = NSApplication.shared
+        let shortcutAvailabilityChecker = FakeShortcutAvailabilityChecker(unavailableKeyCodes: [Key.f.carbonKeyCode])
+        let appState = AppState(
+            settingsStore: FakeAppSettingsStore(),
+            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
+            clipboardMonitor: FakeClipboardMonitor(),
+            llmRouter: FakeAppRouter(),
+            grammarCoordinator: FakeGrammarCoordinator(),
+            screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            permissionStatusProvider: FakePermissionStatusProvider(),
+            shortcutAvailabilityChecker: shortcutAvailabilityChecker,
+            systemSettingsOpener: FakeSystemSettingsOpener()
+        )
+
+        appState.start()
+        await Task.yield()
+
+        XCTAssertEqual(
+            appState.shortcutRegistrationMessage,
+            "Shortcut unavailable: Grammar Check (Command-Shift-F) is already in use by another app."
+        )
+    }
+
+    func testOpenPreferencesUsesSettingsOpener() {
+        _ = NSApplication.shared
+        let systemSettingsOpener = FakeSystemSettingsOpener()
+        let appState = AppState(
+            settingsStore: FakeAppSettingsStore(),
+            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
+            clipboardMonitor: FakeClipboardMonitor(),
+            llmRouter: FakeAppRouter(),
+            grammarCoordinator: FakeGrammarCoordinator(),
+            screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            permissionStatusProvider: FakePermissionStatusProvider(),
+            shortcutAvailabilityChecker: FakeShortcutAvailabilityChecker(),
+            systemSettingsOpener: systemSettingsOpener
+        )
+
+        appState.openPreferences()
+
+        XCTAssertEqual(systemSettingsOpener.openApplicationSettingsCallCount, 1)
     }
 }
 
@@ -102,5 +179,44 @@ private final class FakeAppSettingsStore: LLMSettingsProviding, ClipboardHistory
 
     func setClipboardHistorySettings(_ settings: ClipboardHistorySettings) {
         historySettings = settings
+    }
+}
+
+private struct FakePermissionStatusProvider: PermissionStatusProviding {
+    var accessibilityPermissionGranted = false
+    var screenRecordingPermissionGranted = false
+
+    func isAccessibilityPermissionGranted() -> Bool {
+        accessibilityPermissionGranted
+    }
+
+    func isScreenRecordingPermissionGranted() -> Bool {
+        screenRecordingPermissionGranted
+    }
+}
+
+private struct FakeShortcutAvailabilityChecker: ShortcutAvailabilityChecking {
+    var unavailableKeyCodes: Set<UInt32> = []
+
+    func isShortcutAvailable(key: Key, modifiers: NSEvent.ModifierFlags) -> Bool {
+        !unavailableKeyCodes.contains(key.carbonKeyCode)
+    }
+}
+
+private final class FakeSystemSettingsOpener: SystemSettingsOpening {
+    private(set) var openApplicationSettingsCallCount = 0
+    private(set) var openAccessibilityPrivacySettingsCallCount = 0
+    private(set) var openScreenRecordingPrivacySettingsCallCount = 0
+
+    func openApplicationSettings() {
+        openApplicationSettingsCallCount += 1
+    }
+
+    func openAccessibilityPrivacySettings() {
+        openAccessibilityPrivacySettingsCallCount += 1
+    }
+
+    func openScreenRecordingPrivacySettings() {
+        openScreenRecordingPrivacySettingsCallCount += 1
     }
 }

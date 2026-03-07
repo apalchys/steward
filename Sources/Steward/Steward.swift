@@ -12,6 +12,9 @@ struct StewardApp: App {
             clipboardHistoryStore.append(record)
         }
         let textInteractionService = SystemTextInteractionService(suppression: clipboardMonitor)
+        let permissionStatusProvider = SystemPermissionStatusProvider()
+        let shortcutAvailabilityChecker = SystemShortcutAvailabilityChecker()
+        let systemSettingsOpener = SystemSettingsOpener()
         let llmRouter = LLMRouter(
             providers: [
                 OpenAILLMProvider(),
@@ -39,7 +42,10 @@ struct StewardApp: App {
                 clipboardMonitor: clipboardMonitor,
                 llmRouter: llmRouter,
                 grammarCoordinator: grammarCoordinator,
-                screenOCRCoordinator: screenOCRCoordinator
+                screenOCRCoordinator: screenOCRCoordinator,
+                permissionStatusProvider: permissionStatusProvider,
+                shortcutAvailabilityChecker: shortcutAvailabilityChecker,
+                systemSettingsOpener: systemSettingsOpener
             )
         )
     }
@@ -89,6 +95,7 @@ private struct AppMenuView: View {
             Divider()
 
             Text(appState.activityStatusTitle)
+                .foregroundColor(.secondary)
 
             Button(appState.grammarStatusTitle) {
                 appState.checkGrammarProviderStatus()
@@ -96,6 +103,34 @@ private struct AppMenuView: View {
 
             Button(appState.ocrStatusTitle) {
                 appState.checkOCRProviderStatus()
+            }
+
+            Divider()
+
+            if appState.accessibilityPermissionGranted {
+                Text(appState.accessibilityStatusTitle)
+                    .foregroundColor(.secondary)
+            } else {
+                Button(appState.accessibilityStatusTitle) {
+                    appState.openAccessibilityPrivacySettings()
+                }
+            }
+
+            if appState.screenRecordingPermissionGranted {
+                Text(appState.screenRecordingStatusTitle)
+                    .foregroundColor(.secondary)
+            } else {
+                Button(appState.screenRecordingStatusTitle) {
+                    appState.openScreenRecordingPrivacySettings()
+                }
+            }
+
+            if let shortcutRegistrationMessage = appState.shortcutRegistrationMessage {
+                Divider()
+
+                Text(shortcutRegistrationMessage)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Divider()
@@ -114,6 +149,9 @@ private struct AppMenuView: View {
             Button("Quit") {
                 NSApplication.shared.terminate(nil)
             }
+        }
+        .onAppear {
+            appState.refreshPermissionStatuses()
         }
     }
 }
