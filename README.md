@@ -29,7 +29,7 @@ Screen Text Capture:
 
 Clipboard History:
 
-1. Enable recording in Preferences > History.
+1. Enable recording in Preferences > Clipboard.
 2. Open the history window from the menu bar.
 3. Search, view, or delete entries.
 

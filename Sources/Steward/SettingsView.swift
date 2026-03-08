@@ -42,7 +42,7 @@ struct SettingsView: View {
 
             historyTab
                 .tabItem {
-                    Label("Clipboard History", systemImage: "clipboard")
+                    Label("Clipboard", systemImage: "clipboard")
                 }
 
             aboutTab
@@ -166,7 +166,7 @@ struct SettingsView: View {
     private var historyTab: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Clipboard History")
+                Text("Clipboard")
                     .font(.headline)
 
                 Toggle("Enable clipboard history", isOn: $settings.clipboardHistory.isEnabled)
