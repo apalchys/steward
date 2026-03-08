@@ -51,7 +51,9 @@ struct LLMSettings: Equatable {
 }
 
 struct ClipboardHistorySettings: Equatable {
-    static let defaultMaxStoredRecords = 100
+    static let defaultMaxStoredRecords = 1_000
+    static let maxStoredRecordsLimit = 10_000
+    static let maxStoredRecordsStep = 500
     static let `default` = ClipboardHistorySettings()
 
     var isEnabled: Bool
@@ -63,7 +65,7 @@ struct ClipboardHistorySettings: Equatable {
     }
 
     static func sanitizedMaxStoredRecords(_ value: Int) -> Int {
-        max(1, value)
+        min(max(1, value), maxStoredRecordsLimit)
     }
 }
 

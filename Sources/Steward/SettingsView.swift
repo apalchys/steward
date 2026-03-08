@@ -178,8 +178,8 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Stepper(
                         value: $settings.clipboardHistory.maxStoredRecords,
-                        in: 25...500,
-                        step: 25
+                        in: 1...ClipboardHistorySettings.maxStoredRecordsLimit,
+                        step: ClipboardHistorySettings.maxStoredRecordsStep
                     ) {
                         Text("Keep up to \(settings.clipboardHistory.maxStoredRecords) entries")
                     }

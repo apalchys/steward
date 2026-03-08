@@ -74,6 +74,16 @@ final class LLMSettingsMigrationTests: XCTestCase {
         XCTAssertEqual(settings.screenshotCustomInstructions, "")
         XCTAssertEqual(settings.clipboardHistory, .default)
     }
+
+    func testClipboardHistoryDefaultMaxStoredRecordsIs1000() {
+        XCTAssertEqual(ClipboardHistorySettings.default.maxStoredRecords, 1_000)
+    }
+
+    func testClipboardHistoryMaxStoredRecordsIsCappedAt10000() {
+        let settings = ClipboardHistorySettings(maxStoredRecords: 20_000)
+
+        XCTAssertEqual(settings.maxStoredRecords, ClipboardHistorySettings.maxStoredRecordsLimit)
+    }
 }
 
 private final class InMemoryLLMSecretsStore: LLMSecretsStoring {
