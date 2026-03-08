@@ -171,7 +171,7 @@ struct SettingsView: View {
 
                 Toggle("Enable clipboard history", isOn: $settings.clipboardHistory.isEnabled)
 
-                Text("Clipboard history is stored only on this Mac and is disabled by default.")
+                Text("Clipboard history is stored only on this Mac and is enabled by default.")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
 

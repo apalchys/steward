@@ -57,7 +57,7 @@ struct ClipboardHistorySettings: Equatable {
     var isEnabled: Bool
     var maxStoredRecords: Int
 
-    init(isEnabled: Bool = false, maxStoredRecords: Int = ClipboardHistorySettings.defaultMaxStoredRecords) {
+    init(isEnabled: Bool = true, maxStoredRecords: Int = ClipboardHistorySettings.defaultMaxStoredRecords) {
         self.isEnabled = isEnabled
         self.maxStoredRecords = Self.sanitizedMaxStoredRecords(maxStoredRecords)
     }

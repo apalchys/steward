@@ -68,7 +68,7 @@ open Steward.app
 
 - Settings and API keys are stored locally via UserDefaults.
 - Clipboard history is stored locally at `~/Library/Application Support/Steward/clipboard-history.jsonl`.
-- Clipboard history is off by default. Only new entries are recorded after you enable it.
+- Clipboard history is on by default. New entries are recorded until you disable it.
 - Requests are sent only to the provider you configure for each feature.
 
 ## Dependencies
