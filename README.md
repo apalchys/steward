@@ -1,9 +1,6 @@
 # Steward
 
-<img height="300" alt="image" src="https://github.com/user-attachments/assets/06395f67-1ad1-4b72-88df-ed6e7faa3e23" />
-
-<img height="300" alt="image" src="https://github.com/user-attachments/assets/de00d44b-bd28-4fcf-9b9b-2698fbb376cd" />
-
+<img width="120" height="120" alt="image" src="https://github.com/user-attachments/assets/27fcee3a-b017-4665-8048-71de5360ba9d" />
 
 Steward is a macOS menu bar app that helps you be more productive with three features:
 
@@ -12,6 +9,9 @@ Steward is a macOS menu bar app that helps you be more productive with three fea
 - Keep a searchable clipboard history
 
 It uses OpenAI or Gemini as the LLM backend, configurable per feature.
+
+<img height="250" alt="image" src="https://github.com/user-attachments/assets/06395f67-1ad1-4b72-88df-ed6e7faa3e23" />
+<img height="250" alt="image" src="https://github.com/user-attachments/assets/de00d44b-bd28-4fcf-9b9b-2698fbb376cd" />
 
 ## How It Works
 
