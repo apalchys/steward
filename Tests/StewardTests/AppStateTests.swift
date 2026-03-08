@@ -55,6 +55,29 @@ final class AppStateTests: XCTestCase {
         XCTAssertTrue(appState.accessibilityPermissionGranted)
         XCTAssertFalse(appState.screenRecordingPermissionGranted)
         XCTAssertEqual(appState.screenRecordingStatusTitle, "Screen Recording: Open Privacy Settings")
+        XCTAssertTrue(appState.shouldShowPermissionActions)
+    }
+
+    func testStartHidesPermissionActionsWhenAllPermissionsAreGranted() async {
+        _ = NSApplication.shared
+        let appSystemServices = FakeAppSystemServices(
+            accessibilityPermissionGranted: true,
+            screenRecordingPermissionGranted: true
+        )
+        let appState = AppState(
+            settingsStore: FakeAppSettingsStore(),
+            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
+            clipboardMonitor: FakeClipboardMonitor(),
+            llmRouter: FakeAppRouter(),
+            grammarCoordinator: FakeGrammarCoordinator(),
+            screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            appSystemServices: appSystemServices.services
+        )
+
+        appState.start()
+        await Task.yield()
+
+        XCTAssertFalse(appState.shouldShowPermissionActions)
     }
 
     func testStartPublishesShortcutConflictMessageWhenShortcutIsUnavailable() async {

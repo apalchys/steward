@@ -146,6 +146,10 @@ final class AppState: ObservableObject {
         screenRecordingPermissionGranted ? "Screen Recording: Granted" : "Screen Recording: Open Privacy Settings"
     }
 
+    var shouldShowPermissionActions: Bool {
+        !accessibilityPermissionGranted || !screenRecordingPermissionGranted
+    }
+
     func start() {
         guard !hasStarted else {
             return

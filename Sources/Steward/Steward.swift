@@ -98,23 +98,19 @@ private struct AppMenuView: View {
                 appState.checkOCRProviderStatus()
             }
 
-            Divider()
+            if appState.shouldShowPermissionActions {
+                Divider()
 
-            if appState.accessibilityPermissionGranted {
-                Text(appState.accessibilityStatusTitle)
-                    .foregroundColor(.secondary)
-            } else {
-                Button(appState.accessibilityStatusTitle) {
-                    appState.openAccessibilityPrivacySettings()
+                if !appState.accessibilityPermissionGranted {
+                    Button(appState.accessibilityStatusTitle) {
+                        appState.openAccessibilityPrivacySettings()
+                    }
                 }
-            }
 
-            if appState.screenRecordingPermissionGranted {
-                Text(appState.screenRecordingStatusTitle)
-                    .foregroundColor(.secondary)
-            } else {
-                Button(appState.screenRecordingStatusTitle) {
-                    appState.openScreenRecordingPrivacySettings()
+                if !appState.screenRecordingPermissionGranted {
+                    Button(appState.screenRecordingStatusTitle) {
+                        appState.openScreenRecordingPrivacySettings()
+                    }
                 }
             }
 
