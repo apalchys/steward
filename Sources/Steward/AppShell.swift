@@ -61,6 +61,10 @@ final class AppState: ObservableObject {
     @Published private(set) var accessibilityPermissionGranted = false
     @Published private(set) var screenRecordingPermissionGranted = false
     @Published private(set) var shortcutRegistrationMessage: String?
+    @Published private(set) var launchAtLoginStatus: LaunchAtLoginStatus = .notRegistered
+    @Published private(set) var isUpdatingLaunchAtLogin = false
+    @Published private(set) var launchAtLoginMessage: String?
+    @Published private(set) var shouldShowOpenLoginItemsAction = false
 
     private let clipboardMonitor: any ClipboardMonitoring
     private let llmRouter: any LLMRouting
@@ -150,6 +154,10 @@ final class AppState: ObservableObject {
         !accessibilityPermissionGranted || !screenRecordingPermissionGranted
     }
 
+    var isLaunchAtLoginEnabled: Bool {
+        launchAtLoginStatus.isEnabled
+    }
+
     func start() {
         guard !hasStarted else {
             return
@@ -159,6 +167,7 @@ final class AppState: ObservableObject {
         NSApp.setActivationPolicy(.accessory)
 
         refreshPermissionStatuses()
+        refreshLaunchAtLoginStatus()
         setupHotKeys()
         applyClipboardHistorySettings()
 
@@ -180,6 +189,16 @@ final class AppState: ObservableObject {
         ) { [weak self] _ in
             Task { @MainActor in
                 self?.clipboardMonitor.stop()
+            }
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.refreshLaunchAtLoginStatus()
             }
         }
 
@@ -226,6 +245,7 @@ final class AppState: ObservableObject {
     }
 
     func openPreferences() {
+        refreshLaunchAtLoginStatus()
         openSettingsWindow()
     }
 
@@ -240,6 +260,38 @@ final class AppState: ObservableObject {
 
     func openScreenRecordingPrivacySettings() {
         appSystemServices.openScreenRecordingPrivacySettings()
+    }
+
+    func refreshLaunchAtLoginStatus() {
+        updateLaunchAtLoginState(status: appSystemServices.launchAtLoginStatus())
+    }
+
+    func setLaunchAtLoginEnabled(_ isEnabled: Bool) {
+        isUpdatingLaunchAtLogin = true
+        defer { isUpdatingLaunchAtLogin = false }
+
+        do {
+            try appSystemServices.setLaunchAtLoginEnabled(isEnabled)
+            logger.log("Launch at login updated. enabled=\(isEnabled, privacy: .public)")
+            updateLaunchAtLoginState(status: appSystemServices.launchAtLoginStatus())
+        } catch let error as LaunchAtLoginError {
+            logger.error("Launch at login update failed: \(error.localizedDescription)")
+            updateLaunchAtLoginState(
+                status: appSystemServices.launchAtLoginStatus(),
+                messageOverride: error.errorDescription,
+                showOpenSettingsActionOverride: error.shouldOfferOpenLoginItemsSettings
+            )
+        } catch {
+            logger.error("Launch at login update failed: \(error.localizedDescription)")
+            updateLaunchAtLoginState(
+                status: appSystemServices.launchAtLoginStatus(),
+                messageOverride: LaunchAtLoginError.unknown.errorDescription
+            )
+        }
+    }
+
+    func openLoginItemsSettings() {
+        appSystemServices.openLoginItemsSettings()
     }
 
     private func setupHotKeys() {
@@ -461,6 +513,29 @@ final class AppState: ObservableObject {
             clipboardMonitor.start()
         } else {
             clipboardMonitor.stop()
+        }
+    }
+
+    private func updateLaunchAtLoginState(
+        status: LaunchAtLoginStatus,
+        messageOverride: String? = nil,
+        showOpenSettingsActionOverride: Bool? = nil
+    ) {
+        launchAtLoginStatus = status
+        launchAtLoginMessage = messageOverride ?? defaultLaunchAtLoginMessage(for: status)
+
+        let defaultActionVisibility = status == .requiresApproval
+        shouldShowOpenLoginItemsAction = showOpenSettingsActionOverride ?? defaultActionVisibility
+    }
+
+    private func defaultLaunchAtLoginMessage(for status: LaunchAtLoginStatus) -> String? {
+        switch status {
+        case .requiresApproval:
+            return LaunchAtLoginError.requiresApproval.errorDescription
+        case .notFound:
+            return "Steward could not locate its login item registration."
+        case .enabled, .notRegistered:
+            return nil
         }
     }
 

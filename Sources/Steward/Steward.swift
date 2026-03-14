@@ -59,6 +59,7 @@ struct StewardApp: App {
 
         Settings {
             SettingsView(
+                appState: appState,
                 settingsStore: appState.settingsStore,
                 clipboardHistoryStore: appState.clipboardHistoryStore
             ) {

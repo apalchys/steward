@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 
 struct SettingsView: View {
+    @ObservedObject private var appState: AppState
     @ObservedObject private var clipboardHistoryStore: ClipboardHistoryStore
     @State private var settings: LLMSettings
     @State private var showClearHistoryConfirmation = false
@@ -18,10 +19,12 @@ struct SettingsView: View {
     }
 
     init(
+        appState: AppState,
         settingsStore: any AppSettingsProviding = UserDefaultsLLMSettingsStore(),
         clipboardHistoryStore: ClipboardHistoryStore = ClipboardHistoryStore(autoLoad: false),
         onSettingsChanged: (() -> Void)? = nil
     ) {
+        _appState = ObservedObject(wrappedValue: appState)
         self.settingsStore = settingsStore
         self.onSettingsChanged = onSettingsChanged
         _clipboardHistoryStore = ObservedObject(wrappedValue: clipboardHistoryStore)
@@ -30,6 +33,11 @@ struct SettingsView: View {
 
     var body: some View {
         TabView {
+            generalTab
+                .tabItem {
+                    Label("General", systemImage: "gearshape")
+                }
+
             grammarTab
                 .tabItem {
                     Label("Grammar", systemImage: "text.book.closed")
@@ -53,6 +61,10 @@ struct SettingsView: View {
         .frame(width: 760, height: 520)
         .onAppear {
             settings = settingsStore.loadSettings()
+            appState.refreshLaunchAtLoginStatus()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            appState.refreshLaunchAtLoginStatus()
         }
         .onChange(of: settings) { _, newSettings in
             persistSettings(newSettings)
@@ -64,6 +76,35 @@ struct SettingsView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This permanently deletes all locally stored clipboard history.")
+        }
+    }
+
+    private var generalTab: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("General")
+                    .font(.headline)
+
+                Toggle("Launch Steward at login", isOn: launchAtLoginBinding)
+                    .disabled(appState.isUpdatingLaunchAtLogin)
+
+                Text("Steward uses macOS Login Items and follows your system-level preference.")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+
+                if let launchAtLoginMessage = appState.launchAtLoginMessage {
+                    Text(launchAtLoginMessage)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                if appState.shouldShowOpenLoginItemsAction {
+                    Button("Open Login Items Settings") {
+                        appState.openLoginItemsSettings()
+                    }
+                }
+            }
+            .padding(20)
         }
     }
 
@@ -273,5 +314,16 @@ struct SettingsView: View {
     private func persistSettings(_ settings: LLMSettings) {
         settingsStore.saveSettings(settings)
         onSettingsChanged?()
+    }
+
+    private var launchAtLoginBinding: Binding<Bool> {
+        Binding(
+            get: {
+                appState.isLaunchAtLoginEnabled
+            },
+            set: { newValue in
+                appState.setLaunchAtLoginEnabled(newValue)
+            }
+        )
     }
 }

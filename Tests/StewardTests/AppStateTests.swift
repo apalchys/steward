@@ -119,6 +119,147 @@ final class AppStateTests: XCTestCase {
 
         XCTAssertEqual(appSystemServices.openApplicationSettingsCallCount, 1)
     }
+
+    func testStartRefreshesLaunchAtLoginStatus() async {
+        _ = NSApplication.shared
+        let appSystemServices = FakeAppSystemServices(launchAtLoginStatus: .enabled)
+        let appState = AppState(
+            settingsStore: FakeAppSettingsStore(),
+            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
+            clipboardMonitor: FakeClipboardMonitor(),
+            llmRouter: FakeAppRouter(),
+            grammarCoordinator: FakeGrammarCoordinator(),
+            screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            appSystemServices: appSystemServices.services
+        )
+
+        appState.start()
+        await Task.yield()
+
+        XCTAssertEqual(appState.launchAtLoginStatus, .enabled)
+        XCTAssertTrue(appState.isLaunchAtLoginEnabled)
+        XCTAssertNil(appState.launchAtLoginMessage)
+    }
+
+    func testSetLaunchAtLoginEnabledTurnsOnAndRefreshesStatus() {
+        _ = NSApplication.shared
+        let appSystemServices = FakeAppSystemServices(launchAtLoginStatus: .notRegistered)
+        let appState = AppState(
+            settingsStore: FakeAppSettingsStore(),
+            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
+            clipboardMonitor: FakeClipboardMonitor(),
+            llmRouter: FakeAppRouter(),
+            grammarCoordinator: FakeGrammarCoordinator(),
+            screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            appSystemServices: appSystemServices.services
+        )
+
+        appState.setLaunchAtLoginEnabled(true)
+
+        XCTAssertEqual(appSystemServices.setLaunchAtLoginEnabledCalls, [true])
+        XCTAssertEqual(appState.launchAtLoginStatus, .enabled)
+        XCTAssertTrue(appState.isLaunchAtLoginEnabled)
+        XCTAssertNil(appState.launchAtLoginMessage)
+    }
+
+    func testSetLaunchAtLoginEnabledTurnsOffAndRefreshesStatus() {
+        _ = NSApplication.shared
+        let appSystemServices = FakeAppSystemServices(launchAtLoginStatus: .enabled)
+        let appState = AppState(
+            settingsStore: FakeAppSettingsStore(),
+            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
+            clipboardMonitor: FakeClipboardMonitor(),
+            llmRouter: FakeAppRouter(),
+            grammarCoordinator: FakeGrammarCoordinator(),
+            screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            appSystemServices: appSystemServices.services
+        )
+
+        appState.setLaunchAtLoginEnabled(false)
+
+        XCTAssertEqual(appSystemServices.setLaunchAtLoginEnabledCalls, [false])
+        XCTAssertEqual(appState.launchAtLoginStatus, .notRegistered)
+        XCTAssertFalse(appState.isLaunchAtLoginEnabled)
+        XCTAssertNil(appState.launchAtLoginMessage)
+    }
+
+    func testRefreshLaunchAtLoginStatusShowsRequiresApprovalMessage() {
+        _ = NSApplication.shared
+        let appSystemServices = FakeAppSystemServices(launchAtLoginStatus: .requiresApproval)
+        let appState = AppState(
+            settingsStore: FakeAppSettingsStore(),
+            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
+            clipboardMonitor: FakeClipboardMonitor(),
+            llmRouter: FakeAppRouter(),
+            grammarCoordinator: FakeGrammarCoordinator(),
+            screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            appSystemServices: appSystemServices.services
+        )
+
+        appState.refreshLaunchAtLoginStatus()
+
+        XCTAssertEqual(appState.launchAtLoginStatus, .requiresApproval)
+        XCTAssertEqual(appState.launchAtLoginMessage, LaunchAtLoginError.requiresApproval.errorDescription)
+        XCTAssertTrue(appState.shouldShowOpenLoginItemsAction)
+    }
+
+    func testRefreshLaunchAtLoginStatusShowsNotFoundMessage() {
+        _ = NSApplication.shared
+        let appSystemServices = FakeAppSystemServices(launchAtLoginStatus: .notFound)
+        let appState = AppState(
+            settingsStore: FakeAppSettingsStore(),
+            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
+            clipboardMonitor: FakeClipboardMonitor(),
+            llmRouter: FakeAppRouter(),
+            grammarCoordinator: FakeGrammarCoordinator(),
+            screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            appSystemServices: appSystemServices.services
+        )
+
+        appState.refreshLaunchAtLoginStatus()
+
+        XCTAssertEqual(appState.launchAtLoginStatus, .notFound)
+        XCTAssertEqual(appState.launchAtLoginMessage, "Steward could not locate its login item registration.")
+    }
+
+    func testSetLaunchAtLoginEnabledWithRequiresApprovalErrorShowsActionableMessage() {
+        _ = NSApplication.shared
+        let appSystemServices = FakeAppSystemServices(launchAtLoginStatus: .requiresApproval)
+        appSystemServices.setLaunchAtLoginEnabledError = LaunchAtLoginError.requiresApproval
+        let appState = AppState(
+            settingsStore: FakeAppSettingsStore(),
+            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
+            clipboardMonitor: FakeClipboardMonitor(),
+            llmRouter: FakeAppRouter(),
+            grammarCoordinator: FakeGrammarCoordinator(),
+            screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            appSystemServices: appSystemServices.services
+        )
+
+        appState.setLaunchAtLoginEnabled(true)
+
+        XCTAssertEqual(appState.launchAtLoginStatus, .requiresApproval)
+        XCTAssertEqual(appState.launchAtLoginMessage, LaunchAtLoginError.requiresApproval.errorDescription)
+        XCTAssertTrue(appState.shouldShowOpenLoginItemsAction)
+    }
+
+    func testOpenLoginItemsSettingsUsesSystemServices() {
+        _ = NSApplication.shared
+        let appSystemServices = FakeAppSystemServices()
+        let appState = AppState(
+            settingsStore: FakeAppSettingsStore(),
+            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
+            clipboardMonitor: FakeClipboardMonitor(),
+            llmRouter: FakeAppRouter(),
+            grammarCoordinator: FakeGrammarCoordinator(),
+            screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            appSystemServices: appSystemServices.services
+        )
+
+        appState.openLoginItemsSettings()
+
+        XCTAssertEqual(appSystemServices.openLoginItemsSettingsCallCount, 1)
+    }
 }
 
 @MainActor
@@ -178,18 +319,24 @@ private final class FakeAppSettingsStore: AppSettingsProviding {
 private final class FakeAppSystemServices {
     var accessibilityPermissionGranted = false
     var screenRecordingPermissionGranted = false
+    var launchAtLoginStatus: LaunchAtLoginStatus = .notRegistered
     var unavailableKeyCodes: Set<UInt32> = []
+    var setLaunchAtLoginEnabledError: Error?
     private(set) var openApplicationSettingsCallCount = 0
     private(set) var openAccessibilityPrivacySettingsCallCount = 0
     private(set) var openScreenRecordingPrivacySettingsCallCount = 0
+    private(set) var openLoginItemsSettingsCallCount = 0
+    private(set) var setLaunchAtLoginEnabledCalls: [Bool] = []
 
     init(
         accessibilityPermissionGranted: Bool = false,
         screenRecordingPermissionGranted: Bool = false,
+        launchAtLoginStatus: LaunchAtLoginStatus = .notRegistered,
         unavailableKeyCodes: Set<UInt32> = []
     ) {
         self.accessibilityPermissionGranted = accessibilityPermissionGranted
         self.screenRecordingPermissionGranted = screenRecordingPermissionGranted
+        self.launchAtLoginStatus = launchAtLoginStatus
         self.unavailableKeyCodes = unavailableKeyCodes
     }
 
@@ -208,6 +355,21 @@ private final class FakeAppSystemServices {
             },
             openScreenRecordingPrivacySettings: {
                 self.openScreenRecordingPrivacySettingsCallCount += 1
+            },
+            launchAtLoginStatus: {
+                self.launchAtLoginStatus
+            },
+            setLaunchAtLoginEnabled: { isEnabled in
+                self.setLaunchAtLoginEnabledCalls.append(isEnabled)
+
+                if let error = self.setLaunchAtLoginEnabledError {
+                    throw error
+                }
+
+                self.launchAtLoginStatus = isEnabled ? .enabled : .notRegistered
+            },
+            openLoginItemsSettings: {
+                self.openLoginItemsSettingsCallCount += 1
             }
         )
     }

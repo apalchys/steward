@@ -47,7 +47,6 @@
 
 ## Testing Guidelines
 
-- Add/update tests with code changes.
 - Keep tests isolated, fast, and deterministic.
 - Use XCTest under `Tests/StewardTests`.
 - Mirror source module areas in test naming (`ThingTests.swift`, `test...`).
@@ -57,9 +56,7 @@
 
 - Follow Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`, `ci:`).
 - Keep PRs scoped and explain what/why.
-- Include screenshots or before/after notes for UI changes.
 - Note permission-impacting changes (Accessibility, Screen Recording, etc.).
-- Pass local build and tests before review.
 
 ## Security & Configuration Tips
 
