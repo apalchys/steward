@@ -2,7 +2,8 @@ import AppKit
 import SwiftUI
 
 enum VoiceRecordingPillState: Equatable {
-    case recording(level: Float)
+    case interactiveRecording(level: Float)
+    case passiveRecording(level: Float)
     case transcribing
 }
 
@@ -11,7 +12,8 @@ protocol VoiceRecordingPillPresenting: AnyObject {
     var onCancel: (() -> Void)? { get set }
     var onConfirm: (() -> Void)? { get set }
 
-    func showRecording(level: Float)
+    func showInteractiveRecording(level: Float)
+    func showPassiveRecording(level: Float)
     func showTranscribing()
     func hide()
 }
@@ -30,7 +32,7 @@ extension NSPanel: VoiceRecordingPillWindowing {}
 
 @MainActor
 final class VoiceRecordingPillViewModel: ObservableObject {
-    @Published private(set) var state: VoiceRecordingPillState = .recording(level: 0)
+    @Published private(set) var state: VoiceRecordingPillState = .interactiveRecording(level: 0)
 
     var onCancel: (() -> Void)?
     var onConfirm: (() -> Void)?
@@ -84,8 +86,13 @@ final class VoiceRecordingPillController: VoiceRecordingPillPresenting {
         self.screenProvider = screenProvider ?? { NSScreen.main ?? NSScreen.screens.first }
     }
 
-    func showRecording(level: Float) {
-        viewModel.update(state: .recording(level: min(max(level, 0), 1)))
+    func showInteractiveRecording(level: Float) {
+        viewModel.update(state: .interactiveRecording(level: min(max(level, 0), 1)))
+        presentWindow()
+    }
+
+    func showPassiveRecording(level: Float) {
+        viewModel.update(state: .passiveRecording(level: min(max(level, 0), 1)))
         presentWindow()
     }
 
@@ -152,22 +159,13 @@ private struct VoiceRecordingPillView: View {
     @ObservedObject var model: VoiceRecordingPillViewModel
 
     var body: some View {
-        HStack(spacing: 18) {
-            Button(action: model.handleCancel) {
-                CircleButtonContent(symbolName: "xmark")
+        Group {
+            switch model.state {
+            case .interactiveRecording:
+                interactiveBody
+            case .passiveRecording, .transcribing:
+                passiveBody
             }
-            .buttonStyle(.plain)
-            .disabled(model.state == .transcribing)
-            .opacity(model.state == .transcribing ? 0.45 : 1)
-
-            centerContent
-
-            Button(action: model.handleConfirm) {
-                CircleButtonContent(symbolName: "checkmark")
-            }
-            .buttonStyle(.plain)
-            .disabled(model.state == .transcribing)
-            .opacity(model.state == .transcribing ? 0.45 : 1)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -182,11 +180,32 @@ private struct VoiceRecordingPillView: View {
     @ViewBuilder
     private var centerContent: some View {
         switch model.state {
-        case .recording(let level):
+        case .interactiveRecording(let level), .passiveRecording(let level):
             VoiceRecordingLevelMeter(level: level)
         case .transcribing:
             VoiceRecordingBusyIndicator()
         }
+    }
+
+    private var interactiveBody: some View {
+        HStack(spacing: 18) {
+            Button(action: model.handleCancel) {
+                CircleButtonContent(symbolName: "xmark")
+            }
+            .buttonStyle(.plain)
+
+            centerContent
+
+            Button(action: model.handleConfirm) {
+                CircleButtonContent(symbolName: "checkmark")
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var passiveBody: some View {
+        centerContent
+            .frame(minWidth: 72)
     }
 }
 

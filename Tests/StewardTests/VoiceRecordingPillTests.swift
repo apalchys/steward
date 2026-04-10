@@ -4,7 +4,7 @@ import XCTest
 
 @MainActor
 final class VoiceRecordingPillTests: XCTestCase {
-    func testShowRecordingUpdatesStateAndShowsWindow() {
+    func testShowInteractiveRecordingUpdatesStateAndShowsWindow() {
         let window = FakeVoiceRecordingPillWindow()
         let screen = NSScreen.main ?? NSScreen.screens.first
         let controller = VoiceRecordingPillController(
@@ -12,9 +12,23 @@ final class VoiceRecordingPillTests: XCTestCase {
             screenProvider: { screen }
         )
 
-        controller.showRecording(level: 1.4)
+        controller.showInteractiveRecording(level: 1.4)
 
-        XCTAssertEqual(controller.currentState, .recording(level: 1))
+        XCTAssertEqual(controller.currentState, .interactiveRecording(level: 1))
+        XCTAssertEqual(window.orderFrontRegardlessCallCount, 1)
+    }
+
+    func testShowPassiveRecordingUpdatesStateAndShowsWindow() {
+        let window = FakeVoiceRecordingPillWindow()
+        let screen = NSScreen.main ?? NSScreen.screens.first
+        let controller = VoiceRecordingPillController(
+            windowFactory: { window },
+            screenProvider: { screen }
+        )
+
+        controller.showPassiveRecording(level: -0.5)
+
+        XCTAssertEqual(controller.currentState, .passiveRecording(level: 0))
         XCTAssertEqual(window.orderFrontRegardlessCallCount, 1)
     }
 
@@ -38,7 +52,7 @@ final class VoiceRecordingPillTests: XCTestCase {
             screenProvider: { NSScreen.main ?? NSScreen.screens.first }
         )
 
-        controller.showRecording(level: 0.3)
+        controller.showInteractiveRecording(level: 0.3)
         controller.hide()
 
         XCTAssertEqual(window.orderOutCallCount, 1)

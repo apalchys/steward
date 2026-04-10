@@ -1,6 +1,6 @@
 ---
 name: Recording Pill For Push To Talk
-status: todo
+status: done
 ---
 
 # Summary
@@ -20,4 +20,3 @@ Adjust the floating recording UI so push-to-talk uses a passive indicator instea
 
 - Push-to-talk recordings show a passive indicator only.
 - Manual fallback recordings still expose explicit stop/cancel controls.
-

@@ -101,7 +101,7 @@ final class VoiceDictationCoordinator: VoiceDictationCoordinating {
                 return
             }
 
-            self.recordingPillPresenter.showRecording(level: level)
+            self.showRecordingPill(level: level)
         }
         audioRecordingService.onMaximumDurationReached = { [weak self] in
             Task { @MainActor in
@@ -175,7 +175,7 @@ final class VoiceDictationCoordinator: VoiceDictationCoordinating {
         try audioRecordingService.startRecording()
         recordingSource = source
         transition(to: .recording)
-        recordingPillPresenter.showRecording(level: 0)
+        showRecordingPill(level: 0)
     }
 
     private func stopAndTranscribeRecording() async throws {
@@ -229,6 +229,17 @@ final class VoiceDictationCoordinator: VoiceDictationCoordinating {
         recordingSource = nil
         recordingPillPresenter.hide()
         transition(to: .idle)
+    }
+
+    private func showRecordingPill(level: Float) {
+        switch recordingSource {
+        case .pushToTalkHotKey:
+            recordingPillPresenter.showPassiveRecording(level: level)
+        case .manualToggle:
+            recordingPillPresenter.showInteractiveRecording(level: level)
+        case nil:
+            recordingPillPresenter.showInteractiveRecording(level: level)
+        }
     }
 
     private func transition(to newState: VoiceDictationWorkflowState) {

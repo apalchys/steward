@@ -23,7 +23,7 @@ final class VoiceDictationCoordinatorTests: XCTestCase {
 
         XCTAssertEqual(microphoneAccess.ensureAccessCallCount, 1)
         XCTAssertEqual(audioRecordingService.startRecordingCallCount, 1)
-        XCTAssertEqual(pillPresenter.recordingLevels, [0])
+        XCTAssertEqual(pillPresenter.recordingStates, [.interactiveRecording(level: 0)])
         XCTAssertTrue(audioRecordingService.isRecording)
     }
 
@@ -181,10 +181,11 @@ final class VoiceDictationCoordinatorTests: XCTestCase {
     }
 
     func testPushToTalkKeyDownStartsRecording() async throws {
+        let pillPresenter = FakeVoiceRecordingPillPresenter()
         let coordinator = VoiceDictationCoordinator(
             microphoneAccess: FakeMicrophoneAccessProvider(result: true),
             audioRecordingService: FakeAudioRecordingService(),
-            recordingPillPresenter: FakeVoiceRecordingPillPresenter(),
+            recordingPillPresenter: pillPresenter,
             router: VoiceDictationFakeRouter(result: .success(.text("ignored"))),
             textInteraction: VoiceDictationFakeTextInteraction(),
             settingsStore: VoiceDictationSettingsStore()
@@ -193,6 +194,7 @@ final class VoiceDictationCoordinatorTests: XCTestCase {
         try await coordinator.handlePushToTalkKeyDown()
 
         XCTAssertEqual(coordinator.state, .recording)
+        XCTAssertEqual(pillPresenter.recordingStates, [.passiveRecording(level: 0)])
     }
 
     func testPushToTalkKeyUpStopsRecordingAndTranscribes() async throws {
@@ -288,12 +290,16 @@ private final class FakeAudioRecordingService: AudioRecordingProviding {
 private final class FakeVoiceRecordingPillPresenter: VoiceRecordingPillPresenting {
     var onCancel: (() -> Void)?
     var onConfirm: (() -> Void)?
-    private(set) var recordingLevels: [Float] = []
+    private(set) var recordingStates: [VoiceRecordingPillState] = []
     private(set) var showTranscribingCallCount = 0
     private(set) var hideCallCount = 0
 
-    func showRecording(level: Float) {
-        recordingLevels.append(level)
+    func showInteractiveRecording(level: Float) {
+        recordingStates.append(.interactiveRecording(level: level))
+    }
+
+    func showPassiveRecording(level: Float) {
+        recordingStates.append(.passiveRecording(level: level))
     }
 
     func showTranscribing() {
