@@ -107,19 +107,49 @@ final class LLMRouterTests: XCTestCase {
         XCTAssertEqual(response.textValue, "good text")
     }
 
-    func testPerformVoiceTaskFailsUntilProviderImplementationsExist() async {
-        let router = makeRouter(configured: [.gemini])
+    func testPerformRoutesVoiceRequestsToGemini() async throws {
+        URLProtocolStub.configure(handler: { request in
+            XCTAssertEqual(
+                request.url?.absoluteString,
+                "https://generativelanguage.googleapis.com/v1beta/models/voice-model-gemini:generateContent?key=key-gemini"
+            )
+
+            let data = """
+                {"candidates":[{"content":{"parts":[{"text":"Dictated text"}]}}]}
+                """.data(using: .utf8)
+            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, data)
+        })
+
+        let router = makeRouter(configured: [.gemini], geminiSession: URLProtocolStub.makeSession())
+        let response = try await router.perform(
+            LLMRequest(
+                providerID: .gemini,
+                task: .voiceTranscription(
+                    audioData: Data("audio".utf8),
+                    mimeType: "audio/wav",
+                    customInstructions: ""
+                ),
+                modelIDOverride: "voice-model-gemini"
+            )
+        )
+
+        XCTAssertEqual(response.textValue, "Dictated text")
+    }
+
+    func testPerformVoiceTaskStillFailsForOpenAIUntilImplementationExists() async {
+        let router = makeRouter(configured: [.openAI])
 
         do {
             _ = try await router.perform(
                 LLMRequest(
-                    providerID: .gemini,
+                    providerID: .openAI,
                     task: .voiceTranscription(
                         audioData: Data("audio".utf8),
                         mimeType: "audio/wav",
                         customInstructions: ""
                     ),
-                    modelIDOverride: "voice-model-gemini"
+                    modelIDOverride: "voice-model-openai"
                 )
             )
             XCTFail("Expected unsupported voice task error")

@@ -122,8 +122,15 @@ final class LLMRouter: LLMRouting {
                 customInstructions: customInstructions
             )
             return .text(extractedText)
-        case .voiceTranscription:
-            throw LLMRouterError.unsupportedTask("Voice dictation")
+        case .voiceTranscription(let audioData, let mimeType, let customInstructions):
+            let transcript = try await geminiClient.transcribeAudio(
+                apiKey: configuration.apiKey,
+                modelID: configuration.modelID,
+                audioData: audioData,
+                mimeType: mimeType,
+                customInstructions: customInstructions
+            )
+            return .text(transcript)
         }
     }
 

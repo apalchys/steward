@@ -237,6 +237,71 @@ final class GeminiClientTests: XCTestCase {
         XCTAssertEqual(text, "good text")
     }
 
+    func testTranscribeAudioSuccessParsesOutputAndSendsInlineAudio() async throws {
+        let audioData = Data("audio-bytes".utf8)
+
+        URLProtocolStub.configure(handler: { request in
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertEqual(
+                request.url?.absoluteString,
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=test-key"
+            )
+
+            let requestBody = try XCTUnwrap(request.bodyData())
+            let payload = try XCTUnwrap(try JSONSerialization.jsonObject(with: requestBody) as? [String: Any])
+
+            let systemInstruction = try XCTUnwrap(payload["system_instruction"] as? [String: Any])
+            let systemParts = try XCTUnwrap(systemInstruction["parts"] as? [[String: Any]])
+            XCTAssertTrue((systemParts.first?["text"] as? String)?.contains("do not translate") == true)
+
+            let contents = try XCTUnwrap(payload["contents"] as? [[String: Any]])
+            let parts = try XCTUnwrap(contents.first?["parts"] as? [[String: Any]])
+            XCTAssertEqual(parts.first?["text"] as? String, "Transcribe this dictation and return only the final text.")
+
+            let inlineData = try XCTUnwrap(parts.last?["inline_data"] as? [String: Any])
+            XCTAssertEqual(inlineData["mime_type"] as? String, "audio/wav")
+            XCTAssertEqual(inlineData["data"] as? String, audioData.base64EncodedString())
+
+            let data = """
+                {"candidates":[{"content":{"parts":[{"text":"Hello world."}]}}]}
+                """.data(using: .utf8)
+            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, data)
+        })
+
+        let client = makeClient()
+        let text = try await client.transcribeAudio(
+            apiKey: "test-key",
+            modelID: "gemini-3.1-flash-lite-preview",
+            audioData: audioData,
+            mimeType: "audio/wav",
+            customInstructions: ""
+        )
+
+        XCTAssertEqual(text, "Hello world.")
+    }
+
+    func testTranscribeAudioReturnsEmptyTranscriptErrorWhenOutputIsBlank() async {
+        URLProtocolStub.configure(handler: { request in
+            let data = """
+                {"candidates":[{"content":{"parts":[{"text":"   "} ]}}]}
+                """.data(using: .utf8)
+            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, data)
+        })
+
+        let client = makeClient()
+        await assertThrowsErrorMessage("Gemini returned no transcript.") {
+            try await client.transcribeAudio(
+                apiKey: "test-key",
+                modelID: "gemini-3.1-flash-lite-preview",
+                audioData: Data("audio".utf8),
+                mimeType: "audio/wav",
+                customInstructions: ""
+            )
+        }
+    }
+
     private func makeClient() -> GeminiClient {
         GeminiClient(session: URLProtocolStub.makeSession())
     }

@@ -221,6 +221,63 @@ public struct GeminiClient: Sendable {
         return correctedText
     }
 
+    public func transcribeAudio(
+        apiKey: String,
+        modelID: String,
+        audioData: Data,
+        mimeType: String,
+        customInstructions: String
+    ) async throws -> String {
+        let requestBody = GenerateContentRequest(
+            systemInstruction: .init(parts: [
+                .init(text: buildVoiceTranscriptionPrompt(customInstructions: customInstructions))
+            ]),
+            contents: [
+                .init(parts: [
+                    .init(text: "Transcribe this dictation and return only the final text."),
+                    .init(inlineData: .init(mimeType: mimeType, data: audioData.base64EncodedString())),
+                ])
+            ]
+        )
+
+        guard let httpBody = try? JSONEncoder().encode(requestBody) else {
+            throw LLMClientError.encodingFailed(provider: Self.provider)
+        }
+
+        let encodedModelID = modelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? modelID
+        guard
+            let apiURL = makeURL(
+                path: "/v1beta/models/\(encodedModelID):generateContent",
+                queryItems: [URLQueryItem(name: "key", value: apiKey)])
+        else {
+            throw LLMClientError.requestFailed("Gemini model identifier is invalid.")
+        }
+
+        var request = URLRequest(url: apiURL)
+        request.httpMethod = "POST"
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = httpBody
+
+        let (data, response) = try await performLLMDataRequest(request, session: session)
+
+        if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
+            throw LLMClientError.requestFailed(
+                llmRequestFailureMessage(statusCode: httpResponse.statusCode, data: data, provider: Self.provider))
+        }
+
+        guard !data.isEmpty else {
+            throw LLMClientError.emptyResponse(provider: Self.provider)
+        }
+
+        let apiResponse = try JSONDecoder().decode(GenerateContentResponse.self, from: data)
+
+        guard let transcript = apiResponse.outputText else {
+            throw LLMClientError.emptyOutput(provider: Self.provider, detail: "Gemini returned no transcript.")
+        }
+
+        return transcript
+    }
+
     private func makeURL(path: String, queryItems: [URLQueryItem]) -> URL? {
         guard let baseURL = URL(string: "https://generativelanguage.googleapis.com"),
             let url = URL(string: path, relativeTo: baseURL)?.absoluteURL,
