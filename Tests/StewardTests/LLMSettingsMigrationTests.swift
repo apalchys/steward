@@ -1,4 +1,6 @@
+import AppKit
 import Foundation
+import HotKey
 import XCTest
 @testable import Steward
 
@@ -50,7 +52,11 @@ final class LLMSettingsMigrationTests: XCTestCase {
             providerID: .openAI,
             geminiModelID: "gemini-custom",
             openAIModelID: "gpt-4o-mini-transcribe-custom",
-            customInstructions: "Keep speaker intent"
+            customInstructions: "Keep speaker intent",
+            hotKey: AppHotKey(
+                carbonKeyCode: Key.v.carbonKeyCode,
+                carbonModifiers: NSEvent.ModifierFlags([.command, .option]).carbonFlags
+            )
         )
         settings.clipboardHistory = ClipboardHistorySettings(isEnabled: true, maxStoredRecords: 250)
 
@@ -67,7 +73,11 @@ final class LLMSettingsMigrationTests: XCTestCase {
                 providerID: .openAI,
                 geminiModelID: "gemini-custom",
                 openAIModelID: "gpt-4o-mini-transcribe-custom",
-                customInstructions: "Keep speaker intent"
+                customInstructions: "Keep speaker intent",
+                hotKey: AppHotKey(
+                    carbonKeyCode: Key.v.carbonKeyCode,
+                    carbonModifiers: NSEvent.ModifierFlags([.command, .option]).carbonFlags
+                )
             )
         )
         XCTAssertEqual(loaded.clipboardHistory, ClipboardHistorySettings(isEnabled: true, maxStoredRecords: 250))
@@ -105,13 +115,36 @@ final class LLMSettingsMigrationTests: XCTestCase {
             providerID: .gemini,
             geminiModelID: "   ",
             openAIModelID: "",
-            customInstructions: ""
+            customInstructions: "",
+            hotKey: .defaultVoiceDictation
         )
 
         store.saveSettings(settings)
         let loaded = store.loadSettings()
 
         XCTAssertEqual(loaded.voice, .default)
+    }
+
+    func testVoiceSettingsCustomHotKeyRoundTrips() {
+        let suiteName = "LLMSettingsStoreTests.\(UUID().uuidString)"
+        let defaults = try! XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defer {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let store = UserDefaultsLLMSettingsStore(userDefaults: defaults, secretsStore: InMemoryLLMSecretsStore())
+        var settings = LLMSettings.empty()
+        settings.voice.hotKey = AppHotKey(
+            carbonKeyCode: Key.space.carbonKeyCode,
+            carbonModifiers: NSEvent.ModifierFlags([.control, .shift]).carbonFlags
+        )
+
+        store.saveSettings(settings)
+        let loaded = store.loadSettings()
+
+        XCTAssertEqual(loaded.voice.hotKey, settings.voice.hotKey)
+        XCTAssertEqual(loaded.voice.hotKey.displayValue, "⌃⇧␣")
     }
 
     func testClipboardHistoryDefaultMaxStoredRecordsIs1000() {

@@ -1,5 +1,7 @@
+import AppKit
 import Defaults
 import Foundation
+import HotKey
 import OSLog
 import StewardCore
 
@@ -32,17 +34,20 @@ struct VoiceSettings: Equatable {
     var geminiModelID: String
     var openAIModelID: String
     var customInstructions: String
+    var hotKey: AppHotKey
 
     init(
         providerID: LLMProviderID = .gemini,
         geminiModelID: String = VoiceSettings.defaultGeminiModelID,
         openAIModelID: String = VoiceSettings.defaultOpenAIModelID,
-        customInstructions: String = ""
+        customInstructions: String = "",
+        hotKey: AppHotKey = .defaultVoiceDictation
     ) {
         self.providerID = providerID
         self.geminiModelID = geminiModelID
         self.openAIModelID = openAIModelID
         self.customInstructions = customInstructions
+        self.hotKey = hotKey
     }
 
     func modelID(for providerID: LLMProviderID) -> String {
@@ -54,6 +59,33 @@ struct VoiceSettings: Equatable {
             let trimmedModelID = openAIModelID.trimmed
             return trimmedModelID.isEmpty ? Self.defaultOpenAIModelID : trimmedModelID
         }
+    }
+}
+
+struct AppHotKey: Equatable {
+    static let defaultVoiceDictation = AppHotKey(
+        carbonKeyCode: Key.d.carbonKeyCode,
+        carbonModifiers: NSEvent.ModifierFlags([.command, .shift]).carbonFlags
+    )
+
+    var carbonKeyCode: UInt32
+    var carbonModifiers: UInt32
+
+    init(carbonKeyCode: UInt32, carbonModifiers: UInt32) {
+        self.carbonKeyCode = carbonKeyCode
+        self.carbonModifiers = carbonModifiers
+    }
+
+    init(keyCombo: KeyCombo) {
+        self.init(carbonKeyCode: keyCombo.carbonKeyCode, carbonModifiers: keyCombo.carbonModifiers)
+    }
+
+    var keyCombo: KeyCombo {
+        KeyCombo(carbonKeyCode: carbonKeyCode, carbonModifiers: carbonModifiers)
+    }
+
+    var displayValue: String {
+        keyCombo.description
     }
 }
 
@@ -150,6 +182,8 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
         let voiceGeminiModelID: Defaults.Key<String>
         let voiceOpenAIModelID: Defaults.Key<String>
         let voiceCustomInstructions: Defaults.Key<String>
+        let voiceHotKeyCode: Defaults.Key<Int>
+        let voiceHotKeyModifiers: Defaults.Key<Int>
         let clipboardHistoryEnabled: Defaults.Key<Bool>
         let clipboardHistoryMaxStoredRecords: Defaults.Key<Int>
         let userDefaults: UserDefaults
@@ -184,6 +218,16 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
             voiceCustomInstructions = Defaults.Key<String>(
                 "voiceCustomInstructions",
                 default: "",
+                suite: userDefaults
+            )
+            voiceHotKeyCode = Defaults.Key<Int>(
+                "voiceHotKeyCode",
+                default: Int(AppHotKey.defaultVoiceDictation.carbonKeyCode),
+                suite: userDefaults
+            )
+            voiceHotKeyModifiers = Defaults.Key<Int>(
+                "voiceHotKeyModifiers",
+                default: Int(AppHotKey.defaultVoiceDictation.carbonModifiers),
                 suite: userDefaults
             )
             clipboardHistoryEnabled = Defaults.Key<Bool>(
@@ -234,6 +278,10 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
 
         let rawVoiceProviderID = Defaults[keys.voiceProviderID].trimmed
         let voiceProviderID = LLMProviderID(rawValue: rawVoiceProviderID) ?? .gemini
+        let voiceHotKey = AppHotKey(
+            carbonKeyCode: UInt32(max(0, Defaults[keys.voiceHotKeyCode])),
+            carbonModifiers: UInt32(max(0, Defaults[keys.voiceHotKeyModifiers]))
+        )
 
         return LLMSettings(
             providerProfiles: profiles,
@@ -243,7 +291,8 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
                 providerID: voiceProviderID,
                 geminiModelID: Defaults[keys.voiceGeminiModelID],
                 openAIModelID: Defaults[keys.voiceOpenAIModelID],
-                customInstructions: Defaults[keys.voiceCustomInstructions]
+                customInstructions: Defaults[keys.voiceCustomInstructions],
+                hotKey: voiceHotKey
             ),
             clipboardHistory: ClipboardHistorySettings(
                 isEnabled: Defaults[keys.clipboardHistoryEnabled],
@@ -269,6 +318,8 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
         Defaults[keys.voiceGeminiModelID] = settings.voice.modelID(for: .gemini)
         Defaults[keys.voiceOpenAIModelID] = settings.voice.modelID(for: .openAI)
         Defaults[keys.voiceCustomInstructions] = settings.voice.customInstructions
+        Defaults[keys.voiceHotKeyCode] = Int(settings.voice.hotKey.carbonKeyCode)
+        Defaults[keys.voiceHotKeyModifiers] = Int(settings.voice.hotKey.carbonModifiers)
         Defaults[keys.clipboardHistoryEnabled] = settings.clipboardHistory.isEnabled
         Defaults[keys.clipboardHistoryMaxStoredRecords] = settings.clipboardHistory.maxStoredRecords
     }
