@@ -46,6 +46,12 @@ final class LLMSettingsMigrationTests: XCTestCase {
         )
         settings.grammarCustomInstructions = "Rule 1\nRule 2"
         settings.screenshotCustomInstructions = "Keep bullet lists"
+        settings.voice = VoiceSettings(
+            providerID: .openAI,
+            geminiModelID: "gemini-custom",
+            openAIModelID: "gpt-4o-mini-transcribe-custom",
+            customInstructions: "Keep speaker intent"
+        )
         settings.clipboardHistory = ClipboardHistorySettings(isEnabled: true, maxStoredRecords: 250)
 
         store.saveSettings(settings)
@@ -55,10 +61,19 @@ final class LLMSettingsMigrationTests: XCTestCase {
         XCTAssertEqual(loaded.profile(for: .gemini).apiKey, "gemini-key")
         XCTAssertEqual(loaded.grammarCustomInstructions, "Rule 1\nRule 2")
         XCTAssertEqual(loaded.screenshotCustomInstructions, "Keep bullet lists")
+        XCTAssertEqual(
+            loaded.voice,
+            VoiceSettings(
+                providerID: .openAI,
+                geminiModelID: "gemini-custom",
+                openAIModelID: "gpt-4o-mini-transcribe-custom",
+                customInstructions: "Keep speaker intent"
+            )
+        )
         XCTAssertEqual(loaded.clipboardHistory, ClipboardHistorySettings(isEnabled: true, maxStoredRecords: 250))
     }
 
-    func testLoadSettingsDefaultsCustomInstructionsAndClipboardHistory() {
+    func testLoadSettingsDefaultsCustomInstructionsVoiceSettingsAndClipboardHistory() {
         let suiteName = "LLMSettingsStoreTests.\(UUID().uuidString)"
         let defaults = try! XCTUnwrap(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
@@ -72,7 +87,31 @@ final class LLMSettingsMigrationTests: XCTestCase {
 
         XCTAssertEqual(settings.grammarCustomInstructions, "")
         XCTAssertEqual(settings.screenshotCustomInstructions, "")
+        XCTAssertEqual(settings.voice, .default)
         XCTAssertEqual(settings.clipboardHistory, .default)
+    }
+
+    func testVoiceSettingsEmptyModelIDsSaveBackAsDefaults() {
+        let suiteName = "LLMSettingsStoreTests.\(UUID().uuidString)"
+        let defaults = try! XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defer {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let store = UserDefaultsLLMSettingsStore(userDefaults: defaults, secretsStore: InMemoryLLMSecretsStore())
+        var settings = LLMSettings.empty()
+        settings.voice = VoiceSettings(
+            providerID: .gemini,
+            geminiModelID: "   ",
+            openAIModelID: "",
+            customInstructions: ""
+        )
+
+        store.saveSettings(settings)
+        let loaded = store.loadSettings()
+
+        XCTAssertEqual(loaded.voice, .default)
     }
 
     func testClipboardHistoryDefaultMaxStoredRecordsIs1000() {

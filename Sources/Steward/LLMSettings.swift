@@ -23,6 +23,40 @@ struct LLMProviderProfile: Equatable {
     }
 }
 
+struct VoiceSettings: Equatable {
+    static let defaultGeminiModelID = "gemini-3.1-flash-lite-preview"
+    static let defaultOpenAIModelID = "gpt-4o-mini-transcribe"
+    static let `default` = VoiceSettings()
+
+    var providerID: LLMProviderID
+    var geminiModelID: String
+    var openAIModelID: String
+    var customInstructions: String
+
+    init(
+        providerID: LLMProviderID = .gemini,
+        geminiModelID: String = VoiceSettings.defaultGeminiModelID,
+        openAIModelID: String = VoiceSettings.defaultOpenAIModelID,
+        customInstructions: String = ""
+    ) {
+        self.providerID = providerID
+        self.geminiModelID = geminiModelID
+        self.openAIModelID = openAIModelID
+        self.customInstructions = customInstructions
+    }
+
+    func modelID(for providerID: LLMProviderID) -> String {
+        switch providerID {
+        case .gemini:
+            let trimmedModelID = geminiModelID.trimmed
+            return trimmedModelID.isEmpty ? Self.defaultGeminiModelID : trimmedModelID
+        case .openAI:
+            let trimmedModelID = openAIModelID.trimmed
+            return trimmedModelID.isEmpty ? Self.defaultOpenAIModelID : trimmedModelID
+        }
+    }
+}
+
 struct LLMSettings: Equatable {
     static let grammarProvider = LLMProviderID.openAI
     static let screenshotProvider = LLMProviderID.gemini
@@ -30,6 +64,7 @@ struct LLMSettings: Equatable {
     var providerProfiles: [LLMProviderID: LLMProviderProfile]
     var grammarCustomInstructions: String
     var screenshotCustomInstructions: String
+    var voice: VoiceSettings
     var clipboardHistory: ClipboardHistorySettings
 
     static func empty() -> LLMSettings {
@@ -37,6 +72,7 @@ struct LLMSettings: Equatable {
             providerProfiles: [:],
             grammarCustomInstructions: "",
             screenshotCustomInstructions: "",
+            voice: .default,
             clipboardHistory: .default
         )
     }
@@ -110,6 +146,10 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
     private struct Keys {
         let customGrammarInstructions: Defaults.Key<String>
         let customScreenshotInstructions: Defaults.Key<String>
+        let voiceProviderID: Defaults.Key<String>
+        let voiceGeminiModelID: Defaults.Key<String>
+        let voiceOpenAIModelID: Defaults.Key<String>
+        let voiceCustomInstructions: Defaults.Key<String>
         let clipboardHistoryEnabled: Defaults.Key<Bool>
         let clipboardHistoryMaxStoredRecords: Defaults.Key<Int>
         let userDefaults: UserDefaults
@@ -123,6 +163,26 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
             )
             customScreenshotInstructions = Defaults.Key<String>(
                 "customScreenshotInstructions",
+                default: "",
+                suite: userDefaults
+            )
+            voiceProviderID = Defaults.Key<String>(
+                "voiceProviderID",
+                default: LLMProviderID.gemini.rawValue,
+                suite: userDefaults
+            )
+            voiceGeminiModelID = Defaults.Key<String>(
+                "voiceGeminiModelID",
+                default: VoiceSettings.defaultGeminiModelID,
+                suite: userDefaults
+            )
+            voiceOpenAIModelID = Defaults.Key<String>(
+                "voiceOpenAIModelID",
+                default: VoiceSettings.defaultOpenAIModelID,
+                suite: userDefaults
+            )
+            voiceCustomInstructions = Defaults.Key<String>(
+                "voiceCustomInstructions",
                 default: "",
                 suite: userDefaults
             )
@@ -172,10 +232,19 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
             )
         }
 
+        let rawVoiceProviderID = Defaults[keys.voiceProviderID].trimmed
+        let voiceProviderID = LLMProviderID(rawValue: rawVoiceProviderID) ?? .gemini
+
         return LLMSettings(
             providerProfiles: profiles,
             grammarCustomInstructions: Defaults[keys.customGrammarInstructions],
             screenshotCustomInstructions: Defaults[keys.customScreenshotInstructions],
+            voice: VoiceSettings(
+                providerID: voiceProviderID,
+                geminiModelID: Defaults[keys.voiceGeminiModelID],
+                openAIModelID: Defaults[keys.voiceOpenAIModelID],
+                customInstructions: Defaults[keys.voiceCustomInstructions]
+            ),
             clipboardHistory: ClipboardHistorySettings(
                 isEnabled: Defaults[keys.clipboardHistoryEnabled],
                 maxStoredRecords: Defaults[keys.clipboardHistoryMaxStoredRecords]
@@ -196,6 +265,10 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
 
         Defaults[keys.customGrammarInstructions] = settings.grammarCustomInstructions
         Defaults[keys.customScreenshotInstructions] = settings.screenshotCustomInstructions
+        Defaults[keys.voiceProviderID] = settings.voice.providerID.rawValue
+        Defaults[keys.voiceGeminiModelID] = settings.voice.modelID(for: .gemini)
+        Defaults[keys.voiceOpenAIModelID] = settings.voice.modelID(for: .openAI)
+        Defaults[keys.voiceCustomInstructions] = settings.voice.customInstructions
         Defaults[keys.clipboardHistoryEnabled] = settings.clipboardHistory.isEnabled
         Defaults[keys.clipboardHistoryMaxStoredRecords] = settings.clipboardHistory.maxStoredRecords
     }
