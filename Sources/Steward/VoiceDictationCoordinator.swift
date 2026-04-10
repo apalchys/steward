@@ -34,7 +34,7 @@ protocol VoiceDictationCoordinating: AnyObject {
     var onStateChanged: ((VoiceDictationWorkflowState) -> Void)? { get set }
     var onError: ((Error) -> Void)? { get set }
 
-    func handleHotKeyPress() async throws
+    func handleManualToggleAction() async throws
     func handlePushToTalkKeyDown() async throws
     func handlePushToTalkKeyUp() async throws
 }
@@ -136,7 +136,7 @@ final class VoiceDictationCoordinator: VoiceDictationCoordinating {
         }
     }
 
-    func handleHotKeyPress() async throws {
+    func handleManualToggleAction() async throws {
         switch state {
         case .idle:
             try await startRecording(triggeredBy: .manualToggle)

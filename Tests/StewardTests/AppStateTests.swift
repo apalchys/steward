@@ -399,7 +399,7 @@ final class AppStateTests: XCTestCase {
         appState.runVoiceDictationAction()
         await Task.yield()
 
-        XCTAssertEqual(voiceDictationCoordinator.handleHotKeyPressCallCount, 1)
+        XCTAssertEqual(voiceDictationCoordinator.handleManualToggleActionCallCount, 1)
     }
 
     func testVoiceRecordingUpdatesActivityStatusTitle() async {
@@ -544,12 +544,12 @@ private final class FakeScreenOCRCoordinator: ScreenOCRCoordinating {
 private final class FakeVoiceDictationCoordinator: VoiceDictationCoordinating {
     var onStateChanged: ((VoiceDictationWorkflowState) -> Void)?
     var onError: ((any Error) -> Void)?
-    private(set) var handleHotKeyPressCallCount = 0
+    private(set) var handleManualToggleActionCallCount = 0
     private(set) var handlePushToTalkKeyDownCallCount = 0
     private(set) var handlePushToTalkKeyUpCallCount = 0
 
-    func handleHotKeyPress() async throws {
-        handleHotKeyPressCallCount += 1
+    func handleManualToggleAction() async throws {
+        handleManualToggleActionCallCount += 1
     }
 
     func handlePushToTalkKeyDown() async throws {

@@ -4,7 +4,7 @@ import XCTest
 
 @MainActor
 final class VoiceDictationCoordinatorTests: XCTestCase {
-    func testFirstHotKeyPressStartsRecordingAndShowsPill() async throws {
+    func testFirstManualToggleStartsRecordingAndShowsPill() async throws {
         let microphoneAccess = FakeMicrophoneAccessProvider(result: true)
         let audioRecordingService = FakeAudioRecordingService()
         let pillPresenter = FakeVoiceRecordingPillPresenter()
@@ -19,7 +19,7 @@ final class VoiceDictationCoordinatorTests: XCTestCase {
             settingsStore: VoiceDictationSettingsStore()
         )
 
-        try await coordinator.handleHotKeyPress()
+        try await coordinator.handleManualToggleAction()
 
         XCTAssertEqual(microphoneAccess.ensureAccessCallCount, 1)
         XCTAssertEqual(audioRecordingService.startRecordingCallCount, 1)
@@ -27,7 +27,7 @@ final class VoiceDictationCoordinatorTests: XCTestCase {
         XCTAssertTrue(audioRecordingService.isRecording)
     }
 
-    func testSecondHotKeyPressStopsRecordingRoutesTranscriptAndReplacesText() async throws {
+    func testSecondManualToggleStopsRecordingRoutesTranscriptAndReplacesText() async throws {
         let microphoneAccess = FakeMicrophoneAccessProvider(result: true)
         let audioRecordingService = FakeAudioRecordingService(payload: RecordedAudioPayload(data: Data("audio".utf8), mimeType: "audio/wav"))
         let pillPresenter = FakeVoiceRecordingPillPresenter()
@@ -49,8 +49,8 @@ final class VoiceDictationCoordinatorTests: XCTestCase {
             settingsStore: settingsStore
         )
 
-        try await coordinator.handleHotKeyPress()
-        try await coordinator.handleHotKeyPress()
+        try await coordinator.handleManualToggleAction()
+        try await coordinator.handleManualToggleAction()
 
         XCTAssertEqual(audioRecordingService.stopRecordingCallCount, 1)
         XCTAssertEqual(pillPresenter.showTranscribingCallCount, 1)
@@ -77,7 +77,7 @@ final class VoiceDictationCoordinatorTests: XCTestCase {
             settingsStore: VoiceDictationSettingsStore()
         )
 
-        try await coordinator.handleHotKeyPress()
+        try await coordinator.handleManualToggleAction()
         pillPresenter.onCancel?()
         await Task.yield()
 
@@ -101,10 +101,10 @@ final class VoiceDictationCoordinatorTests: XCTestCase {
             settingsStore: VoiceDictationSettingsStore()
         )
 
-        try await coordinator.handleHotKeyPress()
+        try await coordinator.handleManualToggleAction()
 
         do {
-            try await coordinator.handleHotKeyPress()
+            try await coordinator.handleManualToggleAction()
             XCTFail("Expected insertion fallback error")
         } catch {
             XCTAssertEqual(error as? VoiceDictationCoordinatorError, .insertionFailedCopiedToClipboard)
@@ -125,7 +125,7 @@ final class VoiceDictationCoordinatorTests: XCTestCase {
         )
 
         do {
-            try await coordinator.handleHotKeyPress()
+            try await coordinator.handleManualToggleAction()
             XCTFail("Expected microphone permission error")
         } catch {
             XCTAssertEqual(error as? VoiceDictationCoordinatorError, .permissionDenied)
@@ -149,7 +149,7 @@ final class VoiceDictationCoordinatorTests: XCTestCase {
         var reportedError: Error?
         coordinator.onError = { reportedError = $0 }
 
-        try await coordinator.handleHotKeyPress()
+        try await coordinator.handleManualToggleAction()
         audioRecordingService.onMaximumDurationReached?()
         await Task.yield()
 
@@ -170,10 +170,10 @@ final class VoiceDictationCoordinatorTests: XCTestCase {
             settingsStore: VoiceDictationSettingsStore()
         )
 
-        try await coordinator.handleHotKeyPress()
+        try await coordinator.handleManualToggleAction()
 
         do {
-            try await coordinator.handleHotKeyPress()
+            try await coordinator.handleManualToggleAction()
             XCTFail("Expected invalid provider response error")
         } catch {
             XCTAssertEqual(error as? VoiceDictationCoordinatorError, .invalidProviderResponse)
@@ -226,7 +226,7 @@ final class VoiceDictationCoordinatorTests: XCTestCase {
             settingsStore: VoiceDictationSettingsStore()
         )
 
-        try await coordinator.handleHotKeyPress()
+        try await coordinator.handleManualToggleAction()
         try await coordinator.handlePushToTalkKeyUp()
 
         XCTAssertEqual(audioRecordingService.stopRecordingCallCount, 0)

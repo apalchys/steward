@@ -1,6 +1,6 @@
 ---
 name: Coordinator Entrypoints
-status: todo
+status: done
 ---
 
 # Summary
@@ -23,4 +23,3 @@ Refactor the voice coordinator to support separate push-to-talk and manual-toggl
 
 - The coordinator can distinguish between hotkey-driven and menu-driven sessions.
 - Existing voice provider routing behavior remains unchanged.
-

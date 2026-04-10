@@ -532,7 +532,7 @@ final class AppState: ObservableObject {
         case .ocr:
             try await screenOCRCoordinator.handleHotKeyPress()
         case .voice:
-            try await voiceDictationCoordinator.handleHotKeyPress()
+            try await voiceDictationCoordinator.handleManualToggleAction()
         }
     }
 
