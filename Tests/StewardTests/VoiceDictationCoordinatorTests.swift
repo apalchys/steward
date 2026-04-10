@@ -179,6 +179,41 @@ final class VoiceDictationCoordinatorTests: XCTestCase {
             XCTAssertEqual(error as? VoiceDictationCoordinatorError, .invalidProviderResponse)
         }
     }
+
+    func testPushToTalkKeyDownStartsRecording() async throws {
+        let coordinator = VoiceDictationCoordinator(
+            microphoneAccess: FakeMicrophoneAccessProvider(result: true),
+            audioRecordingService: FakeAudioRecordingService(),
+            recordingPillPresenter: FakeVoiceRecordingPillPresenter(),
+            router: VoiceDictationFakeRouter(result: .success(.text("ignored"))),
+            textInteraction: VoiceDictationFakeTextInteraction(),
+            settingsStore: VoiceDictationSettingsStore()
+        )
+
+        try await coordinator.handlePushToTalkKeyDown()
+
+        XCTAssertEqual(coordinator.state, .recording)
+    }
+
+    func testPushToTalkKeyUpStopsRecordingAndTranscribes() async throws {
+        let audioRecordingService = FakeAudioRecordingService(payload: RecordedAudioPayload(data: Data("audio".utf8), mimeType: "audio/wav"))
+        let textInteraction = VoiceDictationFakeTextInteraction()
+        let coordinator = VoiceDictationCoordinator(
+            microphoneAccess: FakeMicrophoneAccessProvider(result: true),
+            audioRecordingService: audioRecordingService,
+            recordingPillPresenter: FakeVoiceRecordingPillPresenter(),
+            router: VoiceDictationFakeRouter(result: .success(.text("Push to talk transcript"))),
+            textInteraction: textInteraction,
+            settingsStore: VoiceDictationSettingsStore()
+        )
+
+        try await coordinator.handlePushToTalkKeyDown()
+        try await coordinator.handlePushToTalkKeyUp()
+
+        XCTAssertEqual(audioRecordingService.stopRecordingCallCount, 1)
+        XCTAssertEqual(textInteraction.replacedText, "Push to talk transcript")
+        XCTAssertEqual(coordinator.state, .idle)
+    }
 }
 
 private enum VoiceDictationTestError: Error, Equatable {

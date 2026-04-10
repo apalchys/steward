@@ -35,6 +35,8 @@ protocol VoiceDictationCoordinating: AnyObject {
     var onError: ((Error) -> Void)? { get set }
 
     func handleHotKeyPress() async throws
+    func handlePushToTalkKeyDown() async throws
+    func handlePushToTalkKeyUp() async throws
 }
 
 enum VoiceDictationCoordinatorError: LocalizedError, Equatable {
@@ -137,6 +139,22 @@ final class VoiceDictationCoordinator: VoiceDictationCoordinating {
         case .transcribing:
             return
         }
+    }
+
+    func handlePushToTalkKeyDown() async throws {
+        guard state == .idle else {
+            return
+        }
+
+        try await startRecording()
+    }
+
+    func handlePushToTalkKeyUp() async throws {
+        guard state == .recording else {
+            return
+        }
+
+        try await stopAndTranscribeRecording()
     }
 
     private func startRecording() async throws {

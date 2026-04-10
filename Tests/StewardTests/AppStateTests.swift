@@ -545,9 +545,19 @@ private final class FakeVoiceDictationCoordinator: VoiceDictationCoordinating {
     var onStateChanged: ((VoiceDictationWorkflowState) -> Void)?
     var onError: ((any Error) -> Void)?
     private(set) var handleHotKeyPressCallCount = 0
+    private(set) var handlePushToTalkKeyDownCallCount = 0
+    private(set) var handlePushToTalkKeyUpCallCount = 0
 
     func handleHotKeyPress() async throws {
         handleHotKeyPressCallCount += 1
+    }
+
+    func handlePushToTalkKeyDown() async throws {
+        handlePushToTalkKeyDownCallCount += 1
+    }
+
+    func handlePushToTalkKeyUp() async throws {
+        handlePushToTalkKeyUpCallCount += 1
     }
 }
 

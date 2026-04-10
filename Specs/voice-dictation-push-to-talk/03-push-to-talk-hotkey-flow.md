@@ -1,6 +1,6 @@
 ---
 name: Push To Talk Hotkey Flow
-status: todo
+status: done
 ---
 
 # Summary
@@ -19,4 +19,3 @@ Change the global dictation shortcut from toggle behavior to press-and-hold push
 
 - Holding the voice hotkey records audio.
 - Releasing the voice hotkey stops recording and starts transcription.
-

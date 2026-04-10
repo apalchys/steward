@@ -735,7 +735,22 @@ final class AppState: ObservableObject {
             let hotKey = makeHotKey(
                 for: voiceShortcut,
                 action: { [weak self] in
-                    self?.handleHotKeyPress(for: .voice)
+                    Task { @MainActor [weak self] in
+                        do {
+                            try await self?.voiceDictationCoordinator.handlePushToTalkKeyDown()
+                        } catch {
+                            self?.handleCoordinatorError(for: .voice, error: error)
+                        }
+                    }
+                },
+                keyUpAction: { [weak self] in
+                    Task { @MainActor [weak self] in
+                        do {
+                            try await self?.voiceDictationCoordinator.handlePushToTalkKeyUp()
+                        } catch {
+                            self?.handleCoordinatorError(for: .voice, error: error)
+                        }
+                    }
                 })
         else {
             voiceShortcutRegistrationMessage = voiceShortcutMessage(for: requestedHotKey, error: .unavailable)
@@ -767,7 +782,11 @@ final class AppState: ObservableObject {
         shortcutRegistrationMessage = messages.isEmpty ? nil : messages.joined(separator: "\n")
     }
 
-    private func makeHotKey(for shortcut: AppShortcut, action: @escaping @MainActor () -> Void) -> HotKey? {
+    private func makeHotKey(
+        for shortcut: AppShortcut,
+        action: @escaping @MainActor () -> Void,
+        keyUpAction: (@MainActor () -> Void)? = nil
+    ) -> HotKey? {
         guard appSystemServices.isShortcutAvailable(shortcut.key, shortcut.modifiers) else {
             logger.error("Shortcut unavailable: \(shortcut.displayValue, privacy: .public)")
             return nil
@@ -777,6 +796,15 @@ final class AppState: ObservableObject {
         hotKey.keyDownHandler = {
             Task { @MainActor in
                 action()
+            }
+        }
+        hotKey.keyUpHandler = {
+            guard let keyUpAction else {
+                return
+            }
+
+            Task { @MainActor in
+                keyUpAction()
             }
         }
         return hotKey
