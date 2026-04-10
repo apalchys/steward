@@ -29,11 +29,21 @@ enum LLMProviderID: String, CaseIterable, Codable, Identifiable {
 enum LLMTask {
     case grammarCorrection(text: String, customInstructions: String)
     case screenOCR(imageData: Data, mimeType: String, customInstructions: String)
+    case voiceTranscription(audioData: Data, mimeType: String, customInstructions: String)
 }
 
 struct LLMRequest {
     let providerID: LLMProviderID
     let task: LLMTask
+    let modelIDOverride: String?
+
+    init(providerID: LLMProviderID, task: LLMTask, modelIDOverride: String? = nil) {
+        let normalizedModelIDOverride = modelIDOverride?.trimmed ?? ""
+
+        self.providerID = providerID
+        self.task = task
+        self.modelIDOverride = normalizedModelIDOverride.isEmpty ? nil : normalizedModelIDOverride
+    }
 }
 
 enum LLMResult {
@@ -68,11 +78,14 @@ struct LLMProviderHealth {
 
 enum LLMRouterError: LocalizedError {
     case providerNotConfigured(LLMProviderID)
+    case unsupportedTask(String)
 
     var errorDescription: String? {
         switch self {
         case .providerNotConfigured(let providerID):
             return "Provider \(providerID.displayName) is missing API key or model ID in Preferences."
+        case .unsupportedTask(let taskName):
+            return "\(taskName) is not supported yet."
         }
     }
 }

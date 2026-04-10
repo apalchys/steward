@@ -16,4 +16,21 @@ final class CoreHelpersTests: XCTestCase {
         XCTAssertTrue(prompt.contains("Additional instructions to follow:"))
         XCTAssertTrue(prompt.hasSuffix(customInstructions))
     }
+
+    func testBuildVoiceTranscriptionPromptReturnsBasePromptWhenRulesAreEmpty() {
+        let defaultPrompt = buildVoiceTranscriptionPrompt(customInstructions: "")
+        let whitespacePrompt = buildVoiceTranscriptionPrompt(customInstructions: "  \n\t")
+
+        XCTAssertEqual(whitespacePrompt, defaultPrompt)
+        XCTAssertTrue(defaultPrompt.contains("preserve the original spoken language"))
+        XCTAssertTrue(defaultPrompt.contains("do not translate"))
+    }
+
+    func testBuildVoiceTranscriptionPromptAppendsCustomInstructions() {
+        let customInstructions = "Keep sentence fragments if they sound intentional."
+        let prompt = buildVoiceTranscriptionPrompt(customInstructions: customInstructions)
+
+        XCTAssertTrue(prompt.contains("Additional instructions to follow:"))
+        XCTAssertTrue(prompt.hasSuffix(customInstructions))
+    }
 }

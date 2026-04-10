@@ -26,7 +26,7 @@ final class LLMRouter: LLMRouting {
     func perform(_ request: LLMRequest) async throws -> LLMResult {
         let settings = settingsStore.loadSettings()
         let providerID = request.providerID
-        let configuration = try configuration(for: providerID, from: settings)
+        let configuration = try configuration(for: request, from: settings)
         return try await perform(request.task, providerID: providerID, configuration: configuration)
     }
 
@@ -44,14 +44,20 @@ final class LLMRouter: LLMRouting {
         return await healthCheck(for: providerID, configuration: configuration)
     }
 
-    private func configuration(for providerID: LLMProviderID, from settings: LLMSettings) throws
+    private func configuration(for request: LLMRequest, from settings: LLMSettings) throws
         -> LLMProviderConfiguration
     {
+        let providerID = request.providerID
+
         guard let configuration = settings.configuration(for: providerID) else {
             throw LLMRouterError.providerNotConfigured(providerID)
         }
 
-        return configuration
+        guard let modelIDOverride = request.modelIDOverride else {
+            return configuration
+        }
+
+        return LLMProviderConfiguration(apiKey: configuration.apiKey, modelID: modelIDOverride)
     }
 
     private func perform(
@@ -89,6 +95,8 @@ final class LLMRouter: LLMRouting {
                 customInstructions: customInstructions
             )
             return .text(extractedText)
+        case .voiceTranscription:
+            throw LLMRouterError.unsupportedTask("Voice dictation")
         }
     }
 
@@ -114,6 +122,8 @@ final class LLMRouter: LLMRouting {
                 customInstructions: customInstructions
             )
             return .text(extractedText)
+        case .voiceTranscription:
+            throw LLMRouterError.unsupportedTask("Voice dictation")
         }
     }
 

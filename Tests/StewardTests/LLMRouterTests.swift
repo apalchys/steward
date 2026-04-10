@@ -81,6 +81,58 @@ final class LLMRouterTests: XCTestCase {
         }
     }
 
+    func testPerformUsesModelOverrideWhenPresent() async throws {
+        URLProtocolStub.configure(handler: { request in
+            let body = try XCTUnwrap(request.bodyData())
+            let payload = try XCTUnwrap(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+            XCTAssertEqual(payload["model"] as? String, "voice-model-openai")
+
+            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let data = """
+                {"output":[{"type":"message","content":[{"type":"output_text","text":"good text"}]}]}
+                """.data(using: .utf8)
+            return (response, data)
+        })
+
+        let router = makeRouter(configured: [.openAI], openAISession: URLProtocolStub.makeSession())
+
+        let response = try await router.perform(
+            LLMRequest(
+                providerID: .openAI,
+                task: .grammarCorrection(text: "bad text", customInstructions: ""),
+                modelIDOverride: "voice-model-openai"
+            )
+        )
+
+        XCTAssertEqual(response.textValue, "good text")
+    }
+
+    func testPerformVoiceTaskFailsUntilProviderImplementationsExist() async {
+        let router = makeRouter(configured: [.gemini])
+
+        do {
+            _ = try await router.perform(
+                LLMRequest(
+                    providerID: .gemini,
+                    task: .voiceTranscription(
+                        audioData: Data("audio".utf8),
+                        mimeType: "audio/wav",
+                        customInstructions: ""
+                    ),
+                    modelIDOverride: "voice-model-gemini"
+                )
+            )
+            XCTFail("Expected unsupported voice task error")
+        } catch {
+            guard case let LLMRouterError.unsupportedTask(taskName) = error else {
+                XCTFail("Unexpected error: \(error)")
+                return
+            }
+
+            XCTAssertEqual(taskName, "Voice dictation")
+        }
+    }
+
     func testCheckAccessReturnsRequestedProviderHealth() async throws {
         URLProtocolStub.configure(handler: { request in
             XCTAssertEqual(request.httpMethod, "GET")
