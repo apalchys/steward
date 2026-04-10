@@ -28,6 +28,14 @@ struct StewardApp: App {
             selectionPresenter: ScreenSelectionOverlayController(),
             settingsStore: settingsStore
         )
+        let voiceDictationCoordinator = VoiceDictationCoordinator(
+            microphoneAccess: SystemMicrophoneAccessService(),
+            audioRecordingService: SystemAudioRecordingService(),
+            recordingPillPresenter: VoiceRecordingPillController(),
+            router: llmRouter,
+            textInteraction: textInteractionService,
+            settingsStore: settingsStore
+        )
 
         _appState = StateObject(
             wrappedValue: AppState(
@@ -37,6 +45,7 @@ struct StewardApp: App {
                 llmRouter: llmRouter,
                 grammarCoordinator: grammarCoordinator,
                 screenOCRCoordinator: screenOCRCoordinator,
+                voiceDictationCoordinator: voiceDictationCoordinator,
                 appSystemServices: appSystemServices
             )
         )
@@ -86,6 +95,11 @@ private struct AppMenuView: View {
             }
             .keyboardShortcut("r", modifiers: [.command, .shift])
 
+            Button("Voice Dictation") {
+                appState.runVoiceDictationAction()
+            }
+            .keyboardShortcut("d", modifiers: [.command, .shift])
+
             Divider()
 
             Text(appState.activityStatusTitle)
@@ -97,6 +111,10 @@ private struct AppMenuView: View {
 
             Button(appState.ocrStatusTitle) {
                 appState.checkOCRProviderStatus()
+            }
+
+            Button(appState.voiceStatusTitle) {
+                appState.checkVoiceProviderStatus()
             }
 
             if appState.shouldShowPermissionActions {

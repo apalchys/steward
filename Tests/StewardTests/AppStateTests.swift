@@ -15,6 +15,7 @@ final class AppStateTests: XCTestCase {
         let router = FakeAppRouter()
         let grammarCoordinator = FakeGrammarCoordinator()
         let screenOCRCoordinator = FakeScreenOCRCoordinator()
+        let voiceDictationCoordinator = FakeVoiceDictationCoordinator()
         let appSystemServices = FakeAppSystemServices()
         let appState = AppState(
             settingsStore: settingsStore,
@@ -23,6 +24,7 @@ final class AppStateTests: XCTestCase {
             llmRouter: router,
             grammarCoordinator: grammarCoordinator,
             screenOCRCoordinator: screenOCRCoordinator,
+            voiceDictationCoordinator: voiceDictationCoordinator,
             appSystemServices: appSystemServices.services
         )
 
@@ -47,6 +49,7 @@ final class AppStateTests: XCTestCase {
             llmRouter: FakeAppRouter(),
             grammarCoordinator: FakeGrammarCoordinator(),
             screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
             appSystemServices: appSystemServices.services
         )
 
@@ -75,6 +78,7 @@ final class AppStateTests: XCTestCase {
             llmRouter: FakeAppRouter(),
             grammarCoordinator: FakeGrammarCoordinator(),
             screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
             appSystemServices: appSystemServices.services
         )
 
@@ -94,6 +98,7 @@ final class AppStateTests: XCTestCase {
             llmRouter: FakeAppRouter(),
             grammarCoordinator: FakeGrammarCoordinator(),
             screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
             appSystemServices: appSystemServices.services
         )
 
@@ -112,6 +117,7 @@ final class AppStateTests: XCTestCase {
             llmRouter: FakeAppRouter(),
             grammarCoordinator: FakeGrammarCoordinator(),
             screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
             appSystemServices: appSystemServices.services
         )
 
@@ -134,6 +140,7 @@ final class AppStateTests: XCTestCase {
             llmRouter: FakeAppRouter(),
             grammarCoordinator: FakeGrammarCoordinator(),
             screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
             appSystemServices: appSystemServices.services
         )
 
@@ -152,6 +159,7 @@ final class AppStateTests: XCTestCase {
             llmRouter: FakeAppRouter(),
             grammarCoordinator: FakeGrammarCoordinator(),
             screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
             appSystemServices: appSystemServices.services
         )
 
@@ -173,6 +181,7 @@ final class AppStateTests: XCTestCase {
             llmRouter: FakeAppRouter(),
             grammarCoordinator: FakeGrammarCoordinator(),
             screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
             appSystemServices: appSystemServices.services
         )
 
@@ -194,6 +203,7 @@ final class AppStateTests: XCTestCase {
             llmRouter: FakeAppRouter(),
             grammarCoordinator: FakeGrammarCoordinator(),
             screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
             appSystemServices: appSystemServices.services
         )
 
@@ -215,6 +225,7 @@ final class AppStateTests: XCTestCase {
             llmRouter: FakeAppRouter(),
             grammarCoordinator: FakeGrammarCoordinator(),
             screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
             appSystemServices: appSystemServices.services
         )
 
@@ -235,6 +246,7 @@ final class AppStateTests: XCTestCase {
             llmRouter: FakeAppRouter(),
             grammarCoordinator: FakeGrammarCoordinator(),
             screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
             appSystemServices: appSystemServices.services
         )
 
@@ -255,6 +267,7 @@ final class AppStateTests: XCTestCase {
             llmRouter: FakeAppRouter(),
             grammarCoordinator: FakeGrammarCoordinator(),
             screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
             appSystemServices: appSystemServices.services
         )
 
@@ -275,12 +288,104 @@ final class AppStateTests: XCTestCase {
             llmRouter: FakeAppRouter(),
             grammarCoordinator: FakeGrammarCoordinator(),
             screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
             appSystemServices: appSystemServices.services
         )
 
         appState.openLoginItemsSettings()
 
         XCTAssertEqual(appSystemServices.openLoginItemsSettingsCallCount, 1)
+    }
+
+    func testRunVoiceDictationActionInvokesVoiceCoordinator() async {
+        _ = NSApplication.shared
+        let voiceDictationCoordinator = FakeVoiceDictationCoordinator()
+        let appState = AppState(
+            settingsStore: FakeAppSettingsStore(),
+            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
+            clipboardMonitor: FakeClipboardMonitor(),
+            llmRouter: FakeAppRouter(),
+            grammarCoordinator: FakeGrammarCoordinator(),
+            screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            voiceDictationCoordinator: voiceDictationCoordinator,
+            appSystemServices: FakeAppSystemServices().services
+        )
+
+        appState.runVoiceDictationAction()
+        await Task.yield()
+
+        XCTAssertEqual(voiceDictationCoordinator.handleHotKeyPressCallCount, 1)
+    }
+
+    func testVoiceRecordingUpdatesActivityStatusTitle() async {
+        _ = NSApplication.shared
+        let voiceDictationCoordinator = FakeVoiceDictationCoordinator()
+        let appState = AppState(
+            settingsStore: FakeAppSettingsStore(),
+            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
+            clipboardMonitor: FakeClipboardMonitor(),
+            llmRouter: FakeAppRouter(),
+            grammarCoordinator: FakeGrammarCoordinator(),
+            screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            voiceDictationCoordinator: voiceDictationCoordinator,
+            appSystemServices: FakeAppSystemServices().services
+        )
+
+        appState.start()
+        appState.checkGrammarProviderStatus()
+        appState.checkOCRProviderStatus()
+        appState.checkVoiceProviderStatus()
+        await Task.yield()
+
+        voiceDictationCoordinator.onStateChanged?(.recording)
+        await Task.yield()
+
+        XCTAssertEqual(appState.activityStatus, .processing)
+        XCTAssertEqual(appState.activityStatusTitle, "Status: Listening...")
+
+        voiceDictationCoordinator.onStateChanged?(.transcribing)
+        await Task.yield()
+
+        XCTAssertEqual(appState.activityStatusTitle, "Status: Transcribing...")
+
+        voiceDictationCoordinator.onStateChanged?(.idle)
+        await Task.yield()
+
+        XCTAssertEqual(appState.activityStatus, .ready)
+        XCTAssertEqual(appState.activityStatusTitle, "Status: Ready")
+    }
+
+    func testVoiceRecordingBlocksGrammarActionUntilIdle() async {
+        _ = NSApplication.shared
+        let grammarCoordinator = FakeGrammarCoordinator()
+        let voiceDictationCoordinator = FakeVoiceDictationCoordinator()
+        let appState = AppState(
+            settingsStore: FakeAppSettingsStore(),
+            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
+            clipboardMonitor: FakeClipboardMonitor(),
+            llmRouter: FakeAppRouter(),
+            grammarCoordinator: grammarCoordinator,
+            screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            voiceDictationCoordinator: voiceDictationCoordinator,
+            appSystemServices: FakeAppSystemServices().services
+        )
+
+        appState.start()
+        voiceDictationCoordinator.onStateChanged?(.recording)
+        await Task.yield()
+
+        appState.runGrammarAction()
+        await Task.yield()
+
+        XCTAssertEqual(grammarCoordinator.handleHotKeyPressCallCount, 0)
+
+        voiceDictationCoordinator.onStateChanged?(.idle)
+        await Task.yield()
+
+        appState.runGrammarAction()
+        await Task.yield()
+
+        XCTAssertEqual(grammarCoordinator.handleHotKeyPressCallCount, 1)
     }
 }
 
@@ -312,13 +417,27 @@ private final class FakeAppRouter: LLMRouting {
 }
 
 private final class FakeGrammarCoordinator: GrammarCoordinating {
-    func handleHotKeyPress() async throws {}
+    private(set) var handleHotKeyPressCallCount = 0
+
+    func handleHotKeyPress() async throws {
+        handleHotKeyPressCallCount += 1
+    }
 }
 
 private final class FakeScreenOCRCoordinator: ScreenOCRCoordinating {
     var onSelectionActivityChanged: ((Bool) -> Void)?
 
     func handleHotKeyPress() async throws {}
+}
+
+private final class FakeVoiceDictationCoordinator: VoiceDictationCoordinating {
+    var onStateChanged: ((VoiceDictationWorkflowState) -> Void)?
+    var onError: ((any Error) -> Void)?
+    private(set) var handleHotKeyPressCallCount = 0
+
+    func handleHotKeyPress() async throws {
+        handleHotKeyPressCallCount += 1
+    }
 }
 
 private final class FakeAppSettingsStore: AppSettingsProviding {

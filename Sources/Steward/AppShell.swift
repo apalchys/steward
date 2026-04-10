@@ -26,6 +26,7 @@ final class AppState: ObservableObject {
     private enum FeatureKind {
         case grammar
         case ocr
+        case voice
 
         var statusPrefix: String {
             switch self {
@@ -33,6 +34,8 @@ final class AppState: ObservableObject {
                 return "Grammar"
             case .ocr:
                 return "Screen Text"
+            case .voice:
+                return "Voice Dictation"
             }
         }
 
@@ -58,6 +61,7 @@ final class AppState: ObservableObject {
     @Published private(set) var activityStatus: ActivityStatus = .ready
     @Published private(set) var grammarStatus: ProviderStatus = .error(providerID: nil, message: "Not checked")
     @Published private(set) var ocrStatus: ProviderStatus = .error(providerID: nil, message: "Not checked")
+    @Published private(set) var voiceStatus: ProviderStatus = .error(providerID: nil, message: "Not checked")
     @Published private(set) var accessibilityPermissionGranted = false
     @Published private(set) var microphonePermissionGranted = false
     @Published private(set) var screenRecordingPermissionGranted = false
@@ -71,19 +75,24 @@ final class AppState: ObservableObject {
     private let llmRouter: any LLMRouting
     private let grammarCoordinator: any GrammarCoordinating
     private let screenOCRCoordinator: any ScreenOCRCoordinating
+    private let voiceDictationCoordinator: any VoiceDictationCoordinating
     private let appSystemServices: AppSystemServices
 
     private var grammarHotKey: HotKey?
     private var screenOCRHotKey: HotKey?
+    private var voiceHotKey: HotKey?
     private var hasStarted = false
     private var initialHealthCheckTask: Task<Void, Never>?
     private var settingsHealthDebounceTask: Task<Void, Never>?
     private var grammarHealthCheckTask: Task<Void, Never>?
     private var ocrHealthCheckTask: Task<Void, Never>?
+    private var voiceHealthCheckTask: Task<Void, Never>?
 
     private var isProcessing = false
     private var isScreenSelectionActive = false
     private var lastOperationFailed = false
+    private var activeFeature: FeatureKind?
+    private var voiceWorkflowState: VoiceDictationWorkflowState = .idle
 
     init(
         settingsStore: any AppSettingsProviding,
@@ -92,6 +101,7 @@ final class AppState: ObservableObject {
         llmRouter: any LLMRouting,
         grammarCoordinator: any GrammarCoordinating,
         screenOCRCoordinator: any ScreenOCRCoordinating,
+        voiceDictationCoordinator: any VoiceDictationCoordinating,
         appSystemServices: AppSystemServices
     ) {
         self.settingsStore = settingsStore
@@ -100,6 +110,7 @@ final class AppState: ObservableObject {
         self.llmRouter = llmRouter
         self.grammarCoordinator = grammarCoordinator
         self.screenOCRCoordinator = screenOCRCoordinator
+        self.voiceDictationCoordinator = voiceDictationCoordinator
         self.appSystemServices = appSystemServices
 
         Task { [weak self] in
@@ -126,6 +137,12 @@ final class AppState: ObservableObject {
             if isScreenSelectionActive {
                 return "Status: Select an area..."
             }
+            if voiceWorkflowState == .recording {
+                return "Status: Listening..."
+            }
+            if voiceWorkflowState == .transcribing {
+                return "Status: Transcribing..."
+            }
             return "Status: Processing..."
         case .error:
             if lastOperationFailed {
@@ -141,6 +158,10 @@ final class AppState: ObservableObject {
 
     var ocrStatusTitle: String {
         providerStatusTitle(prefix: FeatureKind.ocr.statusPrefix, status: ocrStatus)
+    }
+
+    var voiceStatusTitle: String {
+        providerStatusTitle(prefix: FeatureKind.voice.statusPrefix, status: voiceStatus)
     }
 
     var accessibilityStatusTitle: String {
@@ -187,6 +208,18 @@ final class AppState: ObservableObject {
             }
         }
 
+        voiceDictationCoordinator.onStateChanged = { [weak self] state in
+            Task { @MainActor in
+                self?.handleVoiceWorkflowStateChanged(state)
+            }
+        }
+
+        voiceDictationCoordinator.onError = { [weak self] error in
+            Task { @MainActor in
+                self?.handleCoordinatorError(for: .voice, error: error)
+            }
+        }
+
         NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification,
             object: nil,
@@ -215,6 +248,7 @@ final class AppState: ObservableObject {
 
             self.checkGrammarProviderStatus()
             self.checkOCRProviderStatus()
+            self.checkVoiceProviderStatus()
         }
     }
 
@@ -226,12 +260,20 @@ final class AppState: ObservableObject {
         handleHotKeyPress(for: .ocr)
     }
 
+    func runVoiceDictationAction() {
+        handleHotKeyPress(for: .voice)
+    }
+
     func checkGrammarProviderStatus() {
         checkProviderStatus(for: .grammar)
     }
 
     func checkOCRProviderStatus() {
         checkProviderStatus(for: .ocr)
+    }
+
+    func checkVoiceProviderStatus() {
+        checkProviderStatus(for: .voice)
     }
 
     func settingsDidChange() {
@@ -246,6 +288,7 @@ final class AppState: ObservableObject {
 
             self.checkGrammarProviderStatus()
             self.checkOCRProviderStatus()
+            self.checkVoiceProviderStatus()
         }
     }
 
@@ -317,6 +360,12 @@ final class AppState: ObservableObject {
             modifiers: [.command, .shift],
             displayValue: "Command-Shift-R"
         )
+        let voiceShortcut = AppShortcut(
+            title: "Voice Dictation",
+            key: .d,
+            modifiers: [.command, .shift],
+            displayValue: "Command-Shift-D"
+        )
 
         var unavailableShortcuts: [AppShortcut] = []
 
@@ -340,6 +389,17 @@ final class AppState: ObservableObject {
             screenOCRHotKey = hotKey
         } else {
             unavailableShortcuts.append(screenOCRShortcut)
+        }
+
+        if let hotKey = makeHotKey(
+            for: voiceShortcut,
+            action: { [weak self] in
+                self?.handleHotKeyPress(for: .voice)
+            })
+        {
+            voiceHotKey = hotKey
+        } else {
+            unavailableShortcuts.append(voiceShortcut)
         }
 
         shortcutRegistrationMessage = shortcutConflictMessage(for: unavailableShortcuts)
@@ -377,12 +437,13 @@ final class AppState: ObservableObject {
     }
 
     private func handleHotKeyPress(for feature: FeatureKind) {
-        guard !isProcessing else {
+        guard canRun(feature: feature) else {
             return
         }
 
         lastOperationFailed = false
         isProcessing = true
+        activeFeature = feature
 
         setStatus(.processing(providerID: providerID(for: feature)), for: feature)
         refreshStatusUI()
@@ -390,23 +451,22 @@ final class AppState: ObservableObject {
         Task {
             do {
                 try await performOperation(for: feature)
-                self.lastOperationFailed = false
-                self.markStatusFromCurrentConfiguration(for: feature, asError: false, message: nil)
-            } catch {
-                if self.shouldIgnoreFailure(for: feature, error: error) {
+                if feature != .voice || self.voiceWorkflowState == .idle {
                     self.lastOperationFailed = false
-                } else {
-                    self.lastOperationFailed = true
-                    self.markStatusFromCurrentConfiguration(
-                        for: feature, asError: true, message: error.localizedDescription)
-                    if self.shouldOpenSettings(for: error) {
-                        self.openSettingsWindow()
-                    }
-                    logger.error("\(feature.logLabel) error: \(error.localizedDescription)")
+                    self.activeFeature = nil
+                    self.markStatusFromCurrentConfiguration(for: feature, asError: false, message: nil)
                 }
+            } catch {
+                if feature == .voice && self.voiceWorkflowState != .idle {
+                    return
+                }
+
+                self.handleCoordinatorError(for: feature, error: error)
             }
 
-            self.isProcessing = false
+            if feature != .voice || self.voiceWorkflowState == .idle {
+                self.isProcessing = false
+            }
             self.refreshStatusUI()
         }
     }
@@ -439,6 +499,8 @@ final class AppState: ObservableObject {
             return LLMSettings.grammarProvider
         case .ocr:
             return LLMSettings.screenshotProvider
+        case .voice:
+            return settingsStore.loadSettings().voice.providerID
         }
     }
 
@@ -448,6 +510,8 @@ final class AppState: ObservableObject {
             grammarStatus = status
         case .ocr:
             ocrStatus = status
+        case .voice:
+            voiceStatus = status
         }
     }
 
@@ -457,6 +521,8 @@ final class AppState: ObservableObject {
             return grammarHealthCheckTask
         case .ocr:
             return ocrHealthCheckTask
+        case .voice:
+            return voiceHealthCheckTask
         }
     }
 
@@ -466,6 +532,8 @@ final class AppState: ObservableObject {
             grammarHealthCheckTask = task
         case .ocr:
             ocrHealthCheckTask = task
+        case .voice:
+            voiceHealthCheckTask = task
         }
     }
 
@@ -475,6 +543,8 @@ final class AppState: ObservableObject {
             try await grammarCoordinator.handleHotKeyPress()
         case .ocr:
             try await screenOCRCoordinator.handleHotKeyPress()
+        case .voice:
+            try await voiceDictationCoordinator.handleHotKeyPress()
         }
     }
 
@@ -488,18 +558,22 @@ final class AppState: ObservableObject {
             if case ScreenOCRCoordinatorError.cancelled = error {
                 return true
             }
+        case .voice:
+            break
         }
 
         return false
     }
 
     private func refreshStatusUI() {
-        if isScreenSelectionActive || isProcessing {
+        if isScreenSelectionActive || isProcessing || voiceWorkflowState != .idle {
             activityStatus = .processing
             return
         }
 
-        if lastOperationFailed || hasErrorStatus(grammarStatus) || hasErrorStatus(ocrStatus) {
+        if lastOperationFailed || hasErrorStatus(grammarStatus) || hasErrorStatus(ocrStatus)
+            || hasErrorStatus(voiceStatus)
+        {
             activityStatus = .error
             return
         }
@@ -513,6 +587,55 @@ final class AppState: ObservableObject {
         }
 
         return false
+    }
+
+    private func canRun(feature: FeatureKind) -> Bool {
+        activeFeature == nil || (feature == .voice && activeFeature == .voice)
+    }
+
+    private func handleVoiceWorkflowStateChanged(_ state: VoiceDictationWorkflowState) {
+        voiceWorkflowState = state
+
+        switch state {
+        case .idle:
+            activeFeature = nil
+            isProcessing = false
+
+            if case .processing = voiceStatus {
+                markStatusFromCurrentConfiguration(for: .voice, asError: false, message: nil)
+            }
+        case .recording, .transcribing:
+            activeFeature = .voice
+            isProcessing = true
+            setStatus(.processing(providerID: providerID(for: .voice)), for: .voice)
+        }
+
+        refreshStatusUI()
+    }
+
+    private func handleCoordinatorError(for feature: FeatureKind, error: Error) {
+        if feature == .voice {
+            voiceWorkflowState = .idle
+        }
+
+        activeFeature = nil
+        isProcessing = false
+
+        if shouldIgnoreFailure(for: feature, error: error) {
+            lastOperationFailed = false
+            markStatusFromCurrentConfiguration(for: feature, asError: false, message: nil)
+        } else {
+            lastOperationFailed = true
+            markStatusFromCurrentConfiguration(for: feature, asError: true, message: error.localizedDescription)
+
+            if shouldOpenSettings(for: error) {
+                openSettingsWindow()
+            }
+
+            logger.error("\(feature.logLabel) error: \(error.localizedDescription)")
+        }
+
+        refreshStatusUI()
     }
 
     private func applyClipboardHistorySettings() {
