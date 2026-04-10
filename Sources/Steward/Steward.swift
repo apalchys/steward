@@ -98,7 +98,6 @@ private struct AppMenuView: View {
             Button("Voice Dictation") {
                 appState.runVoiceDictationAction()
             }
-            .keyboardShortcut("d", modifiers: [.command, .shift])
 
             Divider()
 

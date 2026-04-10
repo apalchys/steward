@@ -1,6 +1,6 @@
 ---
 name: App State And Menu Integration
-status: todo
+status: done
 ---
 
 # Summary
@@ -21,4 +21,3 @@ Wire the configurable push-to-talk dictation shortcut through app state, menu st
 
 - The app menu reflects the feature without showing a stale fixed keyboard shortcut.
 - Status titles and busy-state behavior remain correct for both voice entry paths.
-
