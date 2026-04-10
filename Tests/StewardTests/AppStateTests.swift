@@ -215,6 +215,47 @@ final class AppStateTests: XCTestCase {
         )
     }
 
+    func testValidateVoiceHotKeyRejectsGrammarConflict() {
+        _ = NSApplication.shared
+        let appState = AppState(
+            settingsStore: FakeAppSettingsStore(),
+            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
+            clipboardMonitor: FakeClipboardMonitor(),
+            llmRouter: FakeAppRouter(),
+            grammarCoordinator: FakeGrammarCoordinator(),
+            screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
+            appSystemServices: FakeAppSystemServices().services
+        )
+
+        XCTAssertEqual(
+            appState.validateVoiceHotKey(.grammarCheck),
+            .conflictsWithFeature("Grammar Check")
+        )
+    }
+
+    func testValidateVoiceHotKeyRejectsUnavailableShortcut() {
+        _ = NSApplication.shared
+        let unavailableHotKey = AppHotKey(
+            carbonKeyCode: Key.v.carbonKeyCode,
+            carbonModifiers: NSEvent.ModifierFlags([.command, .option]).carbonFlags
+        )
+        let appSystemServices = FakeAppSystemServices()
+        appSystemServices.unavailableHotKeys = [unavailableHotKey]
+        let appState = AppState(
+            settingsStore: FakeAppSettingsStore(),
+            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
+            clipboardMonitor: FakeClipboardMonitor(),
+            llmRouter: FakeAppRouter(),
+            grammarCoordinator: FakeGrammarCoordinator(),
+            screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
+            appSystemServices: appSystemServices.services
+        )
+
+        XCTAssertEqual(appState.validateVoiceHotKey(unavailableHotKey), AppHotKeyValidationError.unavailable)
+    }
+
     func testOpenPreferencesUsesSettingsOpener() {
         _ = NSApplication.shared
         let appSystemServices = FakeAppSystemServices()

@@ -26,10 +26,11 @@ Grammar Fix:
 
 Voice Dictation:
 
-1. Press `Command+Shift+D`.
+1. Hold the configured voice shortcut. The default is `Command+Shift+D`.
 2. Speak while Steward records from your microphone.
-3. Press `Command+Shift+D` again or click `OK`.
-4. The transcript is cleaned up, keeps the spoken language(s), and is inserted into the focused text field.
+3. Release the shortcut to transcribe and insert the cleaned transcript.
+4. If you start dictation from the menu bar item instead, Steward uses a manual toggle fallback with `Cancel` and `OK`.
+5. The transcript is cleaned up, keeps the spoken language(s), and is inserted into the focused text field.
 
 Screen Text Capture:
 
@@ -64,9 +65,11 @@ First launch:
 
 ## Voice Dictation Notes
 
-- Shortcut: `Command+Shift+D`
+- Shortcut: configurable in Preferences > Voice. Default: `Command+Shift+D`
 - Requires Microphone permission
 - Voice settings are configured separately in Preferences > Voice
+- Global dictation uses push-to-talk: hold to record, release to transcribe
+- The menu item remains available as a manual toggle fallback
 - Dictation can preserve mixed-language speech and apply punctuation and paragraph formatting
 - Version 1 is optimized for recordings up to 120 seconds
 - If Steward cannot insert the transcript into the focused app, it copies the transcript to the clipboard instead

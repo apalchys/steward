@@ -1,6 +1,6 @@
 ---
 name: Automated Tests And Docs
-status: todo
+status: done
 ---
 
 # Summary
