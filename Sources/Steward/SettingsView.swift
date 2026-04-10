@@ -48,6 +48,11 @@ struct SettingsView: View {
                     Label("Screen Text", systemImage: "photo.on.rectangle")
                 }
 
+            voiceTab
+                .tabItem {
+                    Label("Voice", systemImage: "waveform")
+                }
+
             historyTab
                 .tabItem {
                     Label("Clipboard", systemImage: "clipboard")
@@ -256,6 +261,72 @@ struct SettingsView: View {
         }
     }
 
+    private var voiceTab: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Voice Dictation")
+                    .font(.headline)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Provider")
+                        .font(.subheadline)
+
+                    Picker("Voice provider", selection: $settings.voice.providerID) {
+                        ForEach(LLMProviderID.allCases) { providerID in
+                            Text(providerID.displayName)
+                                .tag(providerID)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                ContinuousSecureField(
+                    placeholder: "\(selectedVoiceProviderID.displayName) API Key",
+                    text: profileBinding(for: selectedVoiceProviderID, keyPath: \.apiKey)
+                )
+                .frame(height: 22)
+
+                TextField(
+                    "Model (default: \(selectedVoiceDefaultModelID))",
+                    text: voiceModelBinding(for: selectedVoiceProviderID)
+                )
+                .textFieldStyle(.roundedBorder)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Shortcut")
+                        .font(.subheadline)
+
+                    Text("Command-Shift-D")
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+
+                Text("Custom instructions for voice transcription")
+                    .font(.subheadline)
+
+                TextEditor(text: $settings.voice.customInstructions)
+                    .font(.system(.body, design: .monospaced))
+                    .padding(8)
+                    .background(Color(NSColor.textBackgroundColor))
+                    .cornerRadius(6)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                    )
+                    .frame(minHeight: 220)
+
+                Text("Dictation keeps the spoken language(s) and applies punctuation and formatting automatically.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Text("Version 1 is optimized for recordings up to 120 seconds.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .padding(20)
+        }
+    }
+
     private var aboutTab: some View {
         VStack(alignment: .center, spacing: 12) {
             if let appIcon = NSImage(named: "AppIcon") {
@@ -311,6 +382,27 @@ struct SettingsView: View {
         )
     }
 
+    private func voiceModelBinding(for providerID: LLMProviderID) -> Binding<String> {
+        Binding(
+            get: {
+                switch providerID {
+                case .gemini:
+                    settings.voice.geminiModelID
+                case .openAI:
+                    settings.voice.openAIModelID
+                }
+            },
+            set: { newValue in
+                switch providerID {
+                case .gemini:
+                    settings.voice.geminiModelID = newValue
+                case .openAI:
+                    settings.voice.openAIModelID = newValue
+                }
+            }
+        )
+    }
+
     private func persistSettings(_ settings: LLMSettings) {
         settingsStore.saveSettings(settings)
         onSettingsChanged?()
@@ -325,5 +417,18 @@ struct SettingsView: View {
                 appState.setLaunchAtLoginEnabled(newValue)
             }
         )
+    }
+
+    private var selectedVoiceProviderID: LLMProviderID {
+        settings.voice.providerID
+    }
+
+    private var selectedVoiceDefaultModelID: String {
+        switch selectedVoiceProviderID {
+        case .gemini:
+            VoiceSettings.defaultGeminiModelID
+        case .openAI:
+            VoiceSettings.defaultOpenAIModelID
+        }
     }
 }
