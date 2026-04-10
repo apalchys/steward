@@ -296,9 +296,11 @@ struct SettingsView: View {
                     Text("Shortcut")
                         .font(.subheadline)
 
-                    Text("Command-Shift-D")
-                        .font(.system(.body, design: .monospaced))
-                        .foregroundColor(.secondary)
+                    HotKeyRecorderView(
+                        hotKey: $settings.voice.hotKey,
+                        defaultHotKey: .defaultVoiceDictation,
+                        validate: { appState.validateVoiceHotKey($0) }
+                    )
                 }
 
                 Text("Custom instructions for voice transcription")
@@ -315,9 +317,11 @@ struct SettingsView: View {
                     )
                     .frame(minHeight: 220)
 
-                Text("Dictation keeps the spoken language(s) and applies punctuation and formatting automatically.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                Text(
+                    "Dictation keeps the spoken language(s), applies punctuation and formatting automatically, and uses push-to-talk: hold the shortcut to record, release to transcribe."
+                )
+                .font(.caption)
+                .foregroundColor(.secondary)
 
                 Text("Version 1 is optimized for recordings up to 120 seconds.")
                     .font(.caption)

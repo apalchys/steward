@@ -279,6 +279,13 @@ final class AppState: ObservableObject {
         checkProviderStatus(for: .voice)
     }
 
+    func validateVoiceHotKey(_ hotKey: AppHotKey) -> AppHotKeyValidationError? {
+        AppHotKeyValidator.validateVoiceDictationHotKey(
+            hotKey,
+            isShortcutAvailable: appSystemServices.isShortcutAvailable
+        )
+    }
+
     func settingsDidChange() {
         applyClipboardHistorySettings()
         registerVoiceHotKey(using: settingsStore.loadSettings().voice.hotKey)

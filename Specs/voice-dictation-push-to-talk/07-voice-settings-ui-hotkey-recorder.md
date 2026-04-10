@@ -1,6 +1,6 @@
 ---
 name: Voice Settings UI Hotkey Recorder
-status: todo
+status: done
 ---
 
 # Summary
@@ -19,4 +19,3 @@ Replace the fixed voice shortcut label in Preferences with a configurable shortc
 
 - Users can change the dictation hotkey from Preferences.
 - Invalid combinations are not saved.
-
