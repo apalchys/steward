@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import ApplicationServices
 import Carbon
 import Foundation
@@ -53,10 +54,12 @@ enum LaunchAtLoginError: LocalizedError, Equatable {
 @MainActor
 struct AppSystemServices {
     let isAccessibilityPermissionGranted: () -> Bool
+    let isMicrophonePermissionGranted: () -> Bool
     let isScreenRecordingPermissionGranted: () -> Bool
     let isShortcutAvailable: (Key, NSEvent.ModifierFlags) -> Bool
     let openApplicationSettings: () -> Void
     let openAccessibilityPrivacySettings: () -> Void
+    let openMicrophonePrivacySettings: () -> Void
     let openScreenRecordingPrivacySettings: () -> Void
     let launchAtLoginStatus: () -> LaunchAtLoginStatus
     let setLaunchAtLoginEnabled: (Bool) throws -> Void
@@ -72,6 +75,9 @@ struct AppSystemServices {
             isAccessibilityPermissionGranted: {
                 AXIsProcessTrusted()
             },
+            isMicrophonePermissionGranted: {
+                AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+            },
             isScreenRecordingPermissionGranted: {
                 CGPreflightScreenCaptureAccess()
             },
@@ -83,6 +89,9 @@ struct AppSystemServices {
             },
             openAccessibilityPrivacySettings: {
                 openSystemSettings(at: accessibilityURL, workspace: workspace)
+            },
+            openMicrophonePrivacySettings: {
+                openSystemSettings(at: microphoneURL, workspace: workspace)
             },
             openScreenRecordingPrivacySettings: {
                 openSystemSettings(at: screenRecordingURL, workspace: workspace)
@@ -102,6 +111,9 @@ struct AppSystemServices {
     private static let applicationSettingsSelector = Selector(("showSettingsWindow:"))
     private static let accessibilityURL = URL(
         string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+    )!
+    private static let microphoneURL = URL(
+        string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"
     )!
     private static let screenRecordingURL = URL(
         string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"

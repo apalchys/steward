@@ -37,6 +37,7 @@ final class AppStateTests: XCTestCase {
         _ = NSApplication.shared
         let appSystemServices = FakeAppSystemServices(
             accessibilityPermissionGranted: true,
+            microphonePermissionGranted: false,
             screenRecordingPermissionGranted: false
         )
         let appState = AppState(
@@ -53,7 +54,9 @@ final class AppStateTests: XCTestCase {
         await Task.yield()
 
         XCTAssertTrue(appState.accessibilityPermissionGranted)
+        XCTAssertFalse(appState.microphonePermissionGranted)
         XCTAssertFalse(appState.screenRecordingPermissionGranted)
+        XCTAssertEqual(appState.microphoneStatusTitle, "Microphone: Open Privacy Settings")
         XCTAssertEqual(appState.screenRecordingStatusTitle, "Screen Recording: Open Privacy Settings")
         XCTAssertTrue(appState.shouldShowPermissionActions)
     }
@@ -62,6 +65,7 @@ final class AppStateTests: XCTestCase {
         _ = NSApplication.shared
         let appSystemServices = FakeAppSystemServices(
             accessibilityPermissionGranted: true,
+            microphonePermissionGranted: true,
             screenRecordingPermissionGranted: true
         )
         let appState = AppState(
@@ -78,6 +82,24 @@ final class AppStateTests: XCTestCase {
         await Task.yield()
 
         XCTAssertFalse(appState.shouldShowPermissionActions)
+    }
+
+    func testOpenMicrophonePrivacySettingsUsesSystemServices() {
+        _ = NSApplication.shared
+        let appSystemServices = FakeAppSystemServices()
+        let appState = AppState(
+            settingsStore: FakeAppSettingsStore(),
+            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
+            clipboardMonitor: FakeClipboardMonitor(),
+            llmRouter: FakeAppRouter(),
+            grammarCoordinator: FakeGrammarCoordinator(),
+            screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            appSystemServices: appSystemServices.services
+        )
+
+        appState.openMicrophonePrivacySettings()
+
+        XCTAssertEqual(appSystemServices.openMicrophonePrivacySettingsCallCount, 1)
     }
 
     func testStartPublishesShortcutConflictMessageWhenShortcutIsUnavailable() async {
@@ -318,23 +340,27 @@ private final class FakeAppSettingsStore: AppSettingsProviding {
 @MainActor
 private final class FakeAppSystemServices {
     var accessibilityPermissionGranted = false
+    var microphonePermissionGranted = false
     var screenRecordingPermissionGranted = false
     var launchAtLoginStatus: LaunchAtLoginStatus = .notRegistered
     var unavailableKeyCodes: Set<UInt32> = []
     var setLaunchAtLoginEnabledError: Error?
     private(set) var openApplicationSettingsCallCount = 0
     private(set) var openAccessibilityPrivacySettingsCallCount = 0
+    private(set) var openMicrophonePrivacySettingsCallCount = 0
     private(set) var openScreenRecordingPrivacySettingsCallCount = 0
     private(set) var openLoginItemsSettingsCallCount = 0
     private(set) var setLaunchAtLoginEnabledCalls: [Bool] = []
 
     init(
         accessibilityPermissionGranted: Bool = false,
+        microphonePermissionGranted: Bool = false,
         screenRecordingPermissionGranted: Bool = false,
         launchAtLoginStatus: LaunchAtLoginStatus = .notRegistered,
         unavailableKeyCodes: Set<UInt32> = []
     ) {
         self.accessibilityPermissionGranted = accessibilityPermissionGranted
+        self.microphonePermissionGranted = microphonePermissionGranted
         self.screenRecordingPermissionGranted = screenRecordingPermissionGranted
         self.launchAtLoginStatus = launchAtLoginStatus
         self.unavailableKeyCodes = unavailableKeyCodes
@@ -343,6 +369,7 @@ private final class FakeAppSystemServices {
     var services: AppSystemServices {
         AppSystemServices(
             isAccessibilityPermissionGranted: { self.accessibilityPermissionGranted },
+            isMicrophonePermissionGranted: { self.microphonePermissionGranted },
             isScreenRecordingPermissionGranted: { self.screenRecordingPermissionGranted },
             isShortcutAvailable: { key, _ in
                 !self.unavailableKeyCodes.contains(key.carbonKeyCode)
@@ -352,6 +379,9 @@ private final class FakeAppSystemServices {
             },
             openAccessibilityPrivacySettings: {
                 self.openAccessibilityPrivacySettingsCallCount += 1
+            },
+            openMicrophonePrivacySettings: {
+                self.openMicrophonePrivacySettingsCallCount += 1
             },
             openScreenRecordingPrivacySettings: {
                 self.openScreenRecordingPrivacySettingsCallCount += 1

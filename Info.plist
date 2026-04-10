@@ -36,5 +36,7 @@
     <string>This app needs to send Apple Events to capture selected text and insert corrected text in other applications.</string>
     <key>NSInputMonitoringUsageDescription</key>
     <string>This app needs input monitoring permissions to detect keyboard shortcuts and simulate text input for grammar correction.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>This app needs microphone access to capture audio for voice dictation.</string>
 </dict>
 </plist>

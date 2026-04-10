@@ -108,6 +108,12 @@ private struct AppMenuView: View {
                     }
                 }
 
+                if !appState.microphonePermissionGranted {
+                    Button(appState.microphoneStatusTitle) {
+                        appState.openMicrophonePrivacySettings()
+                    }
+                }
+
                 if !appState.screenRecordingPermissionGranted {
                     Button(appState.screenRecordingStatusTitle) {
                         appState.openScreenRecordingPrivacySettings()

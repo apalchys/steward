@@ -59,6 +59,7 @@ final class AppState: ObservableObject {
     @Published private(set) var grammarStatus: ProviderStatus = .error(providerID: nil, message: "Not checked")
     @Published private(set) var ocrStatus: ProviderStatus = .error(providerID: nil, message: "Not checked")
     @Published private(set) var accessibilityPermissionGranted = false
+    @Published private(set) var microphonePermissionGranted = false
     @Published private(set) var screenRecordingPermissionGranted = false
     @Published private(set) var shortcutRegistrationMessage: String?
     @Published private(set) var launchAtLoginStatus: LaunchAtLoginStatus = .notRegistered
@@ -146,12 +147,16 @@ final class AppState: ObservableObject {
         accessibilityPermissionGranted ? "Accessibility: Granted" : "Accessibility: Open Privacy Settings"
     }
 
+    var microphoneStatusTitle: String {
+        microphonePermissionGranted ? "Microphone: Granted" : "Microphone: Open Privacy Settings"
+    }
+
     var screenRecordingStatusTitle: String {
         screenRecordingPermissionGranted ? "Screen Recording: Granted" : "Screen Recording: Open Privacy Settings"
     }
 
     var shouldShowPermissionActions: Bool {
-        !accessibilityPermissionGranted || !screenRecordingPermissionGranted
+        !accessibilityPermissionGranted || !microphonePermissionGranted || !screenRecordingPermissionGranted
     }
 
     var isLaunchAtLoginEnabled: Bool {
@@ -251,11 +256,16 @@ final class AppState: ObservableObject {
 
     func refreshPermissionStatuses() {
         accessibilityPermissionGranted = appSystemServices.isAccessibilityPermissionGranted()
+        microphonePermissionGranted = appSystemServices.isMicrophonePermissionGranted()
         screenRecordingPermissionGranted = appSystemServices.isScreenRecordingPermissionGranted()
     }
 
     func openAccessibilityPrivacySettings() {
         appSystemServices.openAccessibilityPrivacySettings()
+    }
+
+    func openMicrophonePrivacySettings() {
+        appSystemServices.openMicrophonePrivacySettings()
     }
 
     func openScreenRecordingPrivacySettings() {
