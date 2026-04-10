@@ -52,11 +52,118 @@ enum LaunchAtLoginError: LocalizedError, Equatable {
 }
 
 @MainActor
+protocol MouseButtonShortcutMonitoring: AnyObject {
+    func stop()
+}
+
+@MainActor
+private final class EventMonitorMouseButtonShortcut: MouseButtonShortcutMonitoring {
+    private let buttonNumber: Int
+    private let modifiers: NSEvent.ModifierFlags
+    private let onButtonDown: @MainActor () -> Void
+    private let onButtonUp: @MainActor () -> Void
+    private var localDownMonitor: Any?
+    private var localUpMonitor: Any?
+    private var globalDownMonitor: Any?
+    private var globalUpMonitor: Any?
+
+    init(
+        buttonNumber: Int,
+        modifiers: NSEvent.ModifierFlags,
+        onButtonDown: @escaping @MainActor () -> Void,
+        onButtonUp: @escaping @MainActor () -> Void
+    ) {
+        self.buttonNumber = buttonNumber
+        self.modifiers = modifiers.intersection([.command, .shift, .option, .control])
+        self.onButtonDown = onButtonDown
+        self.onButtonUp = onButtonUp
+
+        localDownMonitor = NSEvent.addLocalMonitorForEvents(matching: [.otherMouseDown]) { [weak self] event in
+            guard let self else {
+                return event
+            }
+
+            if self.matches(event) {
+                Task { @MainActor in
+                    self.onButtonDown()
+                }
+            }
+
+            return event
+        }
+        localUpMonitor = NSEvent.addLocalMonitorForEvents(matching: [.otherMouseUp]) { [weak self] event in
+            guard let self else {
+                return event
+            }
+
+            if self.matches(event) {
+                Task { @MainActor in
+                    self.onButtonUp()
+                }
+            }
+
+            return event
+        }
+        globalDownMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.otherMouseDown]) { [weak self] event in
+            guard let self, self.matches(event) else {
+                return
+            }
+
+            Task { @MainActor in
+                self.onButtonDown()
+            }
+        }
+        globalUpMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.otherMouseUp]) { [weak self] event in
+            guard let self, self.matches(event) else {
+                return
+            }
+
+            Task { @MainActor in
+                self.onButtonUp()
+            }
+        }
+    }
+
+    func stop() {
+        if let localDownMonitor {
+            NSEvent.removeMonitor(localDownMonitor)
+            self.localDownMonitor = nil
+        }
+        if let localUpMonitor {
+            NSEvent.removeMonitor(localUpMonitor)
+            self.localUpMonitor = nil
+        }
+        if let globalDownMonitor {
+            NSEvent.removeMonitor(globalDownMonitor)
+            self.globalDownMonitor = nil
+        }
+        if let globalUpMonitor {
+            NSEvent.removeMonitor(globalUpMonitor)
+            self.globalUpMonitor = nil
+        }
+    }
+
+    deinit {
+        MainActor.assumeIsolated {
+            stop()
+        }
+    }
+
+    private func matches(_ event: NSEvent) -> Bool {
+        event.buttonNumber == buttonNumber
+            && event.modifierFlags.intersection([.command, .shift, .option, .control]) == modifiers
+    }
+}
+
+@MainActor
 struct AppSystemServices {
     let isAccessibilityPermissionGranted: () -> Bool
     let isMicrophonePermissionGranted: () -> Bool
     let isScreenRecordingPermissionGranted: () -> Bool
     let isShortcutAvailable: (Key, NSEvent.ModifierFlags) -> Bool
+    let makeMouseButtonMonitor:
+        (Int, NSEvent.ModifierFlags, @escaping @MainActor () -> Void, @escaping @MainActor () -> Void)
+            -> any MouseButtonShortcutMonitoring
     let openApplicationSettings: () -> Void
     let openAccessibilityPrivacySettings: () -> Void
     let openMicrophonePrivacySettings: () -> Void
@@ -83,6 +190,14 @@ struct AppSystemServices {
             },
             isShortcutAvailable: { key, modifiers in
                 isShortcutAvailable(key: key, modifiers: modifiers)
+            },
+            makeMouseButtonMonitor: { buttonNumber, modifiers, onButtonDown, onButtonUp in
+                EventMonitorMouseButtonShortcut(
+                    buttonNumber: buttonNumber,
+                    modifiers: modifiers,
+                    onButtonDown: onButtonDown,
+                    onButtonUp: onButtonUp
+                )
             },
             openApplicationSettings: {
                 openApplicationSettings()

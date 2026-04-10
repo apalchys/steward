@@ -4,6 +4,7 @@ import HotKey
 enum AppHotKeyValidationError: LocalizedError, Equatable {
     case requiresModifier
     case requiresNonModifierKey
+    case requiresMouseButton
     case conflictsWithFeature(String)
     case unavailable
 
@@ -13,6 +14,8 @@ enum AppHotKeyValidationError: LocalizedError, Equatable {
             return "Voice Dictation shortcuts must include at least one modifier key."
         case .requiresNonModifierKey:
             return "Voice Dictation shortcuts must include a non-modifier key."
+        case .requiresMouseButton:
+            return "Voice Dictation mouse shortcuts must use an extra mouse button."
         case .conflictsWithFeature(let featureName):
             return "Voice Dictation shortcut conflicts with \(featureName)."
         case .unavailable:
@@ -26,20 +29,28 @@ struct AppHotKeyValidator {
         _ hotKey: AppHotKey,
         isShortcutAvailable: (Key, NSEvent.ModifierFlags) -> Bool
     ) -> AppHotKeyValidationError? {
-        guard !hotKey.modifiers.intersection([.command, .shift, .option, .control]).isEmpty else {
-            return .requiresModifier
-        }
-
-        guard let key = hotKey.key, !key.isModifierKey else {
-            return .requiresNonModifierKey
-        }
-
         if hotKey == .grammarCheck {
             return .conflictsWithFeature("Grammar Check")
         }
 
         if hotKey == .screenTextCapture {
             return .conflictsWithFeature("Screen Text Capture")
+        }
+
+        if hotKey.isMouseButton {
+            guard hotKey.mouseButtonNumber >= 2 else {
+                return .requiresMouseButton
+            }
+
+            return nil
+        }
+
+        guard !hotKey.modifiers.intersection([.command, .shift, .option, .control]).isEmpty else {
+            return .requiresModifier
+        }
+
+        guard let key = hotKey.key, !key.isModifierKey else {
+            return .requiresNonModifierKey
         }
 
         guard isShortcutAvailable(key, hotKey.modifiers) else {

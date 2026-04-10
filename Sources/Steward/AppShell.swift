@@ -81,6 +81,7 @@ final class AppState: ObservableObject {
     private var grammarHotKey: HotKey?
     private var screenOCRHotKey: HotKey?
     private var voiceHotKey: HotKey?
+    private var voiceMouseButtonMonitor: (any MouseButtonShortcutMonitoring)?
     private var hasStarted = false
     private var initialHealthCheckTask: Task<Void, Never>?
     private var settingsHealthDebounceTask: Task<Void, Never>?
@@ -725,7 +726,40 @@ final class AppState: ObservableObject {
             return
         }
 
-        guard requestedHotKey != activeVoiceHotKey || voiceHotKey == nil else {
+        guard requestedHotKey != activeVoiceHotKey || !hasRegisteredVoiceShortcut(for: requestedHotKey) else {
+            voiceShortcutRegistrationMessage = nil
+            refreshShortcutRegistrationMessage()
+            return
+        }
+
+        if requestedHotKey.isMouseButton {
+            let mouseButtonMonitor = appSystemServices.makeMouseButtonMonitor(
+                requestedHotKey.mouseButtonNumber,
+                requestedHotKey.modifiers,
+                { [weak self] in
+                    Task { @MainActor [weak self] in
+                        do {
+                            try await self?.voiceDictationCoordinator.handlePushToTalkKeyDown()
+                        } catch {
+                            self?.handleCoordinatorError(for: .voice, error: error)
+                        }
+                    }
+                },
+                { [weak self] in
+                    Task { @MainActor [weak self] in
+                        do {
+                            try await self?.voiceDictationCoordinator.handlePushToTalkKeyUp()
+                        } catch {
+                            self?.handleCoordinatorError(for: .voice, error: error)
+                        }
+                    }
+                }
+            )
+
+            voiceHotKey = nil
+            voiceMouseButtonMonitor?.stop()
+            voiceMouseButtonMonitor = mouseButtonMonitor
+            activeVoiceHotKey = requestedHotKey
             voiceShortcutRegistrationMessage = nil
             refreshShortcutRegistrationMessage()
             return
@@ -765,10 +799,20 @@ final class AppState: ObservableObject {
             return
         }
 
+        voiceMouseButtonMonitor?.stop()
+        voiceMouseButtonMonitor = nil
         voiceHotKey = hotKey
         activeVoiceHotKey = requestedHotKey
         voiceShortcutRegistrationMessage = nil
         refreshShortcutRegistrationMessage()
+    }
+
+    private func hasRegisteredVoiceShortcut(for hotKey: AppHotKey) -> Bool {
+        if hotKey.isMouseButton {
+            return voiceMouseButtonMonitor != nil
+        }
+
+        return voiceHotKey != nil
     }
 
     private func voiceShortcutMessage(for hotKey: AppHotKey, error: AppHotKeyValidationError) -> String {
@@ -779,7 +823,7 @@ final class AppState: ObservableObject {
         case .unavailable:
             return
                 "Shortcut unavailable: Voice Dictation (\(hotKey.readableDisplayValue)) is already in use by another app."
-        case .requiresModifier, .requiresNonModifierKey:
+        case .requiresModifier, .requiresNonModifierKey, .requiresMouseButton:
             return error.localizedDescription
         }
     }

@@ -63,6 +63,11 @@ struct VoiceSettings: Equatable {
 }
 
 struct AppHotKey: Equatable, Hashable {
+    enum TriggerKind: String, Equatable, Hashable {
+        case keyboard
+        case mouseButton
+    }
+
     static let grammarCheck = AppHotKey(
         carbonKeyCode: Key.f.carbonKeyCode,
         carbonModifiers: NSEvent.ModifierFlags([.command, .shift]).carbonFlags
@@ -76,56 +81,95 @@ struct AppHotKey: Equatable, Hashable {
         carbonModifiers: NSEvent.ModifierFlags([.command, .shift]).carbonFlags
     )
 
+    var triggerKind: TriggerKind
     var carbonKeyCode: UInt32
     var carbonModifiers: UInt32
+    var mouseButtonNumber: Int
 
     init(carbonKeyCode: UInt32, carbonModifiers: UInt32) {
+        self.triggerKind = .keyboard
         self.carbonKeyCode = carbonKeyCode
         self.carbonModifiers = carbonModifiers
+        self.mouseButtonNumber = 0
+    }
+
+    init(mouseButtonNumber: Int, carbonModifiers: UInt32 = 0) {
+        self.triggerKind = .mouseButton
+        self.carbonKeyCode = 0
+        self.carbonModifiers = carbonModifiers
+        self.mouseButtonNumber = mouseButtonNumber
     }
 
     init(keyCombo: KeyCombo) {
         self.init(carbonKeyCode: keyCombo.carbonKeyCode, carbonModifiers: keyCombo.carbonModifiers)
     }
 
-    var keyCombo: KeyCombo {
-        KeyCombo(carbonKeyCode: carbonKeyCode, carbonModifiers: carbonModifiers)
+    var isKeyboard: Bool {
+        triggerKind == .keyboard
+    }
+
+    var isMouseButton: Bool {
+        triggerKind == .mouseButton
+    }
+
+    var keyCombo: KeyCombo? {
+        guard isKeyboard else {
+            return nil
+        }
+
+        return KeyCombo(carbonKeyCode: carbonKeyCode, carbonModifiers: carbonModifiers)
     }
 
     var key: Key? {
-        keyCombo.key
+        keyCombo?.key
     }
 
     var modifiers: NSEvent.ModifierFlags {
-        keyCombo.modifiers
+        if let keyCombo {
+            return keyCombo.modifiers
+        }
+
+        return NSEvent.ModifierFlags(carbonFlags: carbonModifiers)
     }
 
     var displayValue: String {
-        keyCombo.description
+        if let keyCombo {
+            return keyCombo.description
+        }
+
+        return readableDisplayValue
     }
 
     var readableDisplayValue: String {
-        var components: [String] = []
-
-        if modifiers.contains(.command) {
-            components.append("Command")
-        }
-        if modifiers.contains(.shift) {
-            components.append("Shift")
-        }
-        if modifiers.contains(.option) {
-            components.append("Option")
-        }
-        if modifiers.contains(.control) {
-            components.append("Control")
-        }
+        var components = modifierDisplayComponents(for: modifiers)
 
         if let key {
             components.append(key.readableDisplayName)
+        } else if isMouseButton {
+            components.append("Mouse Button \(mouseButtonNumber)")
         }
 
         return components.joined(separator: "-")
     }
+}
+
+private func modifierDisplayComponents(for modifiers: NSEvent.ModifierFlags) -> [String] {
+    var components: [String] = []
+
+    if modifiers.contains(.command) {
+        components.append("Command")
+    }
+    if modifiers.contains(.shift) {
+        components.append("Shift")
+    }
+    if modifiers.contains(.option) {
+        components.append("Option")
+    }
+    if modifiers.contains(.control) {
+        components.append("Control")
+    }
+
+    return components
 }
 
 private extension Key {
@@ -236,8 +280,10 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
         let voiceGeminiModelID: Defaults.Key<String>
         let voiceOpenAIModelID: Defaults.Key<String>
         let voiceCustomInstructions: Defaults.Key<String>
+        let voiceHotKeyTriggerKind: Defaults.Key<String>
         let voiceHotKeyCode: Defaults.Key<Int>
         let voiceHotKeyModifiers: Defaults.Key<Int>
+        let voiceHotKeyMouseButtonNumber: Defaults.Key<Int>
         let clipboardHistoryEnabled: Defaults.Key<Bool>
         let clipboardHistoryMaxStoredRecords: Defaults.Key<Int>
         let userDefaults: UserDefaults
@@ -274,6 +320,11 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
                 default: "",
                 suite: userDefaults
             )
+            voiceHotKeyTriggerKind = Defaults.Key<String>(
+                "voiceHotKeyTriggerKind",
+                default: AppHotKey.TriggerKind.keyboard.rawValue,
+                suite: userDefaults
+            )
             voiceHotKeyCode = Defaults.Key<Int>(
                 "voiceHotKeyCode",
                 default: Int(AppHotKey.defaultVoiceDictation.carbonKeyCode),
@@ -282,6 +333,11 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
             voiceHotKeyModifiers = Defaults.Key<Int>(
                 "voiceHotKeyModifiers",
                 default: Int(AppHotKey.defaultVoiceDictation.carbonModifiers),
+                suite: userDefaults
+            )
+            voiceHotKeyMouseButtonNumber = Defaults.Key<Int>(
+                "voiceHotKeyMouseButtonNumber",
+                default: 0,
                 suite: userDefaults
             )
             clipboardHistoryEnabled = Defaults.Key<Bool>(
@@ -332,10 +388,21 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
 
         let rawVoiceProviderID = Defaults[keys.voiceProviderID].trimmed
         let voiceProviderID = LLMProviderID(rawValue: rawVoiceProviderID) ?? .gemini
-        let voiceHotKey = AppHotKey(
-            carbonKeyCode: UInt32(max(0, Defaults[keys.voiceHotKeyCode])),
-            carbonModifiers: UInt32(max(0, Defaults[keys.voiceHotKeyModifiers]))
-        )
+        let voiceHotKeyTriggerKind =
+            AppHotKey.TriggerKind(rawValue: Defaults[keys.voiceHotKeyTriggerKind]) ?? .keyboard
+        let voiceHotKey: AppHotKey
+        switch voiceHotKeyTriggerKind {
+        case .keyboard:
+            voiceHotKey = AppHotKey(
+                carbonKeyCode: UInt32(max(0, Defaults[keys.voiceHotKeyCode])),
+                carbonModifiers: UInt32(max(0, Defaults[keys.voiceHotKeyModifiers]))
+            )
+        case .mouseButton:
+            voiceHotKey = AppHotKey(
+                mouseButtonNumber: max(0, Defaults[keys.voiceHotKeyMouseButtonNumber]),
+                carbonModifiers: UInt32(max(0, Defaults[keys.voiceHotKeyModifiers]))
+            )
+        }
 
         return LLMSettings(
             providerProfiles: profiles,
@@ -372,8 +439,10 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
         Defaults[keys.voiceGeminiModelID] = settings.voice.modelID(for: .gemini)
         Defaults[keys.voiceOpenAIModelID] = settings.voice.modelID(for: .openAI)
         Defaults[keys.voiceCustomInstructions] = settings.voice.customInstructions
+        Defaults[keys.voiceHotKeyTriggerKind] = settings.voice.hotKey.triggerKind.rawValue
         Defaults[keys.voiceHotKeyCode] = Int(settings.voice.hotKey.carbonKeyCode)
         Defaults[keys.voiceHotKeyModifiers] = Int(settings.voice.hotKey.carbonModifiers)
+        Defaults[keys.voiceHotKeyMouseButtonNumber] = settings.voice.hotKey.mouseButtonNumber
         Defaults[keys.clipboardHistoryEnabled] = settings.clipboardHistory.isEnabled
         Defaults[keys.clipboardHistoryMaxStoredRecords] = settings.clipboardHistory.maxStoredRecords
     }

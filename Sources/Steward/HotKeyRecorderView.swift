@@ -13,7 +13,7 @@ struct HotKeyRecorderView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
                 Button(action: startRecording) {
-                    Text(isRecording ? "Type shortcut" : hotKey.displayValue)
+                    Text(isRecording ? "Press key or click button" : hotKey.displayValue)
                         .font(.system(.body, design: .monospaced))
                         .frame(minWidth: 140)
                 }
@@ -84,13 +84,20 @@ private final class HotKeyCaptureNSView: NSView {
     var onCapture: ((AppHotKey) -> Void)?
     var isRecording = false {
         didSet {
+            if isRecording {
+                installMouseCaptureMonitor()
+                window?.makeFirstResponder(self)
+            } else {
+                removeMouseCaptureMonitor()
+            }
+
             guard isRecording else {
                 return
             }
-
-            window?.makeFirstResponder(self)
         }
     }
+    private var localMouseCaptureMonitor: Any?
+    private var globalMouseCaptureMonitor: Any?
 
     override var acceptsFirstResponder: Bool {
         true
@@ -116,11 +123,75 @@ private final class HotKeyCaptureNSView: NSView {
         }
 
         let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+        isRecording = false
         onCapture?(
             AppHotKey(
                 carbonKeyCode: UInt32(event.keyCode),
                 carbonModifiers: modifiers.carbonFlags
             )
         )
+    }
+
+    deinit {
+        MainActor.assumeIsolated {
+            removeMouseCaptureMonitor()
+        }
+    }
+
+    private func installMouseCaptureMonitor() {
+        guard localMouseCaptureMonitor == nil, globalMouseCaptureMonitor == nil else {
+            return
+        }
+
+        localMouseCaptureMonitor = NSEvent.addLocalMonitorForEvents(matching: [.otherMouseDown]) { [weak self] event in
+            guard let self else {
+                return event
+            }
+
+            guard self.isRecording else {
+                return event
+            }
+
+            let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+            self.isRecording = false
+            self.onCapture?(
+                AppHotKey(
+                    mouseButtonNumber: Int(event.buttonNumber),
+                    carbonModifiers: modifiers.carbonFlags
+                )
+            )
+            return nil
+        }
+
+        globalMouseCaptureMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.otherMouseDown]) {
+            [weak self] event in
+            guard let self else {
+                return
+            }
+
+            guard self.isRecording else {
+                return
+            }
+
+            let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+            self.isRecording = false
+            self.onCapture?(
+                AppHotKey(
+                    mouseButtonNumber: Int(event.buttonNumber),
+                    carbonModifiers: modifiers.carbonFlags
+                )
+            )
+        }
+    }
+
+    private func removeMouseCaptureMonitor() {
+        if let localMouseCaptureMonitor {
+            NSEvent.removeMonitor(localMouseCaptureMonitor)
+            self.localMouseCaptureMonitor = nil
+        }
+        if let globalMouseCaptureMonitor {
+            NSEvent.removeMonitor(globalMouseCaptureMonitor)
+            self.globalMouseCaptureMonitor = nil
+        }
     }
 }

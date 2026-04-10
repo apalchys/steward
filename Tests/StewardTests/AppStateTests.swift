@@ -184,6 +184,35 @@ final class AppStateTests: XCTestCase {
         XCTAssertNil(appState.shortcutRegistrationMessage)
     }
 
+    func testSettingsDidChangeRegistersMouseButtonVoiceShortcutImmediately() async {
+        _ = NSApplication.shared
+        let settingsStore = FakeAppSettingsStore()
+        let appSystemServices = FakeAppSystemServices()
+        let appState = AppState(
+            settingsStore: settingsStore,
+            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
+            clipboardMonitor: FakeClipboardMonitor(),
+            llmRouter: FakeAppRouter(),
+            grammarCoordinator: FakeGrammarCoordinator(),
+            screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
+            appSystemServices: appSystemServices.services
+        )
+
+        appState.start()
+        await Task.yield()
+        appSystemServices.resetCheckedHotKeys()
+
+        settingsStore.settings.voice.hotKey = AppHotKey(mouseButtonNumber: 4)
+
+        appState.settingsDidChange()
+        await Task.yield()
+
+        XCTAssertEqual(appSystemServices.registeredMouseHotKeys, [settingsStore.settings.voice.hotKey])
+        XCTAssertTrue(appSystemServices.checkedHotKeys.isEmpty)
+        XCTAssertNil(appState.shortcutRegistrationMessage)
+    }
+
     func testSettingsDidChangeRejectsVoiceShortcutThatConflictsWithGrammar() async {
         _ = NSApplication.shared
         let settingsStore = FakeAppSettingsStore()
@@ -254,6 +283,51 @@ final class AppStateTests: XCTestCase {
         )
 
         XCTAssertEqual(appState.validateVoiceHotKey(unavailableHotKey), AppHotKeyValidationError.unavailable)
+    }
+
+    func testValidateVoiceHotKeyAllowsMouseButtonWithoutModifier() {
+        _ = NSApplication.shared
+        let appState = AppState(
+            settingsStore: FakeAppSettingsStore(),
+            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
+            clipboardMonitor: FakeClipboardMonitor(),
+            llmRouter: FakeAppRouter(),
+            grammarCoordinator: FakeGrammarCoordinator(),
+            screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
+            appSystemServices: FakeAppSystemServices().services
+        )
+
+        XCTAssertNil(appState.validateVoiceHotKey(AppHotKey(mouseButtonNumber: 4)))
+    }
+
+    func testMouseVoiceShortcutInvokesPushToTalkHandlers() async {
+        _ = NSApplication.shared
+        let settingsStore = FakeAppSettingsStore()
+        settingsStore.settings.voice.hotKey = AppHotKey(mouseButtonNumber: 4)
+        let voiceDictationCoordinator = FakeVoiceDictationCoordinator()
+        let appSystemServices = FakeAppSystemServices()
+        let appState = AppState(
+            settingsStore: settingsStore,
+            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
+            clipboardMonitor: FakeClipboardMonitor(),
+            llmRouter: FakeAppRouter(),
+            grammarCoordinator: FakeGrammarCoordinator(),
+            screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            voiceDictationCoordinator: voiceDictationCoordinator,
+            appSystemServices: appSystemServices.services
+        )
+
+        appState.start()
+        await Task.yield()
+
+        appSystemServices.lastMouseMonitor?.simulateButtonDown()
+        await Task.yield()
+        appSystemServices.lastMouseMonitor?.simulateButtonUp()
+        await Task.yield()
+
+        XCTAssertEqual(voiceDictationCoordinator.handlePushToTalkKeyDownCallCount, 1)
+        XCTAssertEqual(voiceDictationCoordinator.handlePushToTalkKeyUpCallCount, 1)
     }
 
     func testOpenPreferencesUsesSettingsOpener() {
@@ -634,6 +708,8 @@ private final class FakeAppSystemServices {
     private(set) var openLoginItemsSettingsCallCount = 0
     private(set) var setLaunchAtLoginEnabledCalls: [Bool] = []
     private(set) var checkedHotKeys: [AppHotKey] = []
+    private(set) var registeredMouseHotKeys: [AppHotKey] = []
+    private(set) var lastMouseMonitor: FakeMouseButtonShortcutMonitor?
 
     init(
         accessibilityPermissionGranted: Bool = false,
@@ -663,6 +739,18 @@ private final class FakeAppSystemServices {
                 self.checkedHotKeys.append(hotKey)
                 return !self.unavailableKeyCodes.contains(key.carbonKeyCode) && !self.unavailableHotKeys.contains(hotKey)
             },
+            makeMouseButtonMonitor: { buttonNumber, modifiers, onButtonDown, onButtonUp in
+                let hotKey = AppHotKey(mouseButtonNumber: buttonNumber, carbonModifiers: modifiers.carbonFlags)
+                self.registeredMouseHotKeys.append(hotKey)
+                let monitor = FakeMouseButtonShortcutMonitor(
+                    buttonNumber: buttonNumber,
+                    modifiers: modifiers,
+                    onButtonDown: onButtonDown,
+                    onButtonUp: onButtonUp
+                )
+                self.lastMouseMonitor = monitor
+                return monitor
+            },
             openApplicationSettings: {
                 self.openApplicationSettingsCallCount += 1
             },
@@ -691,5 +779,38 @@ private final class FakeAppSystemServices {
                 self.openLoginItemsSettingsCallCount += 1
             }
         )
+    }
+}
+
+@MainActor
+private final class FakeMouseButtonShortcutMonitor: MouseButtonShortcutMonitoring {
+    let buttonNumber: Int
+    let modifiers: NSEvent.ModifierFlags
+    private let onButtonDown: @MainActor () -> Void
+    private let onButtonUp: @MainActor () -> Void
+    private(set) var stopCallCount = 0
+
+    init(
+        buttonNumber: Int,
+        modifiers: NSEvent.ModifierFlags,
+        onButtonDown: @escaping @MainActor () -> Void,
+        onButtonUp: @escaping @MainActor () -> Void
+    ) {
+        self.buttonNumber = buttonNumber
+        self.modifiers = modifiers
+        self.onButtonDown = onButtonDown
+        self.onButtonUp = onButtonUp
+    }
+
+    func simulateButtonDown() {
+        onButtonDown()
+    }
+
+    func simulateButtonUp() {
+        onButtonUp()
+    }
+
+    func stop() {
+        stopCallCount += 1
     }
 }

@@ -147,6 +147,25 @@ final class LLMSettingsMigrationTests: XCTestCase {
         XCTAssertEqual(loaded.voice.hotKey.displayValue, "⌃⇧␣")
     }
 
+    func testVoiceSettingsMouseButtonHotKeyRoundTrips() {
+        let suiteName = "LLMSettingsStoreTests.\(UUID().uuidString)"
+        let defaults = try! XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defer {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let store = UserDefaultsLLMSettingsStore(userDefaults: defaults, secretsStore: InMemoryLLMSecretsStore())
+        var settings = LLMSettings.empty()
+        settings.voice.hotKey = AppHotKey(mouseButtonNumber: 4)
+
+        store.saveSettings(settings)
+        let loaded = store.loadSettings()
+
+        XCTAssertEqual(loaded.voice.hotKey, settings.voice.hotKey)
+        XCTAssertEqual(loaded.voice.hotKey.readableDisplayValue, "Mouse Button 4")
+    }
+
     func testClipboardHistoryDefaultMaxStoredRecordsIs1000() {
         XCTAssertEqual(ClipboardHistorySettings.default.maxStoredRecords, 1_000)
     }
