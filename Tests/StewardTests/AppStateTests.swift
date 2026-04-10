@@ -130,6 +130,29 @@ final class AppStateTests: XCTestCase {
         )
     }
 
+    func testStartPublishesVoiceShortcutConflictMessageWhenVoiceShortcutIsUnavailable() async {
+        _ = NSApplication.shared
+        let appSystemServices = FakeAppSystemServices(unavailableKeyCodes: [Key.d.carbonKeyCode])
+        let appState = AppState(
+            settingsStore: FakeAppSettingsStore(),
+            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
+            clipboardMonitor: FakeClipboardMonitor(),
+            llmRouter: FakeAppRouter(),
+            grammarCoordinator: FakeGrammarCoordinator(),
+            screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
+            appSystemServices: appSystemServices.services
+        )
+
+        appState.start()
+        await Task.yield()
+
+        XCTAssertEqual(
+            appState.shortcutRegistrationMessage,
+            "Shortcut unavailable: Voice Dictation (Command-Shift-D) is already in use by another app."
+        )
+    }
+
     func testOpenPreferencesUsesSettingsOpener() {
         _ = NSApplication.shared
         let appSystemServices = FakeAppSystemServices()
@@ -387,6 +410,29 @@ final class AppStateTests: XCTestCase {
 
         XCTAssertEqual(grammarCoordinator.handleHotKeyPressCallCount, 1)
     }
+
+    func testCheckVoiceProviderStatusUsesSelectedVoiceProviderAndUpdatesTitle() async {
+        _ = NSApplication.shared
+        let settingsStore = FakeAppSettingsStore()
+        settingsStore.settings.voice = VoiceSettings(providerID: .openAI)
+        let router = FakeAppRouter()
+        let appState = AppState(
+            settingsStore: settingsStore,
+            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
+            clipboardMonitor: FakeClipboardMonitor(),
+            llmRouter: router,
+            grammarCoordinator: FakeGrammarCoordinator(),
+            screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
+            appSystemServices: FakeAppSystemServices().services
+        )
+
+        appState.checkVoiceProviderStatus()
+        await Task.yield()
+
+        XCTAssertEqual(router.checkedProviderIDs, [.openAI])
+        XCTAssertEqual(appState.voiceStatusTitle, "Voice Dictation: OpenAI Ready")
+    }
 }
 
 @MainActor
@@ -407,12 +453,15 @@ private final class FakeClipboardMonitor: ClipboardMonitoring {
 
 @MainActor
 private final class FakeAppRouter: LLMRouting {
+    private(set) var checkedProviderIDs: [LLMProviderID] = []
+
     func perform(_ request: LLMRequest) async throws -> LLMResult {
         .text("ok")
     }
 
     func checkAccess(for providerID: LLMProviderID) async throws -> LLMProviderHealth {
-        LLMProviderHealth(providerID: providerID, state: .available, message: "Ready")
+        checkedProviderIDs.append(providerID)
+        return LLMProviderHealth(providerID: providerID, state: .available, message: "Ready")
     }
 }
 
@@ -441,7 +490,7 @@ private final class FakeVoiceDictationCoordinator: VoiceDictationCoordinating {
 }
 
 private final class FakeAppSettingsStore: AppSettingsProviding {
-    private var settings = LLMSettings.empty()
+    var settings = LLMSettings.empty()
 
     init(historySettings: ClipboardHistorySettings = ClipboardHistorySettings()) {
         settings.clipboardHistory = historySettings

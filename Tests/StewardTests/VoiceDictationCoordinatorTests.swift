@@ -157,6 +157,28 @@ final class VoiceDictationCoordinatorTests: XCTestCase {
         XCTAssertEqual(reportedError as? VoiceDictationTestError, .failed)
         XCTAssertEqual(pillPresenter.hideCallCount, 1)
     }
+
+    func testBlankTranscriptIsRejectedAsInvalidProviderResponse() async throws {
+        let microphoneAccess = FakeMicrophoneAccessProvider(result: true)
+        let audioRecordingService = FakeAudioRecordingService(payload: RecordedAudioPayload(data: Data("audio".utf8), mimeType: "audio/wav"))
+        let coordinator = VoiceDictationCoordinator(
+            microphoneAccess: microphoneAccess,
+            audioRecordingService: audioRecordingService,
+            recordingPillPresenter: FakeVoiceRecordingPillPresenter(),
+            router: VoiceDictationFakeRouter(result: .success(.text("   \n"))),
+            textInteraction: VoiceDictationFakeTextInteraction(),
+            settingsStore: VoiceDictationSettingsStore()
+        )
+
+        try await coordinator.handleHotKeyPress()
+
+        do {
+            try await coordinator.handleHotKeyPress()
+            XCTFail("Expected invalid provider response error")
+        } catch {
+            XCTAssertEqual(error as? VoiceDictationCoordinatorError, .invalidProviderResponse)
+        }
+    }
 }
 
 private enum VoiceDictationTestError: Error, Equatable {

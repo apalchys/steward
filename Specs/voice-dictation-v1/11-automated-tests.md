@@ -1,6 +1,6 @@
 ---
 name: Automated Tests
-status: todo
+status: done
 ---
 
 # Summary

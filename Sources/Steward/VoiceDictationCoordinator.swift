@@ -173,7 +173,7 @@ final class VoiceDictationCoordinator: VoiceDictationCoordinating {
 
             let result = try await router.perform(request)
 
-            guard let transcript = result.textValue else {
+            guard let transcript = result.textValue?.trimmed, !transcript.isEmpty else {
                 throw VoiceDictationCoordinatorError.invalidProviderResponse
             }
 
