@@ -1,6 +1,6 @@
 ---
 name: Hotkey Validation And Registration
-status: todo
+status: done
 ---
 
 # Summary
@@ -23,4 +23,3 @@ Validate custom dictation shortcuts and register them dynamically at runtime.
 
 - A saved custom voice hotkey becomes active without restarting the app.
 - Invalid or conflicting shortcuts are blocked immediately.
-

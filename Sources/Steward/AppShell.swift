@@ -87,12 +87,15 @@ final class AppState: ObservableObject {
     private var grammarHealthCheckTask: Task<Void, Never>?
     private var ocrHealthCheckTask: Task<Void, Never>?
     private var voiceHealthCheckTask: Task<Void, Never>?
+    private var fixedShortcutRegistrationMessage: String?
+    private var voiceShortcutRegistrationMessage: String?
 
     private var isProcessing = false
     private var isScreenSelectionActive = false
     private var lastOperationFailed = false
     private var activeFeature: FeatureKind?
     private var voiceWorkflowState: VoiceDictationWorkflowState = .idle
+    private var activeVoiceHotKey = AppHotKey.defaultVoiceDictation
 
     init(
         settingsStore: any AppSettingsProviding,
@@ -278,6 +281,7 @@ final class AppState: ObservableObject {
 
     func settingsDidChange() {
         applyClipboardHistorySettings()
+        registerVoiceHotKey(using: settingsStore.loadSettings().voice.hotKey)
         initialHealthCheckTask?.cancel()
         settingsHealthDebounceTask?.cancel()
         settingsHealthDebounceTask = Task { @MainActor [weak self] in
@@ -352,19 +356,13 @@ final class AppState: ObservableObject {
             title: "Grammar Check",
             key: .f,
             modifiers: [.command, .shift],
-            displayValue: "Command-Shift-F"
+            displayValue: AppHotKey.grammarCheck.readableDisplayValue
         )
         let screenOCRShortcut = AppShortcut(
             title: "Screen Text Capture",
             key: .r,
             modifiers: [.command, .shift],
-            displayValue: "Command-Shift-R"
-        )
-        let voiceShortcut = AppShortcut(
-            title: "Voice Dictation",
-            key: .d,
-            modifiers: [.command, .shift],
-            displayValue: "Command-Shift-D"
+            displayValue: AppHotKey.screenTextCapture.readableDisplayValue
         )
 
         var unavailableShortcuts: [AppShortcut] = []
@@ -391,18 +389,8 @@ final class AppState: ObservableObject {
             unavailableShortcuts.append(screenOCRShortcut)
         }
 
-        if let hotKey = makeHotKey(
-            for: voiceShortcut,
-            action: { [weak self] in
-                self?.handleHotKeyPress(for: .voice)
-            })
-        {
-            voiceHotKey = hotKey
-        } else {
-            unavailableShortcuts.append(voiceShortcut)
-        }
-
-        shortcutRegistrationMessage = shortcutConflictMessage(for: unavailableShortcuts)
+        fixedShortcutRegistrationMessage = shortcutConflictMessage(for: unavailableShortcuts)
+        registerVoiceHotKey(using: settingsStore.loadSettings().voice.hotKey)
     }
 
     private func checkProviderStatus(for feature: FeatureKind) {
@@ -718,6 +706,65 @@ final class AppState: ObservableObject {
         case .unknown:
             return health.message
         }
+    }
+
+    private func registerVoiceHotKey(using requestedHotKey: AppHotKey) {
+        if let validationError = AppHotKeyValidator.validateVoiceDictationHotKey(
+            requestedHotKey,
+            isShortcutAvailable: appSystemServices.isShortcutAvailable
+        ) {
+            voiceShortcutRegistrationMessage = voiceShortcutMessage(for: requestedHotKey, error: validationError)
+            refreshShortcutRegistrationMessage()
+            return
+        }
+
+        guard requestedHotKey != activeVoiceHotKey || voiceHotKey == nil else {
+            voiceShortcutRegistrationMessage = nil
+            refreshShortcutRegistrationMessage()
+            return
+        }
+
+        let voiceShortcut = AppShortcut(
+            title: "Voice Dictation",
+            key: requestedHotKey.key ?? .d,
+            modifiers: requestedHotKey.modifiers,
+            displayValue: requestedHotKey.readableDisplayValue
+        )
+
+        guard
+            let hotKey = makeHotKey(
+                for: voiceShortcut,
+                action: { [weak self] in
+                    self?.handleHotKeyPress(for: .voice)
+                })
+        else {
+            voiceShortcutRegistrationMessage = voiceShortcutMessage(for: requestedHotKey, error: .unavailable)
+            refreshShortcutRegistrationMessage()
+            return
+        }
+
+        voiceHotKey = hotKey
+        activeVoiceHotKey = requestedHotKey
+        voiceShortcutRegistrationMessage = nil
+        refreshShortcutRegistrationMessage()
+    }
+
+    private func voiceShortcutMessage(for hotKey: AppHotKey, error: AppHotKeyValidationError) -> String {
+        switch error {
+        case .conflictsWithFeature(let featureName):
+            return
+                "Shortcut unavailable: Voice Dictation (\(hotKey.readableDisplayValue)) conflicts with \(featureName)."
+        case .unavailable:
+            return
+                "Shortcut unavailable: Voice Dictation (\(hotKey.readableDisplayValue)) is already in use by another app."
+        case .requiresModifier, .requiresNonModifierKey:
+            return error.localizedDescription
+        }
+    }
+
+    private func refreshShortcutRegistrationMessage() {
+        let messages = [fixedShortcutRegistrationMessage, voiceShortcutRegistrationMessage].compactMap { $0 }
+        shortcutRegistrationMessage = messages.isEmpty ? nil : messages.joined(separator: "\n")
     }
 
     private func makeHotKey(for shortcut: AppShortcut, action: @escaping @MainActor () -> Void) -> HotKey? {

@@ -62,7 +62,15 @@ struct VoiceSettings: Equatable {
     }
 }
 
-struct AppHotKey: Equatable {
+struct AppHotKey: Equatable, Hashable {
+    static let grammarCheck = AppHotKey(
+        carbonKeyCode: Key.f.carbonKeyCode,
+        carbonModifiers: NSEvent.ModifierFlags([.command, .shift]).carbonFlags
+    )
+    static let screenTextCapture = AppHotKey(
+        carbonKeyCode: Key.r.carbonKeyCode,
+        carbonModifiers: NSEvent.ModifierFlags([.command, .shift]).carbonFlags
+    )
     static let defaultVoiceDictation = AppHotKey(
         carbonKeyCode: Key.d.carbonKeyCode,
         carbonModifiers: NSEvent.ModifierFlags([.command, .shift]).carbonFlags
@@ -84,8 +92,54 @@ struct AppHotKey: Equatable {
         KeyCombo(carbonKeyCode: carbonKeyCode, carbonModifiers: carbonModifiers)
     }
 
+    var key: Key? {
+        keyCombo.key
+    }
+
+    var modifiers: NSEvent.ModifierFlags {
+        keyCombo.modifiers
+    }
+
     var displayValue: String {
         keyCombo.description
+    }
+
+    var readableDisplayValue: String {
+        var components: [String] = []
+
+        if modifiers.contains(.command) {
+            components.append("Command")
+        }
+        if modifiers.contains(.shift) {
+            components.append("Shift")
+        }
+        if modifiers.contains(.option) {
+            components.append("Option")
+        }
+        if modifiers.contains(.control) {
+            components.append("Control")
+        }
+
+        if let key {
+            components.append(key.readableDisplayName)
+        }
+
+        return components.joined(separator: "-")
+    }
+}
+
+private extension Key {
+    var readableDisplayName: String {
+        switch self {
+        case .space:
+            return "Space"
+        case .tab:
+            return "Tab"
+        case .return:
+            return "Return"
+        default:
+            return description
+        }
     }
 }
 

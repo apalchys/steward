@@ -153,6 +153,68 @@ final class AppStateTests: XCTestCase {
         )
     }
 
+    func testSettingsDidChangeRegistersCustomVoiceShortcutImmediately() async {
+        _ = NSApplication.shared
+        let settingsStore = FakeAppSettingsStore()
+        let appSystemServices = FakeAppSystemServices()
+        let appState = AppState(
+            settingsStore: settingsStore,
+            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
+            clipboardMonitor: FakeClipboardMonitor(),
+            llmRouter: FakeAppRouter(),
+            grammarCoordinator: FakeGrammarCoordinator(),
+            screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
+            appSystemServices: appSystemServices.services
+        )
+
+        appState.start()
+        await Task.yield()
+        appSystemServices.resetCheckedHotKeys()
+
+        settingsStore.settings.voice.hotKey = AppHotKey(
+            carbonKeyCode: Key.v.carbonKeyCode,
+            carbonModifiers: NSEvent.ModifierFlags([.command, .option]).carbonFlags
+        )
+
+        appState.settingsDidChange()
+        await Task.yield()
+
+        XCTAssertTrue(appSystemServices.checkedHotKeys.contains(settingsStore.settings.voice.hotKey))
+        XCTAssertNil(appState.shortcutRegistrationMessage)
+    }
+
+    func testSettingsDidChangeRejectsVoiceShortcutThatConflictsWithGrammar() async {
+        _ = NSApplication.shared
+        let settingsStore = FakeAppSettingsStore()
+        let appSystemServices = FakeAppSystemServices()
+        let appState = AppState(
+            settingsStore: settingsStore,
+            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
+            clipboardMonitor: FakeClipboardMonitor(),
+            llmRouter: FakeAppRouter(),
+            grammarCoordinator: FakeGrammarCoordinator(),
+            screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
+            appSystemServices: appSystemServices.services
+        )
+
+        appState.start()
+        await Task.yield()
+        appSystemServices.resetCheckedHotKeys()
+
+        settingsStore.settings.voice.hotKey = .grammarCheck
+
+        appState.settingsDidChange()
+        await Task.yield()
+
+        XCTAssertTrue(appSystemServices.checkedHotKeys.isEmpty)
+        XCTAssertEqual(
+            appState.shortcutRegistrationMessage,
+            "Shortcut unavailable: Voice Dictation (Command-Shift-F) conflicts with Grammar Check."
+        )
+    }
+
     func testOpenPreferencesUsesSettingsOpener() {
         _ = NSApplication.shared
         let appSystemServices = FakeAppSystemServices()
@@ -512,6 +574,7 @@ private final class FakeAppSystemServices {
     var screenRecordingPermissionGranted = false
     var launchAtLoginStatus: LaunchAtLoginStatus = .notRegistered
     var unavailableKeyCodes: Set<UInt32> = []
+    var unavailableHotKeys: Set<AppHotKey> = []
     var setLaunchAtLoginEnabledError: Error?
     private(set) var openApplicationSettingsCallCount = 0
     private(set) var openAccessibilityPrivacySettingsCallCount = 0
@@ -519,6 +582,7 @@ private final class FakeAppSystemServices {
     private(set) var openScreenRecordingPrivacySettingsCallCount = 0
     private(set) var openLoginItemsSettingsCallCount = 0
     private(set) var setLaunchAtLoginEnabledCalls: [Bool] = []
+    private(set) var checkedHotKeys: [AppHotKey] = []
 
     init(
         accessibilityPermissionGranted: Bool = false,
@@ -534,13 +598,19 @@ private final class FakeAppSystemServices {
         self.unavailableKeyCodes = unavailableKeyCodes
     }
 
+    func resetCheckedHotKeys() {
+        checkedHotKeys.removeAll()
+    }
+
     var services: AppSystemServices {
         AppSystemServices(
             isAccessibilityPermissionGranted: { self.accessibilityPermissionGranted },
             isMicrophonePermissionGranted: { self.microphonePermissionGranted },
             isScreenRecordingPermissionGranted: { self.screenRecordingPermissionGranted },
-            isShortcutAvailable: { key, _ in
-                !self.unavailableKeyCodes.contains(key.carbonKeyCode)
+            isShortcutAvailable: { key, modifiers in
+                let hotKey = AppHotKey(carbonKeyCode: key.carbonKeyCode, carbonModifiers: modifiers.carbonFlags)
+                self.checkedHotKeys.append(hotKey)
+                return !self.unavailableKeyCodes.contains(key.carbonKeyCode) && !self.unavailableHotKeys.contains(hotKey)
             },
             openApplicationSettings: {
                 self.openApplicationSettingsCallCount += 1
