@@ -26,46 +26,10 @@ cp -f .build/release/Steward Steward.app/Contents/MacOS/
 # Set executable permissions
 chmod +x Steward.app/Contents/MacOS/Steward
 
-# Create Info.plist
-echo "Creating Info.plist..."
-cat > Steward.app/Contents/Info.plist << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleDevelopmentRegion</key>
-    <string>en</string>
-    <key>CFBundleExecutable</key>
-    <string>Steward</string>
-    <key>CFBundleIconFile</key>
-    <string>AppIcon</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.apalchys.steward</string>
-    <key>CFBundleInfoDictionaryVersion</key>
-    <string>6.0</string>
-    <key>CFBundleName</key>
-    <string>Steward</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
-    <key>CFBundleVersion</key>
-    <string>1</string>
-    <key>LSApplicationCategoryType</key>
-    <string>public.app-category.productivity</string>
-    <key>LSMinimumSystemVersion</key>
-    <string>15.0</string>
-    <key>NSHumanReadableCopyright</key>
-    <string>Copyright © 2025. All rights reserved.</string>
-    <key>NSPrincipalClass</key>
-    <string>NSApplication</string>
-    <key>LSUIElement</key>
-    <true/>
-    <key>NSAccessibilityUsageDescription</key>
-    <string>This app needs accessibility permissions to capture and replace text.</string>
-</dict>
-</plist>
-EOF
+# Copy Info.plist from the repository so permission keys stay in sync with source.
+echo "Copying Info.plist..."
+cp -f Info.plist Steward.app/Contents/Info.plist
+plutil -lint Steward.app/Contents/Info.plist
 
 # Copy app icon if it exists
 echo "Copying app icon..."
