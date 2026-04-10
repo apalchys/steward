@@ -59,6 +59,11 @@ enum VoiceDictationCoordinatorError: LocalizedError, Equatable {
 
 @MainActor
 final class VoiceDictationCoordinator: VoiceDictationCoordinating {
+    private enum RecordingSource {
+        case pushToTalkHotKey
+        case manualToggle
+    }
+
     var onStateChanged: ((VoiceDictationWorkflowState) -> Void)?
     var onError: ((Error) -> Void)?
 
@@ -74,6 +79,7 @@ final class VoiceDictationCoordinator: VoiceDictationCoordinating {
             onStateChanged?(state)
         }
     }
+    private var recordingSource: RecordingSource?
 
     init(
         microphoneAccess: any MicrophoneAccessProviding,
@@ -133,8 +139,12 @@ final class VoiceDictationCoordinator: VoiceDictationCoordinating {
     func handleHotKeyPress() async throws {
         switch state {
         case .idle:
-            try await startRecording()
+            try await startRecording(triggeredBy: .manualToggle)
         case .recording:
+            guard recordingSource == .manualToggle else {
+                return
+            }
+
             try await stopAndTranscribeRecording()
         case .transcribing:
             return
@@ -146,23 +156,24 @@ final class VoiceDictationCoordinator: VoiceDictationCoordinating {
             return
         }
 
-        try await startRecording()
+        try await startRecording(triggeredBy: .pushToTalkHotKey)
     }
 
     func handlePushToTalkKeyUp() async throws {
-        guard state == .recording else {
+        guard state == .recording, recordingSource == .pushToTalkHotKey else {
             return
         }
 
         try await stopAndTranscribeRecording()
     }
 
-    private func startRecording() async throws {
+    private func startRecording(triggeredBy source: RecordingSource) async throws {
         guard await microphoneAccess.ensureAccess() else {
             throw VoiceDictationCoordinatorError.permissionDenied
         }
 
         try audioRecordingService.startRecording()
+        recordingSource = source
         transition(to: .recording)
         recordingPillPresenter.showRecording(level: 0)
     }
@@ -215,6 +226,7 @@ final class VoiceDictationCoordinator: VoiceDictationCoordinating {
     }
 
     private func finishWorkflow() {
+        recordingSource = nil
         recordingPillPresenter.hide()
         transition(to: .idle)
     }

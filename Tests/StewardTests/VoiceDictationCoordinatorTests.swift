@@ -214,6 +214,24 @@ final class VoiceDictationCoordinatorTests: XCTestCase {
         XCTAssertEqual(textInteraction.replacedText, "Push to talk transcript")
         XCTAssertEqual(coordinator.state, .idle)
     }
+
+    func testPushToTalkKeyUpDoesNotStopMenuTriggeredRecording() async throws {
+        let audioRecordingService = FakeAudioRecordingService()
+        let coordinator = VoiceDictationCoordinator(
+            microphoneAccess: FakeMicrophoneAccessProvider(result: true),
+            audioRecordingService: audioRecordingService,
+            recordingPillPresenter: FakeVoiceRecordingPillPresenter(),
+            router: VoiceDictationFakeRouter(result: .success(.text("ignored"))),
+            textInteraction: VoiceDictationFakeTextInteraction(),
+            settingsStore: VoiceDictationSettingsStore()
+        )
+
+        try await coordinator.handleHotKeyPress()
+        try await coordinator.handlePushToTalkKeyUp()
+
+        XCTAssertEqual(audioRecordingService.stopRecordingCallCount, 0)
+        XCTAssertEqual(coordinator.state, .recording)
+    }
 }
 
 private enum VoiceDictationTestError: Error, Equatable {

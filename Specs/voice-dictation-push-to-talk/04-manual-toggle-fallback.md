@@ -1,6 +1,6 @@
 ---
 name: Manual Toggle Fallback
-status: todo
+status: done
 ---
 
 # Summary
@@ -18,4 +18,3 @@ Keep a non-hotkey fallback path for dictation so the menu action still works wit
 
 - Menu-triggered dictation can still start and stop without relying on key release.
 - Push-to-talk key release only affects hotkey-started sessions.
-
