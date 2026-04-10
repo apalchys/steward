@@ -5,6 +5,7 @@ public struct OpenAIClient: Sendable {
     private static let provider = "OpenAI"
     private let session: URLSession
     private static let responsesURL = URL(string: "https://api.openai.com/v1/responses")!
+    private static let transcriptionURL = URL(string: "https://api.openai.com/v1/audio/transcriptions")!
 
     private struct ResponsesRequest: Encodable {
         struct Reasoning: Encodable {
@@ -205,9 +206,99 @@ public struct OpenAIClient: Sendable {
         return extractedText
     }
 
+    public func transcribeAudio(
+        apiKey: String,
+        modelID: String,
+        audioData: Data,
+        mimeType: String,
+        customInstructions: String
+    ) async throws -> String {
+        let boundary = "Boundary-\(UUID().uuidString)"
+        let httpBody = multipartTranscriptionBody(
+            boundary: boundary,
+            modelID: modelID,
+            prompt: buildVoiceTranscriptionPrompt(customInstructions: customInstructions),
+            audioData: audioData,
+            mimeType: mimeType
+        )
+
+        var request = URLRequest(url: Self.transcriptionURL)
+        request.httpMethod = "POST"
+        request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.addValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.httpBody = httpBody
+
+        let (data, response) = try await performLLMDataRequest(request, session: session)
+
+        if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
+            throw LLMClientError.requestFailed(
+                llmRequestFailureMessage(statusCode: httpResponse.statusCode, data: data, provider: Self.provider))
+        }
+
+        guard !data.isEmpty else {
+            throw LLMClientError.emptyResponse(provider: Self.provider)
+        }
+
+        guard let transcript = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+            !transcript.isEmpty
+        else {
+            throw LLMClientError.emptyOutput(provider: Self.provider, detail: "OpenAI returned no transcript.")
+        }
+
+        return transcript
+    }
+
     private func reasoningEffort(for modelID: String) -> String? {
         return modelID.lowercased().hasPrefix("gpt-5") ? "none" : nil
+    }
+
+    private func multipartTranscriptionBody(
+        boundary: String,
+        modelID: String,
+        prompt: String,
+        audioData: Data,
+        mimeType: String
+    ) -> Data {
+        var body = Data()
+        body.appendMultipartField(named: "model", value: modelID, boundary: boundary)
+        body.appendMultipartField(named: "prompt", value: prompt, boundary: boundary)
+        body.appendMultipartField(named: "response_format", value: "text", boundary: boundary)
+        body.appendMultipartFile(
+            named: "file",
+            filename: "dictation.wav",
+            mimeType: mimeType,
+            data: audioData,
+            boundary: boundary
+        )
+        body.appendString("--\(boundary)--\r\n")
+        return body
     }
 }
 
 extension OpenAIClient: LLMClient {}
+
+private extension Data {
+    mutating func appendMultipartField(named name: String, value: String, boundary: String) {
+        appendString("--\(boundary)\r\n")
+        appendString("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n")
+        appendString("\(value)\r\n")
+    }
+
+    mutating func appendMultipartFile(
+        named name: String,
+        filename: String,
+        mimeType: String,
+        data: Data,
+        boundary: String
+    ) {
+        appendString("--\(boundary)\r\n")
+        appendString("Content-Disposition: form-data; name=\"\(name)\"; filename=\"\(filename)\"\r\n")
+        appendString("Content-Type: \(mimeType)\r\n\r\n")
+        append(data)
+        appendString("\r\n")
+    }
+
+    mutating func appendString(_ string: String) {
+        append(Data(string.utf8))
+    }
+}

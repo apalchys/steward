@@ -137,30 +137,28 @@ final class LLMRouterTests: XCTestCase {
         XCTAssertEqual(response.textValue, "Dictated text")
     }
 
-    func testPerformVoiceTaskStillFailsForOpenAIUntilImplementationExists() async {
-        let router = makeRouter(configured: [.openAI])
+    func testPerformRoutesVoiceRequestsToOpenAI() async throws {
+        URLProtocolStub.configure(handler: { request in
+            XCTAssertEqual(request.url?.absoluteString, "https://api.openai.com/v1/audio/transcriptions")
 
-        do {
-            _ = try await router.perform(
-                LLMRequest(
-                    providerID: .openAI,
-                    task: .voiceTranscription(
-                        audioData: Data("audio".utf8),
-                        mimeType: "audio/wav",
-                        customInstructions: ""
-                    ),
-                    modelIDOverride: "voice-model-openai"
-                )
+            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, Data("OpenAI dictated text".utf8))
+        })
+
+        let router = makeRouter(configured: [.openAI], openAISession: URLProtocolStub.makeSession())
+        let response = try await router.perform(
+            LLMRequest(
+                providerID: .openAI,
+                task: .voiceTranscription(
+                    audioData: Data("audio".utf8),
+                    mimeType: "audio/wav",
+                    customInstructions: ""
+                ),
+                modelIDOverride: "voice-model-openai"
             )
-            XCTFail("Expected unsupported voice task error")
-        } catch {
-            guard case let LLMRouterError.unsupportedTask(taskName) = error else {
-                XCTFail("Unexpected error: \(error)")
-                return
-            }
+        )
 
-            XCTAssertEqual(taskName, "Voice dictation")
-        }
+        XCTAssertEqual(response.textValue, "OpenAI dictated text")
     }
 
     func testCheckAccessReturnsRequestedProviderHealth() async throws {

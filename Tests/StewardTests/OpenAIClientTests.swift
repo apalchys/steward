@@ -246,6 +246,60 @@ final class OpenAIClientTests: XCTestCase {
         XCTAssertEqual(extractedText, "Extracted text")
     }
 
+    func testTranscribeAudioSuccessReturnsTranscriptAndUploadsMultipartAudio() async throws {
+        let audioData = Data("audio-bytes".utf8)
+
+        URLProtocolStub.configure(handler: { request in
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertEqual(request.url?.absoluteString, "https://api.openai.com/v1/audio/transcriptions")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer sk-test")
+            XCTAssertTrue((request.value(forHTTPHeaderField: "Content-Type") ?? "").contains("multipart/form-data"))
+
+            let body = String(data: try XCTUnwrap(request.bodyData()), encoding: .utf8) ?? ""
+            XCTAssertTrue(body.contains("name=\"model\""))
+            XCTAssertTrue(body.contains("gpt-4o-mini-transcribe"))
+            XCTAssertTrue(body.contains("name=\"prompt\""))
+            XCTAssertTrue(body.contains("do not translate"))
+            XCTAssertTrue(body.contains("name=\"response_format\""))
+            XCTAssertTrue(body.contains("text"))
+            XCTAssertTrue(body.contains("name=\"file\"; filename=\"dictation.wav\""))
+            XCTAssertTrue(body.contains("Content-Type: audio/wav"))
+            XCTAssertTrue(body.contains("audio-bytes"))
+
+            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, Data("Hello from OpenAI.".utf8))
+        })
+
+        let client = makeClient()
+        let transcript = try await client.transcribeAudio(
+            apiKey: "sk-test",
+            modelID: "gpt-4o-mini-transcribe",
+            audioData: audioData,
+            mimeType: "audio/wav",
+            customInstructions: ""
+        )
+
+        XCTAssertEqual(transcript, "Hello from OpenAI.")
+    }
+
+    func testTranscribeAudioReturnsEmptyTranscriptErrorWhenBodyIsBlank() async {
+        URLProtocolStub.configure(handler: { request in
+            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, Data("   ".utf8))
+        })
+
+        let client = makeClient()
+        await assertThrowsErrorMessage("OpenAI returned no transcript.") {
+            try await client.transcribeAudio(
+                apiKey: "sk-test",
+                modelID: "gpt-4o-mini-transcribe",
+                audioData: Data("audio".utf8),
+                mimeType: "audio/wav",
+                customInstructions: ""
+            )
+        }
+    }
+
     private func makeClient() -> OpenAIClient {
         OpenAIClient(session: URLProtocolStub.makeSession())
     }
