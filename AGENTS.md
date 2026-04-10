@@ -68,9 +68,7 @@
 
 ## Specs
 
-Use the "Specs" folder to store the project specifications. Break down the specifications into small, deliverable tasks and save them as Markdown files.
-
-The naming convention for the specifications is "{feature-name}/{number}-{task-name}.md". Example: "voice-dictation-v1/01-voice-settings-model.md".
+Use the "Specs" folder to store the project specifications. Break down the specifications into small, deliverable tasks and save them as Markdown files. The naming convention for the specifications is "{feature-name}/{number}-{task-name}.md". Example: "voice-dictation-v1/01-voice-settings-model.md".
 
 Each task markdown file should have:
 
@@ -80,6 +78,8 @@ Each task markdown file should have:
 2. Summary section: A brief description of the task.
 3. Scope section: A detailed description of the task.
 4. Acceptance Criteria section: A list of criteria that must be met for the task to be considered complete.
+
+Mark the task as "done" when it is fully implemented and tested.
 
 ## Development Principles
 
