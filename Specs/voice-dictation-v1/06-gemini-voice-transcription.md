@@ -1,6 +1,6 @@
 ---
 name: Gemini Voice Transcription
-status: todo
+status: done
 ---
 
 # Summary

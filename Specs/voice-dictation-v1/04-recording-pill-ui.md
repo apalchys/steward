@@ -1,6 +1,6 @@
 ---
 name: Recording Pill UI
-status: todo
+status: done
 ---
 
 # Summary

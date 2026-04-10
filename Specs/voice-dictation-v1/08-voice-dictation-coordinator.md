@@ -1,6 +1,6 @@
 ---
 name: Voice Dictation Coordinator
-status: todo
+status: done
 ---
 
 # Summary
