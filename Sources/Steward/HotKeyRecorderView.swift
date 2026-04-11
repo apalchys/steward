@@ -10,32 +10,54 @@ struct HotKeyRecorderView: View {
     @State private var validationMessage: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 12) {
+        VStack(spacing: 0) {
+            SettingsListRow(title: "Hot Key") {
                 Button(action: startRecording) {
-                    Text(isRecording ? "Press key or mouse" : hotKey.displayValue)
-                        .font(.system(.body, design: .monospaced))
-                        .frame(minWidth: 160)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
+                    HStack(spacing: 10) {
+                        Text(isRecording ? "Press key or mouse" : hotKey.displayValue)
+                            .font(.system(.body, design: .monospaced))
+                            .lineLimit(1)
 
-                Button("Restore Default") {
-                    apply(defaultHotKey)
+                        Image(systemName: isRecording ? "circle.fill" : "keyboard")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(isRecording ? Color.accentColor : Color.secondary)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .frame(minWidth: 220, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(isRecording ? Color.accentColor.opacity(0.12) : Color(NSColor.controlColor))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(
+                                isRecording
+                                    ? Color.accentColor.opacity(0.5) : Color(NSColor.separatorColor).opacity(0.8),
+                                lineWidth: 1
+                            )
+                    )
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-                .disabled(hotKey == defaultHotKey)
+                .buttonStyle(.plain)
+            }
+
+            if hotKey != defaultHotKey {
+                SettingsListDivider()
+                SettingsListRow(title: "Default Shortcut") {
+                    Button("Restore") {
+                        apply(defaultHotKey)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                }
             }
 
             if let validationMessage {
-                Text(validationMessage)
-                    .font(.caption)
-                    .foregroundColor(.red)
-            } else {
-                Text("Hold to record, release to transcribe.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                SettingsListDivider()
+                SettingsListInfoRow(
+                    text: validationMessage,
+                    foregroundStyle: .red
+                )
             }
         }
         .background(

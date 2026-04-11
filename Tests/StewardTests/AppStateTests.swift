@@ -541,6 +541,7 @@ final class AppStateTests: XCTestCase {
         await Task.yield()
 
         XCTAssertEqual(appState.activityStatus, .processing)
+        XCTAssertTrue(appState.shouldShowActivityStatusTitle)
         XCTAssertEqual(appState.activityStatusTitle, "Status: Listening...")
 
         voiceDictationCoordinator.onStateChanged?(.transcribing)
@@ -552,6 +553,7 @@ final class AppStateTests: XCTestCase {
         await Task.yield()
 
         XCTAssertEqual(appState.activityStatus, .ready)
+        XCTAssertFalse(appState.shouldShowActivityStatusTitle)
         XCTAssertEqual(appState.activityStatusTitle, "Status: Ready")
     }
 
@@ -611,6 +613,55 @@ final class AppStateTests: XCTestCase {
 
         XCTAssertEqual(router.checkedSelections, [voiceSelection])
         XCTAssertEqual(appState.voiceStatusTitle, "Dictate: OpenAI Ready")
+    }
+
+    func testProviderMenuStatusesShowUniqueProvidersInsteadOfFeatures() async {
+        _ = NSApplication.shared
+        let appState = AppState(
+            settingsStore: FakeAppSettingsStore(),
+            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
+            clipboardMonitor: FakeClipboardMonitor(),
+            llmRouter: FakeAppRouter(),
+            grammarCoordinator: FakeGrammarCoordinator(),
+            screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
+            appSystemServices: FakeAppSystemServices().services
+        )
+
+        appState.checkGrammarProviderStatus()
+        appState.checkOCRProviderStatus()
+        appState.checkVoiceProviderStatus()
+        await Task.yield()
+        await Task.yield()
+
+        XCTAssertEqual(
+            appState.providerMenuStatuses.map(\.title),
+            ["OpenAI: Ready", "Gemini: Ready"]
+        )
+    }
+
+    func testCheckProviderStatusRefreshesAllFeaturesUsingProvider() async {
+        _ = NSApplication.shared
+        let settingsStore = FakeAppSettingsStore()
+        let screenSelection = settingsStore.settings.screenText.selectedModel!
+        let voiceSelection = settingsStore.settings.voice.selectedModel!
+        let router = FakeAppRouter()
+        let appState = AppState(
+            settingsStore: settingsStore,
+            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
+            clipboardMonitor: FakeClipboardMonitor(),
+            llmRouter: router,
+            grammarCoordinator: FakeGrammarCoordinator(),
+            screenOCRCoordinator: FakeScreenOCRCoordinator(),
+            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
+            appSystemServices: FakeAppSystemServices().services
+        )
+
+        appState.checkProviderStatus(for: .gemini)
+        await Task.yield()
+        await Task.yield()
+
+        XCTAssertEqual(router.checkedSelections, [screenSelection, voiceSelection])
     }
 }
 
@@ -750,7 +801,8 @@ private final class FakeAppSystemServices {
             isShortcutAvailable: { key, modifiers in
                 let hotKey = AppHotKey(carbonKeyCode: key.carbonKeyCode, carbonModifiers: modifiers.carbonFlags)
                 self.checkedHotKeys.append(hotKey)
-                return !self.unavailableKeyCodes.contains(key.carbonKeyCode) && !self.unavailableHotKeys.contains(hotKey)
+                return !self.unavailableKeyCodes.contains(key.carbonKeyCode)
+                    && !self.unavailableHotKeys.contains(hotKey)
             },
             makeMouseButtonMonitor: { buttonNumber, modifiers, onButtonDown, onButtonUp in
                 let hotKey = AppHotKey(mouseButtonNumber: buttonNumber, carbonModifiers: modifiers.carbonFlags)

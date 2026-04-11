@@ -101,19 +101,15 @@ private struct AppMenuView: View {
 
             Divider()
 
-            Text(appState.activityStatusTitle)
-                .foregroundColor(.secondary)
-
-            Button(appState.grammarStatusTitle) {
-                appState.checkGrammarProviderStatus()
+            if appState.shouldShowActivityStatusTitle {
+                Text(appState.activityStatusTitle)
+                    .foregroundColor(.secondary)
             }
 
-            Button(appState.ocrStatusTitle) {
-                appState.checkOCRProviderStatus()
-            }
-
-            Button(appState.voiceStatusTitle) {
-                appState.checkVoiceProviderStatus()
+            ForEach(appState.providerMenuStatuses) { providerStatus in
+                Button(providerStatus.title) {
+                    appState.checkProviderStatus(for: providerStatus.providerID)
+                }
             }
 
             if appState.shouldShowPermissionActions {

@@ -23,7 +23,14 @@ final class AppState: ObservableObject {
         let displayValue: String
     }
 
-    private enum FeatureKind {
+    struct ProviderMenuStatus: Identifiable, Equatable {
+        let providerID: LLMProviderID
+        let title: String
+
+        var id: String { providerID.id }
+    }
+
+    private enum FeatureKind: CaseIterable {
         case grammar
         case ocr
         case voice
@@ -157,16 +164,35 @@ final class AppState: ObservableObject {
         }
     }
 
+    var shouldShowActivityStatusTitle: Bool {
+        switch activityStatus {
+        case .ready:
+            return false
+        case .processing, .error:
+            return true
+        }
+    }
+
+    var providerMenuStatuses: [ProviderMenuStatus] {
+        LLMProviderID.allCases.compactMap { providerID in
+            guard let title = providerMenuStatusTitle(for: providerID) else {
+                return nil
+            }
+
+            return ProviderMenuStatus(providerID: providerID, title: title)
+        }
+    }
+
     var grammarStatusTitle: String {
-        providerStatusTitle(prefix: FeatureKind.grammar.statusPrefix, status: grammarStatus)
+        featureStatusTitle(prefix: FeatureKind.grammar.statusPrefix, status: grammarStatus)
     }
 
     var ocrStatusTitle: String {
-        providerStatusTitle(prefix: FeatureKind.ocr.statusPrefix, status: ocrStatus)
+        featureStatusTitle(prefix: FeatureKind.ocr.statusPrefix, status: ocrStatus)
     }
 
     var voiceStatusTitle: String {
-        providerStatusTitle(prefix: FeatureKind.voice.statusPrefix, status: voiceStatus)
+        featureStatusTitle(prefix: FeatureKind.voice.statusPrefix, status: voiceStatus)
     }
 
     var accessibilityStatusTitle: String {
@@ -279,6 +305,12 @@ final class AppState: ObservableObject {
 
     func checkVoiceProviderStatus() {
         checkProviderStatus(for: .voice)
+    }
+
+    func checkProviderStatus(for providerID: LLMProviderID) {
+        for feature in features(using: providerID) {
+            checkProviderStatus(for: feature)
+        }
     }
 
     func validateVoiceHotKey(_ hotKey: AppHotKey) -> AppHotKeyValidationError? {
@@ -521,6 +553,17 @@ final class AppState: ObservableObject {
         }
     }
 
+    private func status(for feature: FeatureKind) -> ProviderStatus {
+        switch feature {
+        case .grammar:
+            return grammarStatus
+        case .ocr:
+            return ocrStatus
+        case .voice:
+            return voiceStatus
+        }
+    }
+
     private func healthCheckTask(for feature: FeatureKind) -> Task<Void, Never>? {
         switch feature {
         case .grammar:
@@ -593,6 +636,26 @@ final class AppState: ObservableObject {
         }
 
         return false
+    }
+
+    private func isProcessingStatus(_ status: ProviderStatus) -> Bool {
+        if case .processing = status {
+            return true
+        }
+
+        return false
+    }
+
+    private func errorMessage(from status: ProviderStatus) -> String? {
+        if case .error(_, let message) = status {
+            return message
+        }
+
+        return nil
+    }
+
+    private func features(using providerID: LLMProviderID) -> [FeatureKind] {
+        FeatureKind.allCases.filter { modelSelection(for: $0)?.providerID == providerID }
     }
 
     private func canRun(feature: FeatureKind) -> Bool {
@@ -678,7 +741,7 @@ final class AppState: ObservableObject {
         }
     }
 
-    private func providerStatusTitle(prefix: String, status: ProviderStatus) -> String {
+    private func featureStatusTitle(prefix: String, status: ProviderStatus) -> String {
         switch status {
         case .ok(let providerID):
             return "\(prefix): \(providerID.displayName) Ready"
@@ -695,6 +758,23 @@ final class AppState: ObservableObject {
 
             return "\(prefix): \(message)"
         }
+    }
+
+    private func providerMenuStatusTitle(for providerID: LLMProviderID) -> String? {
+        let statuses = features(using: providerID).map(status(for:))
+        guard !statuses.isEmpty else {
+            return nil
+        }
+
+        if statuses.contains(where: isProcessingStatus) {
+            return "\(providerID.displayName): Checking..."
+        }
+
+        if let message = statuses.compactMap(errorMessage(from:)).first {
+            return "\(providerID.displayName): \(message)"
+        }
+
+        return "\(providerID.displayName): Ready"
     }
 
     private func providerStatus(from health: LLMProviderHealth) -> ProviderStatus {

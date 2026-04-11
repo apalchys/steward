@@ -95,7 +95,6 @@ struct SettingsView: View {
             providersPane
         case .grammar:
             featurePane(
-                featureDescription: "Pick a Refine model from the available options.",
                 feature: .grammar,
                 selection: grammarModelBinding,
                 emptyStateMessage: "Add a provider API key in Providers to unlock Refine models.",
@@ -104,7 +103,6 @@ struct SettingsView: View {
             )
         case .screenText:
             featurePane(
-                featureDescription: "Pick a Capture model from the available options.",
                 feature: .screenText,
                 selection: screenTextModelBinding,
                 emptyStateMessage: "Add a provider API key in Providers to unlock Capture models.",
@@ -160,26 +158,32 @@ struct SettingsView: View {
     }
 
     private var voicePane: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            featurePane(
-                featureDescription: "Pick a Dictate model from the available options.",
+        voiceControlsCard
+    }
+
+    private var voiceControlsCard: some View {
+        SettingsListCard {
+            featureModelRows(
                 feature: .voice,
                 selection: voiceModelBinding,
-                emptyStateMessage: "Add a provider API key in Providers to unlock Dictate models.",
-                instructions: $settings.voice.customInstructions,
-                instructionsDescription: "Optional guidance applied after speech is transcribed.",
+                emptyStateMessage: "Add a provider API key in Providers to unlock Dictate models."
             )
 
-            SettingsSectionCard(
-                title: "Shortcut",
-                description: "Hold the shortcut to record. Release to transcribe."
-            ) {
-                HotKeyRecorderView(
-                    hotKey: $settings.voice.hotKey,
-                    defaultHotKey: .defaultVoiceDictation,
-                    validate: { appState.validateVoiceHotKey($0) }
-                )
-            }
+            SettingsListDivider()
+
+            HotKeyRecorderView(
+                hotKey: $settings.voice.hotKey,
+                defaultHotKey: .defaultVoiceDictation,
+                validate: { appState.validateVoiceHotKey($0) }
+            )
+
+            SettingsListDivider()
+
+            SettingsInlineEditorSection(
+                title: "Custom Instructions",
+                description: "Optional guidance applied after speech is transcribed.",
+                text: $settings.voice.customInstructions
+            )
         }
     }
 
@@ -266,27 +270,22 @@ struct SettingsView: View {
     }
 
     private func featurePane(
-        featureDescription: String,
         feature: LLMFeature,
         selection: Binding<LLMModelSelection?>,
         emptyStateMessage: String,
         instructions: Binding<String>,
         instructionsDescription: String,
     ) -> some View {
-        VStack(alignment: .leading, spacing: 20) {
-            SettingsSectionCard(title: "Model") {
-                VStack(alignment: .leading, spacing: 14) {
-                    SettingsInfoRow(text: featureDescription)
+        SettingsListCard {
+            featureModelRows(
+                feature: feature,
+                selection: selection,
+                emptyStateMessage: emptyStateMessage
+            )
 
-                    modelPickerRow(
-                        feature: feature,
-                        selection: selection,
-                        emptyStateMessage: emptyStateMessage
-                    )
-                }
-            }
+            SettingsListDivider()
 
-            SettingsEditorCard(
+            SettingsInlineEditorSection(
                 title: "Custom Instructions",
                 description: instructionsDescription,
                 text: instructions
@@ -369,26 +368,48 @@ struct SettingsView: View {
     }
 
     @ViewBuilder
-    private func modelPickerRow(
+    private func featureModelRows(
         feature: LLMFeature,
         selection: Binding<LLMModelSelection?>,
         emptyStateMessage: String
     ) -> some View {
         let availableModels = settings.availableModels(for: feature)
 
-        if availableModels.isEmpty {
-            SettingsInfoRow(text: emptyStateMessage)
-        } else {
-            Picker("Model", selection: selection) {
-                ForEach(availableModels) { entry in
-                    Text(entry.selection.pickerLabel)
-                        .tag(Optional(entry.selection))
-                }
+        SettingsListRow(title: "Model") {
+            if availableModels.isEmpty {
+                Text("Unavailable")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+            } else {
+                modelPickerControl(
+                    feature: feature,
+                    selection: selection
+                )
             }
-            .pickerStyle(.menu)
-            .labelsHidden()
-            .frame(width: 320)
         }
+
+        if availableModels.isEmpty {
+            SettingsListDivider()
+            SettingsListInfoRow(text: emptyStateMessage)
+        }
+    }
+
+    private func modelPickerControl(
+        feature: LLMFeature,
+        selection: Binding<LLMModelSelection?>
+    ) -> some View {
+        let availableModels = settings.availableModels(for: feature)
+
+        return Picker("Model", selection: selection) {
+            ForEach(availableModels) { entry in
+                Text(entry.selection.pickerLabel)
+                    .tag(Optional(entry.selection))
+            }
+        }
+        .pickerStyle(.menu)
+        .labelsHidden()
+        .controlSize(.large)
+        .frame(minWidth: 280, alignment: .trailing)
     }
 
     private var appIconView: some View {
@@ -600,6 +621,30 @@ private struct SettingsSectionCard<Content: View>: View {
     }
 }
 
+struct SettingsListCard<Content: View>: View {
+    let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            content
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(NSColor.controlBackgroundColor))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color(NSColor.separatorColor).opacity(0.8), lineWidth: 1)
+        )
+    }
+}
+
 private struct SettingsSidebarRow: View {
     let pane: SettingsPane
 
@@ -622,6 +667,12 @@ private struct SettingsInsetDivider: View {
     var body: some View {
         Divider()
             .padding(.leading, 0)
+    }
+}
+
+struct SettingsListDivider: View {
+    var body: some View {
+        Divider()
     }
 }
 
@@ -659,6 +710,31 @@ private struct SettingsRow<Accessory: View>: View {
     }
 }
 
+struct SettingsListRow<Accessory: View>: View {
+    let title: String
+    @ViewBuilder let accessory: Accessory
+
+    init(
+        title: String,
+        @ViewBuilder accessory: () -> Accessory
+    ) {
+        self.title = title
+        self.accessory = accessory()
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 16) {
+            Text(title)
+                .font(.body)
+
+            Spacer(minLength: 16)
+
+            accessory
+        }
+        .frame(minHeight: 58)
+    }
+}
+
 private struct SettingsValueRow: View {
     let title: String
     let description: String
@@ -689,6 +765,19 @@ private struct SettingsInfoRow: View {
             .font(.subheadline)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+struct SettingsListInfoRow: View {
+    let text: String
+    var foregroundStyle: Color = Color.secondary
+
+    var body: some View {
+        Text(text)
+            .font(.subheadline)
+            .foregroundStyle(foregroundStyle)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.vertical, 14)
     }
 }
 
@@ -729,6 +818,38 @@ private struct SettingsEditorCard: View {
                         .stroke(Color(NSColor.separatorColor), lineWidth: 1)
                 )
         }
+    }
+}
+
+private struct SettingsInlineEditorSection: View {
+    let title: String
+    let description: String
+    @Binding var text: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.body)
+
+            Text(description)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            TextEditor(text: $text)
+                .font(.system(.body, design: .monospaced))
+                .scrollContentBackground(.hidden)
+                .padding(10)
+                .frame(minHeight: 220)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color(NSColor.textBackgroundColor))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                )
+        }
+        .padding(.vertical, 14)
     }
 }
 
