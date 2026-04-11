@@ -36,6 +36,7 @@ protocol DictateCoordinating: AnyObject {
     var onError: ((Error) -> Void)? { get set }
 
     func handleManualToggleAction() async throws
+    func handleRegularHotKeyToggleAction() async throws
     func handlePushToTalkKeyDown() async throws
     func handlePushToTalkKeyUp() async throws
 }
@@ -62,6 +63,7 @@ final class DictateCoordinator: DictateCoordinating {
     private enum RecordingSource {
         case pushToTalkHotKey
         case manualToggle
+        case regularHotKeyToggle
     }
 
     var onStateChanged: ((DictateWorkflowState) -> Void)?
@@ -142,6 +144,21 @@ final class DictateCoordinator: DictateCoordinating {
             try await startRecording(triggeredBy: .manualToggle)
         case .recording:
             guard recordingSource == .manualToggle else {
+                return
+            }
+
+            try await stopAndTranscribeRecording()
+        case .transcribing:
+            return
+        }
+    }
+
+    func handleRegularHotKeyToggleAction() async throws {
+        switch state {
+        case .idle:
+            try await startRecording(triggeredBy: .regularHotKeyToggle)
+        case .recording:
+            guard recordingSource == .regularHotKeyToggle else {
                 return
             }
 
@@ -242,7 +259,7 @@ final class DictateCoordinator: DictateCoordinating {
         switch recordingSource {
         case .pushToTalkHotKey:
             recordingPillPresenter.showPassiveRecording(level: level)
-        case .manualToggle:
+        case .manualToggle, .regularHotKeyToggle:
             recordingPillPresenter.showInteractiveRecording(level: level)
         case nil:
             recordingPillPresenter.showInteractiveRecording(level: level)

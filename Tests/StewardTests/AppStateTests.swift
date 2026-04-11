@@ -694,11 +694,16 @@ private final class FakeDictateCoordinator: DictateCoordinating {
     var onStateChanged: ((DictateWorkflowState) -> Void)?
     var onError: ((any Error) -> Void)?
     private(set) var handleManualToggleActionCallCount = 0
+    private(set) var handleRegularHotKeyToggleActionCallCount = 0
     private(set) var handlePushToTalkKeyDownCallCount = 0
     private(set) var handlePushToTalkKeyUpCallCount = 0
 
     func handleManualToggleAction() async throws {
         handleManualToggleActionCallCount += 1
+    }
+
+    func handleRegularHotKeyToggleAction() async throws {
+        handleRegularHotKeyToggleActionCallCount += 1
     }
 
     func handlePushToTalkKeyDown() async throws {

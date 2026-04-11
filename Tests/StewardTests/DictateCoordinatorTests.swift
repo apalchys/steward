@@ -204,6 +204,43 @@ final class DictateCoordinatorTests: XCTestCase {
         XCTAssertEqual(pillPresenter.recordingStates, [.passiveRecording(level: 0)])
     }
 
+    func testRegularHotKeyToggleStartsRecordingWithInteractivePill() async throws {
+        let pillPresenter = FakeVoiceRecordingPillPresenter()
+        let coordinator = DictateCoordinator(
+            microphoneAccess: FakeMicrophoneAccessProvider(result: true),
+            audioRecordingService: FakeAudioRecordingService(),
+            recordingPillPresenter: pillPresenter,
+            router: VoiceDictationFakeRouter(result: .success(.text("ignored"))),
+            textInteraction: VoiceDictationFakeTextInteraction(),
+            settingsStore: VoiceDictationSettingsStore()
+        )
+
+        try await coordinator.handleRegularHotKeyToggleAction()
+
+        XCTAssertEqual(coordinator.state, .recording)
+        XCTAssertEqual(pillPresenter.recordingStates, [.interactiveRecording(level: 0)])
+    }
+
+    func testRegularHotKeyToggleStopsItsOwnRecordingAndTranscribes() async throws {
+        let audioRecordingService = FakeAudioRecordingService(payload: RecordedAudioPayload(data: Data("audio".utf8), mimeType: "audio/wav"))
+        let textInteraction = VoiceDictationFakeTextInteraction()
+        let coordinator = DictateCoordinator(
+            microphoneAccess: FakeMicrophoneAccessProvider(result: true),
+            audioRecordingService: audioRecordingService,
+            recordingPillPresenter: FakeVoiceRecordingPillPresenter(),
+            router: VoiceDictationFakeRouter(result: .success(.text("Regular mode transcript"))),
+            textInteraction: textInteraction,
+            settingsStore: VoiceDictationSettingsStore()
+        )
+
+        try await coordinator.handleRegularHotKeyToggleAction()
+        try await coordinator.handleRegularHotKeyToggleAction()
+
+        XCTAssertEqual(audioRecordingService.stopRecordingCallCount, 1)
+        XCTAssertEqual(textInteraction.replacedText, "Regular mode transcript")
+        XCTAssertEqual(coordinator.state, .idle)
+    }
+
     func testPushToTalkKeyUpStopsRecordingAndTranscribes() async throws {
         let audioRecordingService = FakeAudioRecordingService(payload: RecordedAudioPayload(data: Data("audio".utf8), mimeType: "audio/wav"))
         let textInteraction = VoiceDictationFakeTextInteraction()
@@ -237,6 +274,24 @@ final class DictateCoordinatorTests: XCTestCase {
 
         try await coordinator.handleManualToggleAction()
         try await coordinator.handlePushToTalkKeyUp()
+
+        XCTAssertEqual(audioRecordingService.stopRecordingCallCount, 0)
+        XCTAssertEqual(coordinator.state, .recording)
+    }
+
+    func testRegularHotKeyToggleDoesNotStopMenuTriggeredRecording() async throws {
+        let audioRecordingService = FakeAudioRecordingService()
+        let coordinator = DictateCoordinator(
+            microphoneAccess: FakeMicrophoneAccessProvider(result: true),
+            audioRecordingService: audioRecordingService,
+            recordingPillPresenter: FakeVoiceRecordingPillPresenter(),
+            router: VoiceDictationFakeRouter(result: .success(.text("ignored"))),
+            textInteraction: VoiceDictationFakeTextInteraction(),
+            settingsStore: VoiceDictationSettingsStore()
+        )
+
+        try await coordinator.handleManualToggleAction()
+        try await coordinator.handleRegularHotKeyToggleAction()
 
         XCTAssertEqual(audioRecordingService.stopRecordingCallCount, 0)
         XCTAssertEqual(coordinator.state, .recording)

@@ -1,6 +1,6 @@
 ---
 name: Dictate Coordinator Mode Handling
-status: todo
+status: done
 ---
 
 # Summary
@@ -19,4 +19,3 @@ Support separate regular-hotkey toggle behavior while preserving push-to-talk an
 - Regular Dictate hotkey starts recording on first press and stops/transcribes on second press.
 - Push-to-talk release cannot stop a regular/manual session.
 - Menu Dictate behavior still works.
-
