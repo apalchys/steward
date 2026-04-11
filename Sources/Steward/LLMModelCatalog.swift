@@ -93,7 +93,7 @@ enum LLMModelCatalog {
             models: [
                 LLMProviderModel(
                     modelID: OpenAIClient.defaultModelID,
-                    capabilities: [.grammar],
+                    capabilities: [.grammar, .screenText],
                     defaultCapabilities: [.grammar]
                 ),
                 LLMProviderModel(
@@ -106,6 +106,10 @@ enum LLMModelCatalog {
         LLMProviderCatalog(
             providerID: .gemini,
             models: [
+                LLMProviderModel(
+                    modelID: "gemini-3-flash-preview",
+                    capabilities: [.grammar, .screenText, .voice]
+                ),
                 LLMProviderModel(
                     modelID: GeminiClient.defaultModelID,
                     capabilities: [.grammar, .screenText, .voice],

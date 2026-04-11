@@ -147,7 +147,10 @@ final class LLMSettingsMigrationTests: XCTestCase {
             settings.grammar.selectedModel,
             LLMModelSelection(providerID: .openAI, modelID: OpenAIClient.defaultModelID)
         )
-        XCTAssertNil(settings.screenText.selectedModel)
+        XCTAssertEqual(
+            settings.screenText.selectedModel,
+            LLMModelSelection(providerID: .openAI, modelID: OpenAIClient.defaultModelID)
+        )
         XCTAssertEqual(
             settings.voice.selectedModel,
             LLMModelSelection(providerID: .openAI, modelID: "gpt-4o-mini-transcribe")

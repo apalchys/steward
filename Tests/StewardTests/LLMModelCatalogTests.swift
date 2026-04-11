@@ -9,12 +9,17 @@ final class LLMModelCatalogTests: XCTestCase {
                 LLMModelCatalogEntry(
                     providerID: .openAI,
                     modelID: "gpt-5.4",
-                    supportedFeatures: [.grammar]
+                    supportedFeatures: [.grammar, .screenText]
                 ),
                 LLMModelCatalogEntry(
                     providerID: .openAI,
                     modelID: "gpt-4o-mini-transcribe",
                     supportedFeatures: [.voice]
+                ),
+                LLMModelCatalogEntry(
+                    providerID: .gemini,
+                    modelID: "gemini-3-flash-preview",
+                    supportedFeatures: [.grammar, .screenText, .voice]
                 ),
                 LLMModelCatalogEntry(
                     providerID: .gemini,
@@ -67,14 +72,14 @@ final class LLMModelCatalogTests: XCTestCase {
         )
     }
 
-    func testSanitizedSelectionReturnsNilWhenNoCompatibleEnabledModelsExist() {
+    func testSanitizedSelectionFallsBackToOpenAIDefaultForCaptureWhenOnlyOpenAIEnabled() {
         let selection = LLMModelCatalog.sanitizedSelection(
             LLMModelSelection(providerID: .gemini, modelID: "not-in-catalog"),
             for: .screenText,
             enabledProviders: [.openAI]
         )
 
-        XCTAssertNil(selection)
+        XCTAssertEqual(selection, LLMModelSelection(providerID: .openAI, modelID: "gpt-5.4"))
     }
 
     func testValidationErrorsIncludeDuplicateModelIDs() {
