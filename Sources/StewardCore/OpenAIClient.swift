@@ -1,8 +1,8 @@
 import Foundation
 
 public struct OpenAIClient: Sendable {
-    public static let defaultModelID = "gpt-5.4"
     private static let provider = "OpenAI"
+    public let defaultModelID: String
     private let session: URLSession
     private static let responsesURL = URL(string: "https://api.openai.com/v1/responses")!
     private static let transcriptionURL = URL(string: "https://api.openai.com/v1/audio/transcriptions")!
@@ -80,12 +80,20 @@ public struct OpenAIClient: Sendable {
         }
     }
 
-    public init(session: URLSession = .shared) {
+    public init(defaultModelID: String, session: URLSession = .shared) {
+        self.defaultModelID = defaultModelID.trimmingCharacters(in: .whitespacesAndNewlines)
         self.session = session
     }
 
     public func checkAccessStatus(apiKey: String, modelID: String) async -> LLMHealthCheckResult {
-        let encodedModelID = modelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? modelID
+        let resolvedModelID = resolvedModelID(modelID)
+        guard !resolvedModelID.isEmpty else {
+            return LLMHealthCheckResult(status: .unknown, message: "OpenAI model identifier is invalid.")
+        }
+
+        let encodedModelID =
+            resolvedModelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
+            ?? resolvedModelID
 
         guard let apiURL = URL(string: "https://api.openai.com/v1/models/\(encodedModelID)") else {
             return LLMHealthCheckResult(status: .unknown, message: "OpenAI model identifier is invalid.")
@@ -116,11 +124,16 @@ public struct OpenAIClient: Sendable {
         customInstructions: String,
         text: String
     ) async throws -> String {
+        let resolvedModelID = resolvedModelID(modelID)
+        guard !resolvedModelID.isEmpty else {
+            throw LLMClientError.requestFailed("OpenAI model identifier is invalid.")
+        }
+
         let requestBody = ResponsesRequest(
-            model: modelID,
+            model: resolvedModelID,
             instructions: buildGrammarPrompt(customInstructions: customInstructions),
             input: text,
-            reasoning: reasoningEffort(for: modelID).map { ResponsesRequest.Reasoning(effort: $0) }
+            reasoning: reasoningEffort(for: resolvedModelID).map { ResponsesRequest.Reasoning(effort: $0) }
         )
 
         guard let httpBody = try? JSONEncoder().encode(requestBody) else {
@@ -160,9 +173,14 @@ public struct OpenAIClient: Sendable {
         mimeType: String,
         customInstructions: String = ""
     ) async throws -> String {
+        let resolvedModelID = resolvedModelID(modelID)
+        guard !resolvedModelID.isEmpty else {
+            throw LLMClientError.requestFailed("OpenAI model identifier is invalid.")
+        }
+
         let imageDataURL = "data:\(mimeType);base64,\(imageData.base64EncodedString())"
         let requestBody = ResponsesVisionRequest(
-            model: modelID,
+            model: resolvedModelID,
             instructions: buildOCRPrompt(customInstructions: customInstructions),
             input: [
                 .init(
@@ -173,7 +191,7 @@ public struct OpenAIClient: Sendable {
                     ]
                 )
             ],
-            reasoning: reasoningEffort(for: modelID).map { ResponsesVisionRequest.Reasoning(effort: $0) }
+            reasoning: reasoningEffort(for: resolvedModelID).map { ResponsesVisionRequest.Reasoning(effort: $0) }
         )
 
         guard let httpBody = try? JSONEncoder().encode(requestBody) else {
@@ -213,10 +231,15 @@ public struct OpenAIClient: Sendable {
         mimeType: String,
         customInstructions: String
     ) async throws -> String {
+        let resolvedModelID = resolvedModelID(modelID)
+        guard !resolvedModelID.isEmpty else {
+            throw LLMClientError.requestFailed("OpenAI model identifier is invalid.")
+        }
+
         let boundary = "Boundary-\(UUID().uuidString)"
         let httpBody = multipartTranscriptionBody(
             boundary: boundary,
-            modelID: modelID,
+            modelID: resolvedModelID,
             prompt: buildVoiceTranscriptionPrompt(customInstructions: customInstructions),
             audioData: audioData,
             mimeType: mimeType
@@ -250,6 +273,11 @@ public struct OpenAIClient: Sendable {
 
     private func reasoningEffort(for modelID: String) -> String? {
         return modelID.lowercased().hasPrefix("gpt-5") ? "none" : nil
+    }
+
+    private func resolvedModelID(_ modelID: String) -> String {
+        let overrideModelID = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
+        return overrideModelID.isEmpty ? defaultModelID : overrideModelID
     }
 
     private func multipartTranscriptionBody(

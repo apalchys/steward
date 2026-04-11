@@ -13,6 +13,11 @@ final class LLMModelCatalogTests: XCTestCase {
                 ),
                 LLMModelCatalogEntry(
                     providerID: .openAI,
+                    modelID: "gpt-5.4-mini",
+                    supportedFeatures: [.grammar, .screenText]
+                ),
+                LLMModelCatalogEntry(
+                    providerID: .openAI,
                     modelID: "gpt-4o-mini-transcribe",
                     supportedFeatures: [.voice]
                 ),
@@ -87,6 +92,7 @@ final class LLMModelCatalogTests: XCTestCase {
             in: [
                 LLMProviderCatalog(
                     providerID: .openAI,
+                    defaultModelID: "dup",
                     models: [
                         LLMProviderModel(modelID: "dup", capabilities: [.grammar]),
                         LLMProviderModel(modelID: "dup", capabilities: [.voice]),
@@ -101,16 +107,16 @@ final class LLMModelCatalogTests: XCTestCase {
         )
     }
 
-    func testValidationErrorsIncludeUnsupportedDefaultCapabilities() {
+    func testValidationErrorsIncludeMissingDefaultModel() {
         let errors = LLMModelCatalog.validationErrors(
             in: [
                 LLMProviderCatalog(
                     providerID: .gemini,
+                    defaultModelID: "missing-default",
                     models: [
                         LLMProviderModel(
                             modelID: "gemini-test",
-                            capabilities: [.grammar],
-                            defaultCapabilities: [.voice]
+                            capabilities: [.grammar]
                         )
                     ]
                 )
@@ -119,40 +125,14 @@ final class LLMModelCatalogTests: XCTestCase {
 
         XCTAssertEqual(
             errors,
-            [.invalidDefaultCapability(providerID: .gemini, modelID: "gemini-test", feature: .voice)]
+            [.missingDefaultModel(providerID: .gemini, defaultModelID: "missing-default")]
         )
     }
 
-    func testValidationErrorsIncludeDuplicateDefaultsForFeature() {
-        let errors = LLMModelCatalog.validationErrors(
-            in: [
-                LLMProviderCatalog(
-                    providerID: .openAI,
-                    models: [
-                        LLMProviderModel(
-                            modelID: "grammar-a",
-                            capabilities: [.grammar],
-                            defaultCapabilities: [.grammar]
-                        ),
-                        LLMProviderModel(
-                            modelID: "grammar-b",
-                            capabilities: [.grammar],
-                            defaultCapabilities: [.grammar]
-                        ),
-                    ]
-                )
-            ]
-        )
-
+    func testDefaultModelIDReturnsConfiguredProviderDefault() {
         XCTAssertEqual(
-            errors,
-            [
-                .duplicateDefault(
-                    providerID: .openAI,
-                    feature: .grammar,
-                    modelIDs: ["grammar-a", "grammar-b"]
-                )
-            ]
+            LLMModelCatalog.defaultModelID(for: .openAI),
+            "gpt-5.4"
         )
     }
 }

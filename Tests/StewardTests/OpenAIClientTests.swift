@@ -301,7 +301,7 @@ final class OpenAIClientTests: XCTestCase {
     }
 
     private func makeClient() -> OpenAIClient {
-        OpenAIClient(session: URLProtocolStub.makeSession())
+        OpenAIClient(defaultModelID: "gpt-5.4", session: URLProtocolStub.makeSession())
     }
 
     private func assertThrowsErrorMessage(

@@ -545,12 +545,12 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
         case .grammar:
             return LLMModelSelection(
                 providerID: .openAI,
-                modelID: legacyProviderModelID(for: .openAI, defaultModelID: OpenAIClient.defaultModelID)
+                modelID: legacyProviderModelID(for: .openAI)
             )
         case .screenText:
             return LLMModelSelection(
                 providerID: .gemini,
-                modelID: legacyProviderModelID(for: .gemini, defaultModelID: GeminiClient.defaultModelID)
+                modelID: legacyProviderModelID(for: .gemini)
             )
         case .voice:
             let providerID = legacyVoiceProviderID()
@@ -561,10 +561,10 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
         }
     }
 
-    private func legacyProviderModelID(for providerID: LLMProviderID, defaultModelID: String) -> String {
+    private func legacyProviderModelID(for providerID: LLMProviderID) -> String {
         let key = keys.legacyProviderModelKey(for: providerID)
         let rawModelID = (keys.userDefaults.string(forKey: key) ?? "").trimmed
-        return rawModelID.isEmpty ? defaultModelID : rawModelID
+        return rawModelID.isEmpty ? LLMModelCatalog.defaultModelID(for: providerID) : rawModelID
     }
 
     private func legacyVoiceProviderID() -> LLMProviderID {
@@ -576,7 +576,7 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
         switch providerID {
         case .gemini:
             let rawModelID = (keys.userDefaults.string(forKey: "voiceGeminiModelID") ?? "").trimmed
-            return rawModelID.isEmpty ? GeminiClient.defaultModelID : rawModelID
+            return rawModelID.isEmpty ? LLMModelCatalog.defaultModelID(for: .gemini) : rawModelID
         case .openAI:
             let rawModelID = (keys.userDefaults.string(forKey: "voiceOpenAIModelID") ?? "").trimmed
             return rawModelID.isEmpty ? "gpt-4o-mini-transcribe" : rawModelID

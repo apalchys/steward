@@ -303,7 +303,7 @@ final class GeminiClientTests: XCTestCase {
     }
 
     private func makeClient() -> GeminiClient {
-        GeminiClient(session: URLProtocolStub.makeSession())
+        GeminiClient(defaultModelID: "gemini-3.1-flash-lite-preview", session: URLProtocolStub.makeSession())
     }
 
     private func assertThrowsErrorMessage(

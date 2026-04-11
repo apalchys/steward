@@ -1,8 +1,8 @@
 import Foundation
 
 public struct GeminiClient: Sendable {
-    public static let defaultModelID = "gemini-3.1-flash-lite-preview"
     private static let provider = "Gemini"
+    public let defaultModelID: String
     private let session: URLSession
 
     private struct GenerateContentRequest: Encodable {
@@ -80,12 +80,20 @@ public struct GeminiClient: Sendable {
         }
     }
 
-    public init(session: URLSession = .shared) {
+    public init(defaultModelID: String, session: URLSession = .shared) {
+        self.defaultModelID = defaultModelID.trimmingCharacters(in: .whitespacesAndNewlines)
         self.session = session
     }
 
     public func checkAccessStatus(apiKey: String, modelID: String) async -> LLMHealthCheckResult {
-        let encodedModelID = modelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? modelID
+        let resolvedModelID = resolvedModelID(modelID)
+        guard !resolvedModelID.isEmpty else {
+            return LLMHealthCheckResult(status: .unknown, message: "Gemini model identifier is invalid.")
+        }
+
+        let encodedModelID =
+            resolvedModelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
+            ?? resolvedModelID
         guard
             let apiURL = makeURL(
                 path: "/v1beta/models/\(encodedModelID)",
@@ -119,6 +127,11 @@ public struct GeminiClient: Sendable {
         mimeType: String,
         customInstructions: String = ""
     ) async throws -> String {
+        let resolvedModelID = resolvedModelID(modelID)
+        guard !resolvedModelID.isEmpty else {
+            throw LLMClientError.requestFailed("Gemini model identifier is invalid.")
+        }
+
         let combinedInstructions = buildOCRPrompt(customInstructions: customInstructions)
         let requestBody = GenerateContentRequest(
             systemInstruction: .init(parts: [.init(text: combinedInstructions)]),
@@ -134,7 +147,9 @@ public struct GeminiClient: Sendable {
             throw LLMClientError.encodingFailed(provider: Self.provider)
         }
 
-        let encodedModelID = modelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? modelID
+        let encodedModelID =
+            resolvedModelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
+            ?? resolvedModelID
         guard
             let apiURL = makeURL(
                 path: "/v1beta/models/\(encodedModelID):generateContent",
@@ -174,6 +189,11 @@ public struct GeminiClient: Sendable {
         customInstructions: String,
         text: String
     ) async throws -> String {
+        let resolvedModelID = resolvedModelID(modelID)
+        guard !resolvedModelID.isEmpty else {
+            throw LLMClientError.requestFailed("Gemini model identifier is invalid.")
+        }
+
         let requestBody = GenerateContentRequest(
             systemInstruction: .init(parts: [.init(text: buildGrammarPrompt(customInstructions: customInstructions))]),
             contents: [
@@ -187,7 +207,9 @@ public struct GeminiClient: Sendable {
             throw LLMClientError.encodingFailed(provider: Self.provider)
         }
 
-        let encodedModelID = modelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? modelID
+        let encodedModelID =
+            resolvedModelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
+            ?? resolvedModelID
         guard
             let apiURL = makeURL(
                 path: "/v1beta/models/\(encodedModelID):generateContent",
@@ -228,6 +250,11 @@ public struct GeminiClient: Sendable {
         mimeType: String,
         customInstructions: String
     ) async throws -> String {
+        let resolvedModelID = resolvedModelID(modelID)
+        guard !resolvedModelID.isEmpty else {
+            throw LLMClientError.requestFailed("Gemini model identifier is invalid.")
+        }
+
         let requestBody = GenerateContentRequest(
             systemInstruction: .init(parts: [
                 .init(text: buildVoiceTranscriptionPrompt(customInstructions: customInstructions))
@@ -244,7 +271,9 @@ public struct GeminiClient: Sendable {
             throw LLMClientError.encodingFailed(provider: Self.provider)
         }
 
-        let encodedModelID = modelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? modelID
+        let encodedModelID =
+            resolvedModelID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
+            ?? resolvedModelID
         guard
             let apiURL = makeURL(
                 path: "/v1beta/models/\(encodedModelID):generateContent",
@@ -276,6 +305,11 @@ public struct GeminiClient: Sendable {
         }
 
         return transcript
+    }
+
+    private func resolvedModelID(_ modelID: String) -> String {
+        let overrideModelID = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
+        return overrideModelID.isEmpty ? defaultModelID : overrideModelID
     }
 
     private func makeURL(path: String, queryItems: [URLQueryItem]) -> URL? {

@@ -18,30 +18,34 @@ struct LLMModelSelection: Equatable, Hashable, Codable {
 struct LLMProviderModel: Equatable {
     let modelID: String
     let capabilities: Set<LLMFeature>
-    let defaultCapabilities: Set<LLMFeature>
 
     init(
         modelID: String,
-        capabilities: Set<LLMFeature>,
-        defaultCapabilities: Set<LLMFeature> = []
+        capabilities: Set<LLMFeature>
     ) {
         self.modelID = modelID.trimmed
         self.capabilities = capabilities
-        self.defaultCapabilities = defaultCapabilities
     }
 
     func supports(_ feature: LLMFeature) -> Bool {
         capabilities.contains(feature)
     }
-
-    func isDefault(for feature: LLMFeature) -> Bool {
-        defaultCapabilities.contains(feature)
-    }
 }
 
 struct LLMProviderCatalog: Equatable {
     let providerID: LLMProviderID
+    let defaultModelID: String
     let models: [LLMProviderModel]
+
+    init(
+        providerID: LLMProviderID,
+        defaultModelID: String,
+        models: [LLMProviderModel]
+    ) {
+        self.providerID = providerID
+        self.defaultModelID = defaultModelID.trimmed
+        self.models = models
+    }
 }
 
 struct LLMModelCatalogEntry: Equatable, Identifiable {
@@ -71,17 +75,14 @@ struct LLMModelCatalogEntry: Equatable, Identifiable {
 
 enum LLMModelCatalogValidationError: Error, Equatable, CustomStringConvertible {
     case duplicateModelID(providerID: LLMProviderID, modelID: String)
-    case invalidDefaultCapability(providerID: LLMProviderID, modelID: String, feature: LLMFeature)
-    case duplicateDefault(providerID: LLMProviderID, feature: LLMFeature, modelIDs: [String])
+    case missingDefaultModel(providerID: LLMProviderID, defaultModelID: String)
 
     var description: String {
         switch self {
         case .duplicateModelID(let providerID, let modelID):
             return "\(providerID.rawValue) duplicates model \(modelID)."
-        case .invalidDefaultCapability(let providerID, let modelID, let feature):
-            return "\(providerID.rawValue) marks \(modelID) default for unsupported \(feature.rawValue)."
-        case .duplicateDefault(let providerID, let feature, let modelIDs):
-            return "\(providerID.rawValue) has multiple defaults for \(feature.rawValue): \(modelIDs.joined(separator: ", "))."
+        case .missingDefaultModel(let providerID, let defaultModelID):
+            return "\(providerID.rawValue) default model \(defaultModelID) is not in provider models."
         }
     }
 }
@@ -90,31 +91,34 @@ enum LLMModelCatalog {
     static let providers: [LLMProviderCatalog] = validated([
         LLMProviderCatalog(
             providerID: .openAI,
+            defaultModelID: "gpt-5.4",
             models: [
                 LLMProviderModel(
-                    modelID: OpenAIClient.defaultModelID,
-                    capabilities: [.grammar, .screenText],
-                    defaultCapabilities: [.grammar]
+                    modelID: "gpt-5.4",
+                    capabilities: [.grammar, .screenText]
+                ),
+                LLMProviderModel(
+                    modelID: "gpt-5.4-mini",
+                    capabilities: [.grammar, .screenText]
                 ),
                 LLMProviderModel(
                     modelID: "gpt-4o-mini-transcribe",
-                    capabilities: [.voice],
-                    defaultCapabilities: [.voice]
+                    capabilities: [.voice]
                 ),
             ]
         ),
         LLMProviderCatalog(
             providerID: .gemini,
+            defaultModelID: "gemini-3.1-flash-lite-preview",
             models: [
                 LLMProviderModel(
                     modelID: "gemini-3-flash-preview",
                     capabilities: [.grammar, .screenText, .voice]
                 ),
                 LLMProviderModel(
-                    modelID: GeminiClient.defaultModelID,
-                    capabilities: [.grammar, .screenText, .voice],
-                    defaultCapabilities: [.grammar, .screenText, .voice]
-                )
+                    modelID: "gemini-3.1-flash-lite-preview",
+                    capabilities: [.grammar, .screenText, .voice]
+                ),
             ]
         ),
     ])
@@ -136,7 +140,6 @@ enum LLMModelCatalog {
 
         for provider in providers {
             var seenModelIDs = Set<String>()
-            var defaultModelsByFeature: [LLMFeature: [String]] = [:]
 
             for model in provider.models {
                 if !seenModelIDs.insert(model.modelID).inserted {
@@ -144,35 +147,28 @@ enum LLMModelCatalog {
                         .duplicateModelID(providerID: provider.providerID, modelID: model.modelID)
                     )
                 }
-
-                for feature in model.defaultCapabilities {
-                    guard model.capabilities.contains(feature) else {
-                        errors.append(
-                            .invalidDefaultCapability(
-                                providerID: provider.providerID,
-                                modelID: model.modelID,
-                                feature: feature
-                            )
-                        )
-                        continue
-                    }
-
-                    defaultModelsByFeature[feature, default: []].append(model.modelID)
-                }
             }
 
-            for (feature, modelIDs) in defaultModelsByFeature where modelIDs.count > 1 {
+            if !provider.models.contains(where: { $0.modelID == provider.defaultModelID }) {
                 errors.append(
-                    .duplicateDefault(
+                    .missingDefaultModel(
                         providerID: provider.providerID,
-                        feature: feature,
-                        modelIDs: modelIDs
+                        defaultModelID: provider.defaultModelID
                     )
                 )
             }
         }
 
         return errors
+    }
+
+    static func defaultModelID(for providerID: LLMProviderID) -> String {
+        guard let provider = provider(for: providerID) else {
+            assertionFailure("Unknown provider \(providerID.rawValue)")
+            return ""
+        }
+
+        return provider.defaultModelID
     }
 
     static func entries(for providerID: LLMProviderID) -> [LLMModelCatalogEntry] {
@@ -305,10 +301,18 @@ enum LLMModelCatalog {
         for feature: LLMFeature,
         providerID: LLMProviderID
     ) -> LLMModelSelection? {
-        provider(for: providerID)?
-            .models
-            .first { $0.isDefault(for: feature) }
-            .map { LLMModelSelection(providerID: providerID, modelID: $0.modelID) }
+        guard let provider = provider(for: providerID) else {
+            return nil
+        }
+
+        guard
+            let defaultModel = provider.models.first(where: { $0.modelID == provider.defaultModelID }),
+            defaultModel.supports(feature)
+        else {
+            return nil
+        }
+
+        return LLMModelSelection(providerID: providerID, modelID: defaultModel.modelID)
     }
 
     private static func firstCompatibleSelection(

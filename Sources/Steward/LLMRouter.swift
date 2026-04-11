@@ -15,8 +15,8 @@ final class LLMRouter: LLMRouting {
 
     init(
         settingsStore: AppSettingsProviding,
-        openAIClient: OpenAIClient = OpenAIClient(),
-        geminiClient: GeminiClient = GeminiClient()
+        openAIClient: OpenAIClient = OpenAIClient(defaultModelID: LLMModelCatalog.defaultModelID(for: .openAI)),
+        geminiClient: GeminiClient = GeminiClient(defaultModelID: LLMModelCatalog.defaultModelID(for: .gemini))
     ) {
         self.settingsStore = settingsStore
         self.openAIClient = openAIClient

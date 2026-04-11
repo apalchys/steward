@@ -197,8 +197,14 @@ final class LLMRouterTests: XCTestCase {
     ) -> LLMRouter {
         LLMRouter(
             settingsStore: FakeSettingsStore(settings: makeSettings(configured: configured)),
-            openAIClient: OpenAIClient(session: openAISession),
-            geminiClient: GeminiClient(session: geminiSession)
+            openAIClient: OpenAIClient(
+                defaultModelID: LLMModelCatalog.defaultModelID(for: .openAI),
+                session: openAISession
+            ),
+            geminiClient: GeminiClient(
+                defaultModelID: LLMModelCatalog.defaultModelID(for: .gemini),
+                session: geminiSession
+            )
         )
     }
 

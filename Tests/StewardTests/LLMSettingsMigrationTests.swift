@@ -42,11 +42,17 @@ final class LLMSettingsMigrationTests: XCTestCase {
         settings.providerSettings[.openAI] = LLMProviderSettings(apiKey: "openai-key")
         settings.providerSettings[.gemini] = LLMProviderSettings(apiKey: "gemini-key")
         settings.grammar = GrammarSettings(
-            selectedModel: LLMModelSelection(providerID: .openAI, modelID: OpenAIClient.defaultModelID),
+            selectedModel: LLMModelSelection(
+                providerID: .openAI,
+                modelID: LLMModelCatalog.defaultModelID(for: .openAI)
+            ),
             customInstructions: "Rule 1\nRule 2"
         )
         settings.screenText = ScreenTextSettings(
-            selectedModel: LLMModelSelection(providerID: .gemini, modelID: GeminiClient.defaultModelID),
+            selectedModel: LLMModelSelection(
+                providerID: .gemini,
+                modelID: LLMModelCatalog.defaultModelID(for: .gemini)
+            ),
             customInstructions: "Keep bullet lists"
         )
         settings.voice = VoiceSettings(
@@ -111,11 +117,17 @@ final class LLMSettingsMigrationTests: XCTestCase {
 
         XCTAssertEqual(
             settings.grammar.selectedModel,
-            LLMModelSelection(providerID: .openAI, modelID: OpenAIClient.defaultModelID)
+            LLMModelSelection(
+                providerID: .openAI,
+                modelID: LLMModelCatalog.defaultModelID(for: .openAI)
+            )
         )
         XCTAssertEqual(
             settings.screenText.selectedModel,
-            LLMModelSelection(providerID: .gemini, modelID: GeminiClient.defaultModelID)
+            LLMModelSelection(
+                providerID: .gemini,
+                modelID: LLMModelCatalog.defaultModelID(for: .gemini)
+            )
         )
         XCTAssertEqual(
             settings.voice.selectedModel,
@@ -145,11 +157,17 @@ final class LLMSettingsMigrationTests: XCTestCase {
 
         XCTAssertEqual(
             settings.grammar.selectedModel,
-            LLMModelSelection(providerID: .openAI, modelID: OpenAIClient.defaultModelID)
+            LLMModelSelection(
+                providerID: .openAI,
+                modelID: LLMModelCatalog.defaultModelID(for: .openAI)
+            )
         )
         XCTAssertEqual(
             settings.screenText.selectedModel,
-            LLMModelSelection(providerID: .openAI, modelID: OpenAIClient.defaultModelID)
+            LLMModelSelection(
+                providerID: .openAI,
+                modelID: LLMModelCatalog.defaultModelID(for: .openAI)
+            )
         )
         XCTAssertEqual(
             settings.voice.selectedModel,
