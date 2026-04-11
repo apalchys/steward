@@ -5,7 +5,7 @@ status: done
 
 # Summary
 
-Add persisted settings for a user-configurable voice dictation hotkey.
+Add persisted settings for a user-configurable Dictate hotkey.
 
 # Scope
 

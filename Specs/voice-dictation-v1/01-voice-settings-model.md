@@ -26,5 +26,5 @@ Add voice-specific persisted settings to the existing app settings model and cho
 # Acceptance Criteria
 
 - Existing users load with valid default voice settings.
-- Voice settings round-trip through the settings store.
-- Grammar, OCR, and clipboard settings behavior does not change.
+- Dictate settings round-trip through the settings store.
+- Refine, Capture, and clipboard settings behavior does not change.

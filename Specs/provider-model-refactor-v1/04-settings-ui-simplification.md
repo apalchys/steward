@@ -18,6 +18,6 @@ Move provider setup to General and simplify feature tabs to model selection plus
 # Acceptance Criteria
 
 - General contains provider API key setup.
-- Grammar, Screen Text, and Voice each expose a single model picker labeled with provider and model.
+- Refine, Capture, and Dictate each expose a single model picker labeled with provider and model.
 - Feature tabs no longer ask for provider selection or API keys.
 - A missing compatible model is explained with a clear message pointing the user to General.

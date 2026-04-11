@@ -31,11 +31,11 @@ final class AppState: ObservableObject {
         var statusPrefix: String {
             switch self {
             case .grammar:
-                return "Grammar"
+                return "Refine"
             case .ocr:
-                return "Screen Text"
+                return "Capture"
             case .voice:
-                return "Voice Dictation"
+                return "Dictate"
             }
         }
 
@@ -362,13 +362,13 @@ final class AppState: ObservableObject {
 
     private func setupHotKeys() {
         let grammarShortcut = AppShortcut(
-            title: "Grammar Check",
+            title: "Refine",
             key: .f,
             modifiers: [.command, .shift],
             displayValue: AppHotKey.grammarCheck.readableDisplayValue
         )
         let screenOCRShortcut = AppShortcut(
-            title: "Screen Text Capture",
+            title: "Capture",
             key: .r,
             modifiers: [.command, .shift],
             displayValue: AppHotKey.screenTextCapture.readableDisplayValue
@@ -776,7 +776,7 @@ final class AppState: ObservableObject {
         }
 
         let voiceShortcut = AppShortcut(
-            title: "Voice Dictation",
+            title: "Dictate",
             key: requestedHotKey.key ?? .d,
             modifiers: requestedHotKey.modifiers,
             displayValue: requestedHotKey.readableDisplayValue
@@ -828,11 +828,9 @@ final class AppState: ObservableObject {
     private func voiceShortcutMessage(for hotKey: AppHotKey, error: AppHotKeyValidationError) -> String {
         switch error {
         case .conflictsWithFeature(let featureName):
-            return
-                "Shortcut unavailable: Voice Dictation (\(hotKey.readableDisplayValue)) conflicts with \(featureName)."
+            return "Shortcut unavailable: Dictate (\(hotKey.readableDisplayValue)) conflicts with \(featureName)."
         case .unavailable:
-            return
-                "Shortcut unavailable: Voice Dictation (\(hotKey.readableDisplayValue)) is already in use by another app."
+            return "Shortcut unavailable: Dictate (\(hotKey.readableDisplayValue)) is already in use by another app."
         case .requiresModifier, .requiresNonModifierKey, .requiresMouseButton:
             return error.localizedDescription
         }

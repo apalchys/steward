@@ -126,7 +126,7 @@ final class AppStateTests: XCTestCase {
 
         XCTAssertEqual(
             appState.shortcutRegistrationMessage,
-            "Shortcut unavailable: Grammar Check (Command-Shift-F) is already in use by another app."
+            "Shortcut unavailable: Refine (Command-Shift-F) is already in use by another app."
         )
     }
 
@@ -149,7 +149,7 @@ final class AppStateTests: XCTestCase {
 
         XCTAssertEqual(
             appState.shortcutRegistrationMessage,
-            "Shortcut unavailable: Voice Dictation (Command-Shift-D) is already in use by another app."
+            "Shortcut unavailable: Dictate (Command-Shift-D) is already in use by another app."
         )
     }
 
@@ -240,7 +240,7 @@ final class AppStateTests: XCTestCase {
         XCTAssertTrue(appSystemServices.checkedHotKeys.isEmpty)
         XCTAssertEqual(
             appState.shortcutRegistrationMessage,
-            "Shortcut unavailable: Voice Dictation (Command-Shift-F) conflicts with Grammar Check."
+            "Shortcut unavailable: Dictate (Command-Shift-F) conflicts with Refine."
         )
     }
 
@@ -259,7 +259,7 @@ final class AppStateTests: XCTestCase {
 
         XCTAssertEqual(
             appState.validateVoiceHotKey(.grammarCheck),
-            .conflictsWithFeature("Grammar Check")
+            .conflictsWithFeature("Refine")
         )
     }
 
@@ -610,7 +610,7 @@ final class AppStateTests: XCTestCase {
         await Task.yield()
 
         XCTAssertEqual(router.checkedSelections, [voiceSelection])
-        XCTAssertEqual(appState.voiceStatusTitle, "Voice Dictation: OpenAI Ready")
+        XCTAssertEqual(appState.voiceStatusTitle, "Dictate: OpenAI Ready")
     }
 }
 

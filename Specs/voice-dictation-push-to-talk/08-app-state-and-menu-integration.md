@@ -5,7 +5,7 @@ status: done
 
 # Summary
 
-Wire the configurable push-to-talk dictation shortcut through app state, menu status, and settings refresh.
+Wire the configurable Dictate push-to-talk shortcut through app state, menu status, and settings refresh.
 
 # Scope
 

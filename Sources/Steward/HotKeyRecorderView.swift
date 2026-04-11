@@ -13,16 +13,18 @@ struct HotKeyRecorderView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
                 Button(action: startRecording) {
-                    Text(isRecording ? "Press key or click button" : hotKey.displayValue)
+                    Text(isRecording ? "Press key or mouse" : hotKey.displayValue)
                         .font(.system(.body, design: .monospaced))
-                        .frame(minWidth: 140)
+                        .frame(minWidth: 160)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.bordered)
+                .controlSize(.large)
 
                 Button("Restore Default") {
                     apply(defaultHotKey)
                 }
                 .buttonStyle(.bordered)
+                .controlSize(.large)
                 .disabled(hotKey == defaultHotKey)
             }
 

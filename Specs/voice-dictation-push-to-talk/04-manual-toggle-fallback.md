@@ -9,7 +9,7 @@ Keep a non-hotkey fallback path for dictation so the menu action still works wit
 
 # Scope
 
-- Preserve the Voice Dictation menu item as a manual toggle fallback.
+- Preserve the Dictate menu item as a manual toggle fallback.
 - Separate manual toggle behavior from push-to-talk hotkey behavior in the coordinator.
 - Ensure a key-up event from the global hotkey cannot stop a session started from the menu item.
 - Keep the same provider, insertion, and clipboard-fallback behavior across both entry paths.

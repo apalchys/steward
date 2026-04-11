@@ -11,15 +11,15 @@ enum AppHotKeyValidationError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .requiresModifier:
-            return "Voice Dictation shortcuts must include at least one modifier key."
+            return "Dictate shortcuts must include at least one modifier key."
         case .requiresNonModifierKey:
-            return "Voice Dictation shortcuts must include a non-modifier key."
+            return "Dictate shortcuts must include a non-modifier key."
         case .requiresMouseButton:
-            return "Voice Dictation mouse shortcuts must use an extra mouse button."
+            return "Dictate mouse shortcuts must use an extra mouse button."
         case .conflictsWithFeature(let featureName):
-            return "Voice Dictation shortcut conflicts with \(featureName)."
+            return "Dictate shortcut conflicts with \(featureName)."
         case .unavailable:
-            return "Voice Dictation shortcut is already in use by another app."
+            return "Dictate shortcut is already in use by another app."
         }
     }
 }
@@ -30,11 +30,11 @@ struct AppHotKeyValidator {
         isShortcutAvailable: (Key, NSEvent.ModifierFlags) -> Bool
     ) -> AppHotKeyValidationError? {
         if hotKey == .grammarCheck {
-            return .conflictsWithFeature("Grammar Check")
+            return .conflictsWithFeature("Refine")
         }
 
         if hotKey == .screenTextCapture {
-            return .conflictsWithFeature("Screen Text Capture")
+            return .conflictsWithFeature("Capture")
         }
 
         if hotKey.isMouseButton {

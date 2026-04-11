@@ -1,5 +1,5 @@
 ---
-name: Voice Dictation Coordinator
+name: Dictate Coordinator
 status: done
 ---
 
@@ -26,7 +26,7 @@ Add a coordinator that owns the full voice workflow from permission check throug
 
 # Acceptance Criteria
 
-- Starting voice dictation opens a new recording session.
+- Starting Dictate opens a new recording session.
 - Stopping or confirming sends one provider request and inserts the result.
 - Canceling ends the session without sending audio.
 - Failed insertion copies the transcript to the clipboard instead of losing it.

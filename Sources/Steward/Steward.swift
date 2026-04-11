@@ -85,17 +85,17 @@ private struct AppMenuView: View {
 
     var body: some View {
         Group {
-            Button("Grammar Check") {
+            Button("Refine") {
                 appState.runGrammarAction()
             }
             .keyboardShortcut("f", modifiers: [.command, .shift])
 
-            Button("Screen Text Capture") {
+            Button("Capture") {
                 appState.runScreenOCRAction()
             }
             .keyboardShortcut("r", modifiers: [.command, .shift])
 
-            Button("Voice Dictation") {
+            Button("Dictate") {
                 appState.runVoiceDictationAction()
             }
 

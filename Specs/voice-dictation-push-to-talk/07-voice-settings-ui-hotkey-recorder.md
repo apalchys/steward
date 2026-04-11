@@ -9,7 +9,7 @@ Replace the fixed voice shortcut label in Preferences with a configurable shortc
 
 # Scope
 
-- Add a shortcut recorder control to the Voice settings tab.
+- Add a shortcut recorder control to the Dictate settings tab.
 - Show the current saved voice hotkey.
 - Let the user capture a new shortcut and restore the default.
 - Surface inline validation errors for invalid or conflicting shortcuts.
@@ -17,5 +17,5 @@ Replace the fixed voice shortcut label in Preferences with a configurable shortc
 
 # Acceptance Criteria
 
-- Users can change the dictation hotkey from Preferences.
+- Users can change the Dictate hotkey from Preferences.
 - Invalid combinations are not saved.

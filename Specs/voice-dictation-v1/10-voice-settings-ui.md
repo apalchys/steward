@@ -1,15 +1,15 @@
 ---
-name: Voice Settings UI
+name: Dictate Settings UI
 status: done
 ---
 
 # Summary
 
-Add a dedicated Voice tab to Preferences so the feature can be configured independently.
+Add a dedicated Dictate tab to Preferences so the feature can be configured independently.
 
 # Scope
 
-- Add a `Voice` tab to `SettingsView`.
+- Add a `Dictate` tab to `SettingsView`.
 - Include:
   - provider picker for Gemini vs OpenAI
   - API key entry for the selected provider
@@ -21,6 +21,6 @@ Add a dedicated Voice tab to Preferences so the feature can be configured indepe
 
 # Acceptance Criteria
 
-- Users can configure voice provider, model, and custom instructions independently of grammar and OCR.
-- Provider-specific credentials already stored in settings remain reusable in the Voice tab.
-- Changing Voice settings updates the saved configuration immediately.
+- Users can configure Dictate provider, model, and custom instructions independently of Refine and Capture.
+- Provider-specific credentials already stored in settings remain reusable in the Dictate tab.
+- Changing Dictate settings updates the saved configuration immediately.

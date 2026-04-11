@@ -25,11 +25,11 @@ enum LLMFeature: String, CaseIterable, Hashable {
     var displayName: String {
         switch self {
         case .grammar:
-            return "Grammar"
+            return "Refine"
         case .screenText:
-            return "Screen Text"
+            return "Capture"
         case .voice:
-            return "Voice Dictation"
+            return "Dictate"
         }
     }
 }
@@ -109,7 +109,7 @@ enum GrammarCoordinatorError: LocalizedError {
         case .noSelectedText:
             return "No selected text was found."
         case .invalidProviderResponse:
-            return "Provider returned an invalid response for grammar correction."
+            return "Provider returned an invalid Refine response."
         }
     }
 }
@@ -123,13 +123,13 @@ enum ScreenOCRCoordinatorError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .permissionDenied:
-            return "Screen Recording permission is required for Screen Text."
+            return "Screen Recording permission is required for Capture."
         case .cancelled:
-            return "Screen Text capture was cancelled."
+            return "Capture was cancelled."
         case .couldNotCaptureImage:
             return "Could not capture the selected screen region."
         case .invalidProviderResponse:
-            return "Provider returned an invalid Screen Text response."
+            return "Provider returned an invalid Capture response."
         }
     }
 }

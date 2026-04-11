@@ -47,12 +47,11 @@ enum VoiceDictationCoordinatorError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .permissionDenied:
-            return "Microphone permission is required for Voice Dictation."
+            return "Microphone permission is required for Dictate."
         case .invalidProviderResponse:
-            return "Provider returned an invalid Voice Dictation response."
+            return "Provider returned an invalid Dictate response."
         case .insertionFailedCopiedToClipboard:
-            return
-                "Voice Dictation copied the transcript to the clipboard because it could not insert it into the focused app."
+            return "Dictate copied the transcript to the clipboard because it could not insert it into the focused app."
         }
     }
 }
