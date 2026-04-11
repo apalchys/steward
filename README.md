@@ -30,12 +30,13 @@ Steward uses curated OpenAI and Gemini model lists. Providers are unlocked in `P
 
 ### Dictate
 
-1. Hold the configured shortcut. Default: `Command+Shift+D`.
-2. Speak while Steward records.
-3. Release the shortcut to transcribe and insert the result.
-4. If Dictate is started from the menu bar item, Steward uses a manual toggle flow with `Cancel` and `OK`.
+1. Hold the push-to-talk shortcut to record. Default: `Command+Shift+D`.
+2. Or press the regular Dictate shortcut to start recording, then press it again to stop. Default: `Command+Option+D`.
+3. If Dictate is started from the menu bar item, Steward uses the same manual toggle flow with `Cancel` and `OK`.
+4. Steward can bias recognition toward up to 5 preferred languages, or auto-detect when none are selected.
+5. Optional translate mode inserts only the translated output in the configured target language.
 
-Dictate preserves the spoken language, applies punctuation and paragraph formatting, and falls back to the clipboard if direct insertion fails.
+Dictate preserves the spoken language by default, applies punctuation and paragraph formatting, and falls back to the clipboard if direct insertion fails.
 
 ### Clipboard History
 
@@ -59,7 +60,7 @@ First launch:
 3. Grant Microphone permission for Dictate.
 4. Grant Screen Recording permission for Capture.
 5. Open `Preferences > Providers` and add API keys for the providers you want.
-6. Open `Preferences > Refine`, `Capture`, and `Dictate` to choose models and optional custom instructions.
+6. Open `Preferences > Refine`, `Capture`, and `Dictate` to choose models, shortcuts, language preferences, and optional custom instructions.
 
 ## Build
 
