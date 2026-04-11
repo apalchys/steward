@@ -1,4 +1,5 @@
 import AppKit
+import StewardCore
 import SwiftUI
 
 struct SettingsView: View {
@@ -172,10 +173,26 @@ struct SettingsView: View {
             SettingsListDivider()
 
             HotKeyRecorderView(
-                hotKey: $settings.voice.hotKey,
+                hotKey: $settings.voice.pushToTalkHotKey,
                 defaultHotKey: .defaultVoiceDictation,
-                validate: { appState.validateDictateHotKey($0) }
+                validate: { appState.validatePushToTalkDictateHotKey($0) }
             )
+
+            SettingsListDivider()
+
+            HotKeyRecorderView(
+                hotKey: $settings.voice.regularModeHotKey,
+                defaultHotKey: .defaultVoiceDictationRegular,
+                validate: { appState.validateRegularDictateHotKey($0) }
+            )
+
+            SettingsListDivider()
+
+            dictateRecognitionLanguagesSection
+
+            SettingsListDivider()
+
+            dictateTranslationSection
 
             SettingsListDivider()
 
@@ -507,6 +524,139 @@ struct SettingsView: View {
             }
         )
     }
+
+    private var dictateTranslationTargetBinding: Binding<VoiceLanguage?> {
+        Binding(
+            get: {
+                settings.voice.translationTargetLanguage
+            },
+            set: { newValue in
+                settings.voice.translationTargetLanguage = newValue
+            }
+        )
+    }
+
+    private var availableRecognitionLanguagesToAdd: [VoiceLanguage] {
+        VoiceLanguage.allCases.filter { !settings.voice.preferredRecognitionLanguages.contains($0) }
+    }
+
+    private var canAddRecognitionLanguage: Bool {
+        settings.voice.preferredRecognitionLanguages.count < VoiceSettings.maxPreferredRecognitionLanguages
+            && !availableRecognitionLanguagesToAdd.isEmpty
+    }
+
+    private var dictateRecognitionLanguagesSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Recognition Languages")
+                .font(.body)
+
+            Text("Help Dictate recognize up to 5 likely languages. Leave empty for automatic detection.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            if settings.voice.preferredRecognitionLanguages.isEmpty {
+                SettingsListInfoRow(text: "No preferred languages selected. Dictate will auto-detect spoken language.")
+            } else {
+                ForEach(settings.voice.preferredRecognitionLanguages.indices, id: \.self) { index in
+                    DictateLanguageSelectionRow(
+                        title: "Language \(index + 1)",
+                        selection: recognitionLanguageBinding(at: index),
+                        availableLanguages: availableLanguagesForRecognitionRow(at: index),
+                        onRemove: {
+                            removeRecognitionLanguage(at: index)
+                        }
+                    )
+                }
+            }
+
+            if canAddRecognitionLanguage {
+                Button("Add Language") {
+                    addRecognitionLanguage()
+                }
+            } else if settings.voice.preferredRecognitionLanguages.count
+                >= VoiceSettings.maxPreferredRecognitionLanguages
+            {
+                SettingsListInfoRow(text: "Maximum 5 preferred languages.", foregroundStyle: .secondary)
+            }
+        }
+        .padding(.vertical, 14)
+    }
+
+    private var dictateTranslationSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SettingsRow(
+                title: "Translate Output",
+                description: "Translate recognized text automatically before insertion."
+            ) {
+                Toggle("", isOn: $settings.voice.translateToLanguageEnabled)
+                    .labelsHidden()
+            }
+
+            if settings.voice.translateToLanguageEnabled {
+                SettingsListRow(title: "Target Language") {
+                    Picker("Target Language", selection: dictateTranslationTargetBinding) {
+                        Text("Select language")
+                            .tag(Optional<VoiceLanguage>.none)
+
+                        ForEach(VoiceLanguage.allCases) { language in
+                            Text(language.displayName)
+                                .tag(Optional(language))
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .controlSize(.large)
+                    .frame(minWidth: 280, alignment: .trailing)
+                }
+
+                if settings.voice.translationTargetLanguage == nil {
+                    SettingsListInfoRow(
+                        text: "Choose a target language to finish enabling translation.",
+                        foregroundStyle: .red
+                    )
+                }
+            }
+        }
+        .padding(.vertical, 14)
+    }
+
+    private func recognitionLanguageBinding(at index: Int) -> Binding<VoiceLanguage> {
+        Binding(
+            get: {
+                settings.voice.preferredRecognitionLanguages[index]
+            },
+            set: { newValue in
+                guard settings.voice.preferredRecognitionLanguages.indices.contains(index) else {
+                    return
+                }
+
+                settings.voice.preferredRecognitionLanguages[index] = newValue
+            }
+        )
+    }
+
+    private func availableLanguagesForRecognitionRow(at index: Int) -> [VoiceLanguage] {
+        let selectedLanguage = settings.voice.preferredRecognitionLanguages[index]
+        return VoiceLanguage.allCases.filter {
+            $0 == selectedLanguage || !settings.voice.preferredRecognitionLanguages.contains($0)
+        }
+    }
+
+    private func addRecognitionLanguage() {
+        guard let nextLanguage = availableRecognitionLanguagesToAdd.first else {
+            return
+        }
+
+        settings.voice.preferredRecognitionLanguages.append(nextLanguage)
+    }
+
+    private func removeRecognitionLanguage(at index: Int) {
+        guard settings.voice.preferredRecognitionLanguages.indices.contains(index) else {
+            return
+        }
+
+        settings.voice.preferredRecognitionLanguages.remove(at: index)
+    }
 }
 
 private enum SettingsPane: String, CaseIterable, Identifiable {
@@ -550,7 +700,7 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
         case .capture:
             return "Model and prompt settings for capture-to-Markdown extraction."
         case .dictate:
-            return "Model, shortcut, and prompt settings for Dictate push-to-talk."
+            return "Model, shortcut, language, and prompt settings for Dictate."
         case .clipboard:
             return "Local clipboard history capture, retention, and cleanup."
         case .about:
@@ -852,6 +1002,36 @@ private struct SettingsInlineEditorSection: View {
                 )
         }
         .padding(.vertical, 14)
+    }
+}
+
+private struct DictateLanguageSelectionRow: View {
+    let title: String
+    @Binding var selection: VoiceLanguage
+    let availableLanguages: [VoiceLanguage]
+    let onRemove: () -> Void
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Text(title)
+                .font(.body)
+
+            Spacer(minLength: 16)
+
+            Picker(title, selection: $selection) {
+                ForEach(availableLanguages) { language in
+                    Text(language.displayName)
+                        .tag(language)
+                }
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .controlSize(.large)
+            .frame(minWidth: 220, alignment: .trailing)
+
+            Button("Remove", action: onRemove)
+        }
+        .frame(minHeight: 36)
     }
 }
 

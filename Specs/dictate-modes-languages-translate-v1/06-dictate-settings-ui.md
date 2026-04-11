@@ -1,6 +1,6 @@
 ---
 name: Dictate Settings UI
-status: todo
+status: done
 ---
 
 # Summary
@@ -20,4 +20,3 @@ Expose new Dictate mode, language, and translation settings in Preferences using
 - Users can configure both Dictate shortcuts.
 - Users can add up to 5 preferred languages from the fixed catalog.
 - Enabling translate mode requires selecting a target language.
-
