@@ -175,25 +175,26 @@ private struct VoiceRecordingPillView: View {
     @ObservedObject var model: VoiceRecordingPillViewModel
 
     var body: some View {
-        Group {
-            switch model.state {
-            case .interactiveRecording:
-                interactiveBody
-            case .passiveRecording, .transcribing:
-                passiveBody
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(
+        ZStack {
             Capsule(style: .continuous)
                 .fill(Color.black.opacity(0.96))
                 .overlay(
                     Capsule(style: .continuous)
                         .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
                 )
-                .shadow(color: Color.black.opacity(0.22), radius: 12, y: 6)
-        )
+
+            Group {
+                switch model.state {
+                case .interactiveRecording:
+                    interactiveBody
+                case .passiveRecording, .transcribing:
+                    passiveBody
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+        }
+        .frame(width: 220, height: 66)
     }
 
     @ViewBuilder
