@@ -95,28 +95,22 @@ struct SettingsView: View {
             providersPane
         case .grammar:
             featurePane(
-                title: "Refine",
-                featureDescription: "Pick a Refine model and optional instructions for rewrite guidance.",
+                featureDescription: "Pick a Refine model from the available options.",
                 feature: .grammar,
                 selection: grammarModelBinding,
-                instructions: $settings.grammar.customInstructions,
                 emptyStateMessage: "Add a provider API key in Providers to unlock Refine models.",
-                instructionsTitle: "Custom instructions",
+                instructions: $settings.grammar.customInstructions,
                 instructionsDescription: "Optional guidance applied when Steward refines selected text.",
-                footer: "Steward preserves your text intent and applies the model you choose here."
             )
         case .screenText:
             featurePane(
-                title: "Capture",
-                featureDescription: "Choose a model for OCR and optional formatting instructions.",
+                featureDescription: "Pick a Capture model from the available options.",
                 feature: .screenText,
                 selection: screenTextModelBinding,
-                instructions: $settings.screenText.customInstructions,
                 emptyStateMessage: "Add a provider API key in Providers to unlock Capture models.",
-                instructionsTitle: "Custom instructions",
+                instructions: $settings.screenText.customInstructions,
                 instructionsDescription:
                     "Optional guidance applied when Capture converts selected content into Markdown.",
-                footer: "Use concise instructions to control headings, lists, and formatting."
             )
         case .voice:
             voicePane
@@ -139,14 +133,13 @@ struct SettingsView: View {
                         .disabled(appState.isUpdatingLaunchAtLogin)
                 }
 
-                SettingsInsetDivider()
-
                 if let launchAtLoginMessage = appState.launchAtLoginMessage {
-                    SettingsInfoRow(text: launchAtLoginMessage)
                     SettingsInsetDivider()
+                    SettingsInfoRow(text: launchAtLoginMessage)
                 }
 
                 if appState.shouldShowOpenLoginItemsAction {
+
                     SettingsButtonRow(
                         title: "Login Items",
                         description: "Open System Settings if Steward cannot update the login item directly.",
@@ -154,13 +147,6 @@ struct SettingsView: View {
                         action: appState.openLoginItemsSettings
                     )
                 }
-            }
-
-            SettingsSectionCard {
-                SettingsInfoRow(
-                    text:
-                        "Provider setup moved to Providers. Configure API keys there, then return here to manage app behavior."
-                )
             }
         }
     }
@@ -176,15 +162,12 @@ struct SettingsView: View {
     private var voicePane: some View {
         VStack(alignment: .leading, spacing: 20) {
             featurePane(
-                title: "Dictate",
-                featureDescription: "Choose a transcription model and optional instructions for Dictate cleanup.",
+                featureDescription: "Pick a Dictate model from the available options.",
                 feature: .voice,
                 selection: voiceModelBinding,
-                instructions: $settings.voice.customInstructions,
                 emptyStateMessage: "Add a provider API key in Providers to unlock Dictate models.",
-                instructionsTitle: "Custom instructions",
+                instructions: $settings.voice.customInstructions,
                 instructionsDescription: "Optional guidance applied after speech is transcribed.",
-                footer: "Dictate keeps the spoken language, applies punctuation, and formats text automatically."
             )
 
             SettingsSectionCard(
@@ -288,38 +271,31 @@ struct SettingsView: View {
     }
 
     private func featurePane(
-        title: String,
         featureDescription: String,
         feature: LLMFeature,
         selection: Binding<LLMModelSelection?>,
-        instructions: Binding<String>,
         emptyStateMessage: String,
-        instructionsTitle: String,
+        instructions: Binding<String>,
         instructionsDescription: String,
-        footer: String
     ) -> some View {
         VStack(alignment: .leading, spacing: 20) {
-            SettingsSectionCard(
-                title: "Model",
-                description: featureDescription
-            ) {
-                modelPickerRow(
-                    feature: feature,
-                    selection: selection,
-                    emptyStateMessage: emptyStateMessage
-                )
+            SettingsSectionCard(title: "Model") {
+                VStack(alignment: .leading, spacing: 14) {
+                    SettingsInfoRow(text: featureDescription)
+
+                    modelPickerRow(
+                        feature: feature,
+                        selection: selection,
+                        emptyStateMessage: emptyStateMessage
+                    )
+                }
             }
 
             SettingsEditorCard(
-                title: instructionsTitle,
+                title: "Custom Instructions",
                 description: instructionsDescription,
                 text: instructions
             )
-
-            Text(footer)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
         }
     }
 
@@ -408,19 +384,15 @@ struct SettingsView: View {
         if availableModels.isEmpty {
             SettingsInfoRow(text: emptyStateMessage)
         } else {
-            SettingsRow(
-                title: "Selected model",
-                description: "Only models compatible with this feature are shown."
-            ) {
-                Picker("Selected model", selection: selection) {
-                    ForEach(availableModels) { entry in
-                        Text(entry.selection.pickerLabel)
-                            .tag(Optional(entry.selection))
-                    }
+            Picker("Model", selection: selection) {
+                ForEach(availableModels) { entry in
+                    Text(entry.selection.pickerLabel)
+                        .tag(Optional(entry.selection))
                 }
-                .pickerStyle(.menu)
-                .frame(width: 280, alignment: .trailing)
             }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .frame(width: 320)
         }
     }
 
