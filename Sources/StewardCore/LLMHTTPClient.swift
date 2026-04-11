@@ -148,10 +148,10 @@ func llmApiErrorMessage(from data: Data?) -> String? {
     return message?.trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
-// MARK: - Shared OCR prompt
+// MARK: - Shared Capture prompt
 
 private let ocrInstruction = """
-    You are an OCR assistant. Extract all visible text from the provided image and return only the extracted text in Markdown.
+    You are an Capture assistant. Extract all visible text from the provided image and return only the extracted text in Markdown.
     Preserve headings, paragraphs, lists, tables, and code blocks when they are visually clear.
     Do not add explanations, summaries, or commentary.
     """

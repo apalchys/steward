@@ -10,7 +10,7 @@ Add a code-only curated model catalog that declares provider, raw model ID, and 
 # Scope
 
 - Introduce a central curated model catalog source file.
-- Define the feature capability matrix for grammar, screen text, and voice per model entry.
+- Define the feature capability matrix for refine, screen text, and voice per model entry.
 - Add helpers to filter models by feature and enabled providers.
 - Add fallback and sanitization logic that uses catalog order as the priority mechanism.
 

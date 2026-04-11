@@ -118,7 +118,7 @@ public struct OpenAIClient: Sendable {
         }
     }
 
-    public func correctGrammar(
+    public func refineText(
         apiKey: String,
         modelID: String,
         customInstructions: String,
@@ -131,7 +131,7 @@ public struct OpenAIClient: Sendable {
 
         let requestBody = ResponsesRequest(
             model: resolvedModelID,
-            instructions: buildGrammarPrompt(customInstructions: customInstructions),
+            instructions: buildRefinePrompt(customInstructions: customInstructions),
             input: text,
             reasoning: reasoningEffort(for: resolvedModelID).map { ResponsesRequest.Reasoning(effort: $0) }
         )

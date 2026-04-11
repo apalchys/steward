@@ -28,4 +28,4 @@ Add focused automated coverage for the new voice feature without weakening exist
 # Acceptance Criteria
 
 - New voice feature behavior is covered at settings, coordinator, app-state, and provider-client levels.
-- Existing test suites continue to pass without changed expectations for grammar, OCR, or clipboard history.
+- Existing test suites continue to pass without changed expectations for refine, Capture, or clipboard history.

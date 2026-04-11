@@ -26,7 +26,7 @@ public struct LLMHealthCheckResult: Sendable, Equatable {
 }
 
 public protocol LLMClient: Sendable {
-    func correctGrammar(
+    func refineText(
         apiKey: String,
         modelID: String,
         customInstructions: String,

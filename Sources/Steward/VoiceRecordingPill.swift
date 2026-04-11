@@ -30,6 +30,22 @@ protocol VoiceRecordingPillWindowing: AnyObject {
 
 extension NSPanel: VoiceRecordingPillWindowing {}
 
+private final class TransparentHostingView<Content: View>: NSHostingView<Content> {
+    override var isOpaque: Bool { false }
+
+    required init(rootView: Content) {
+        super.init(rootView: rootView)
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.clear.cgColor
+    }
+
+    @MainActor @preconcurrency required dynamic init?(coder aDecoder: NSCoder) {
+        super.init(coder: aDecoder)
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.clear.cgColor
+    }
+}
+
 @MainActor
 final class VoiceRecordingPillViewModel: ObservableObject {
     @Published private(set) var state: VoiceRecordingPillState = .interactiveRecording(level: 0)
@@ -53,7 +69,7 @@ final class VoiceRecordingPillViewModel: ObservableObject {
 @MainActor
 final class VoiceRecordingPillController: VoiceRecordingPillPresenting {
     private enum UI {
-        static let size = CGSize(width: 228, height: 72)
+        static let size = CGSize(width: 220, height: 66)
         static let bottomMargin: CGFloat = 28
     }
 
@@ -117,7 +133,7 @@ final class VoiceRecordingPillController: VoiceRecordingPillPresenting {
         }
 
         let pillWindow = windowFactory()
-        pillWindow.contentView = NSHostingView(rootView: VoiceRecordingPillView(model: viewModel))
+        pillWindow.contentView = TransparentHostingView(rootView: VoiceRecordingPillView(model: viewModel))
         self.pillWindow = pillWindow
         return pillWindow
     }
@@ -146,7 +162,7 @@ final class VoiceRecordingPillController: VoiceRecordingPillPresenting {
         )
         panel.backgroundColor = .clear
         panel.isOpaque = false
-        panel.hasShadow = true
+        panel.hasShadow = false
         panel.hidesOnDeactivate = false
         panel.level = .statusBar
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
@@ -167,14 +183,17 @@ private struct VoiceRecordingPillView: View {
                 passiveBody
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
         .background(
             Capsule(style: .continuous)
-                .fill(Color.black.opacity(0.94))
-                .shadow(color: Color.black.opacity(0.28), radius: 18, y: 8)
+                .fill(Color.black.opacity(0.96))
+                .overlay(
+                    Capsule(style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                )
+                .shadow(color: Color.black.opacity(0.22), radius: 12, y: 6)
         )
-        .padding(8)
     }
 
     @ViewBuilder
@@ -205,7 +224,7 @@ private struct VoiceRecordingPillView: View {
 
     private var passiveBody: some View {
         centerContent
-            .frame(minWidth: 72)
+            .frame(minWidth: 84)
     }
 }
 

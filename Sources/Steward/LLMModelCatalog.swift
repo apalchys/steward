@@ -95,11 +95,11 @@ enum LLMModelCatalog {
             models: [
                 LLMProviderModel(
                     modelID: "gpt-5.4",
-                    capabilities: [.grammar, .screenText]
+                    capabilities: [.refine, .screenText]
                 ),
                 LLMProviderModel(
                     modelID: "gpt-5.4-mini",
-                    capabilities: [.grammar, .screenText]
+                    capabilities: [.refine, .screenText]
                 ),
                 LLMProviderModel(
                     modelID: "gpt-4o-mini-transcribe",
@@ -113,11 +113,11 @@ enum LLMModelCatalog {
             models: [
                 LLMProviderModel(
                     modelID: "gemini-3-flash-preview",
-                    capabilities: [.grammar, .screenText, .voice]
+                    capabilities: [.refine, .screenText, .voice]
                 ),
                 LLMProviderModel(
                     modelID: "gemini-3.1-flash-lite-preview",
-                    capabilities: [.grammar, .screenText, .voice]
+                    capabilities: [.refine, .screenText, .voice]
                 ),
             ]
         ),

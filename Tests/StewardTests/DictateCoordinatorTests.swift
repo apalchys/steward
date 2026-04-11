@@ -3,14 +3,14 @@ import XCTest
 @testable import Steward
 
 @MainActor
-final class VoiceDictationCoordinatorTests: XCTestCase {
+final class DictateCoordinatorTests: XCTestCase {
     func testFirstManualToggleStartsRecordingAndShowsPill() async throws {
         let microphoneAccess = FakeMicrophoneAccessProvider(result: true)
         let audioRecordingService = FakeAudioRecordingService()
         let pillPresenter = FakeVoiceRecordingPillPresenter()
         let router = VoiceDictationFakeRouter(result: .success(.text("ignored")))
         let textInteraction = VoiceDictationFakeTextInteraction()
-        let coordinator = VoiceDictationCoordinator(
+        let coordinator = DictateCoordinator(
             microphoneAccess: microphoneAccess,
             audioRecordingService: audioRecordingService,
             recordingPillPresenter: pillPresenter,
@@ -38,7 +38,7 @@ final class VoiceDictationCoordinatorTests: XCTestCase {
             selectedModel: LLMModelSelection(providerID: .gemini, modelID: "voice-model-gemini"),
             customInstructions: "Keep mixed languages"
         )
-        let coordinator = VoiceDictationCoordinator(
+        let coordinator = DictateCoordinator(
             microphoneAccess: microphoneAccess,
             audioRecordingService: audioRecordingService,
             recordingPillPresenter: pillPresenter,
@@ -65,7 +65,7 @@ final class VoiceDictationCoordinatorTests: XCTestCase {
         let audioRecordingService = FakeAudioRecordingService()
         let pillPresenter = FakeVoiceRecordingPillPresenter()
         let router = VoiceDictationFakeRouter(result: .success(.text("ignored")))
-        let coordinator = VoiceDictationCoordinator(
+        let coordinator = DictateCoordinator(
             microphoneAccess: microphoneAccess,
             audioRecordingService: audioRecordingService,
             recordingPillPresenter: pillPresenter,
@@ -89,7 +89,7 @@ final class VoiceDictationCoordinatorTests: XCTestCase {
         let pillPresenter = FakeVoiceRecordingPillPresenter()
         let router = VoiceDictationFakeRouter(result: .success(.text("Dictated text")))
         let textInteraction = VoiceDictationFakeTextInteraction(replaceError: TextInteractionError.couldNotReplaceSelectedText)
-        let coordinator = VoiceDictationCoordinator(
+        let coordinator = DictateCoordinator(
             microphoneAccess: microphoneAccess,
             audioRecordingService: audioRecordingService,
             recordingPillPresenter: pillPresenter,
@@ -104,7 +104,7 @@ final class VoiceDictationCoordinatorTests: XCTestCase {
             try await coordinator.handleManualToggleAction()
             XCTFail("Expected insertion fallback error")
         } catch {
-            XCTAssertEqual(error as? VoiceDictationCoordinatorError, .insertionFailedCopiedToClipboard)
+            XCTAssertEqual(error as? DictateCoordinatorError, .insertionFailedCopiedToClipboard)
             XCTAssertEqual(textInteraction.copiedText, "Dictated text")
         }
     }
@@ -112,7 +112,7 @@ final class VoiceDictationCoordinatorTests: XCTestCase {
     func testPermissionDeniedFailsBeforeRecordingStarts() async {
         let microphoneAccess = FakeMicrophoneAccessProvider(result: false)
         let audioRecordingService = FakeAudioRecordingService()
-        let coordinator = VoiceDictationCoordinator(
+        let coordinator = DictateCoordinator(
             microphoneAccess: microphoneAccess,
             audioRecordingService: audioRecordingService,
             recordingPillPresenter: FakeVoiceRecordingPillPresenter(),
@@ -125,7 +125,7 @@ final class VoiceDictationCoordinatorTests: XCTestCase {
             try await coordinator.handleManualToggleAction()
             XCTFail("Expected microphone permission error")
         } catch {
-            XCTAssertEqual(error as? VoiceDictationCoordinatorError, .permissionDenied)
+            XCTAssertEqual(error as? DictateCoordinatorError, .permissionDenied)
             XCTAssertEqual(audioRecordingService.startRecordingCallCount, 0)
         }
     }
@@ -135,7 +135,7 @@ final class VoiceDictationCoordinatorTests: XCTestCase {
         let audioRecordingService = FakeAudioRecordingService(payload: RecordedAudioPayload(data: Data("audio".utf8), mimeType: "audio/wav"))
         let pillPresenter = FakeVoiceRecordingPillPresenter()
         let router = VoiceDictationFakeRouter(result: .failure(VoiceDictationTestError.failed))
-        let coordinator = VoiceDictationCoordinator(
+        let coordinator = DictateCoordinator(
             microphoneAccess: microphoneAccess,
             audioRecordingService: audioRecordingService,
             recordingPillPresenter: pillPresenter,
@@ -158,7 +158,7 @@ final class VoiceDictationCoordinatorTests: XCTestCase {
     func testBlankTranscriptIsRejectedAsInvalidProviderResponse() async throws {
         let microphoneAccess = FakeMicrophoneAccessProvider(result: true)
         let audioRecordingService = FakeAudioRecordingService(payload: RecordedAudioPayload(data: Data("audio".utf8), mimeType: "audio/wav"))
-        let coordinator = VoiceDictationCoordinator(
+        let coordinator = DictateCoordinator(
             microphoneAccess: microphoneAccess,
             audioRecordingService: audioRecordingService,
             recordingPillPresenter: FakeVoiceRecordingPillPresenter(),
@@ -173,13 +173,13 @@ final class VoiceDictationCoordinatorTests: XCTestCase {
             try await coordinator.handleManualToggleAction()
             XCTFail("Expected invalid provider response error")
         } catch {
-            XCTAssertEqual(error as? VoiceDictationCoordinatorError, .invalidProviderResponse)
+            XCTAssertEqual(error as? DictateCoordinatorError, .invalidProviderResponse)
         }
     }
 
     func testPushToTalkKeyDownStartsRecording() async throws {
         let pillPresenter = FakeVoiceRecordingPillPresenter()
-        let coordinator = VoiceDictationCoordinator(
+        let coordinator = DictateCoordinator(
             microphoneAccess: FakeMicrophoneAccessProvider(result: true),
             audioRecordingService: FakeAudioRecordingService(),
             recordingPillPresenter: pillPresenter,
@@ -197,7 +197,7 @@ final class VoiceDictationCoordinatorTests: XCTestCase {
     func testPushToTalkKeyUpStopsRecordingAndTranscribes() async throws {
         let audioRecordingService = FakeAudioRecordingService(payload: RecordedAudioPayload(data: Data("audio".utf8), mimeType: "audio/wav"))
         let textInteraction = VoiceDictationFakeTextInteraction()
-        let coordinator = VoiceDictationCoordinator(
+        let coordinator = DictateCoordinator(
             microphoneAccess: FakeMicrophoneAccessProvider(result: true),
             audioRecordingService: audioRecordingService,
             recordingPillPresenter: FakeVoiceRecordingPillPresenter(),
@@ -216,7 +216,7 @@ final class VoiceDictationCoordinatorTests: XCTestCase {
 
     func testPushToTalkKeyUpDoesNotStopMenuTriggeredRecording() async throws {
         let audioRecordingService = FakeAudioRecordingService()
-        let coordinator = VoiceDictationCoordinator(
+        let coordinator = DictateCoordinator(
             microphoneAccess: FakeMicrophoneAccessProvider(result: true),
             audioRecordingService: audioRecordingService,
             recordingPillPresenter: FakeVoiceRecordingPillPresenter(),

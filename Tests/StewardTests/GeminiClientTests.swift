@@ -59,7 +59,7 @@ final class GeminiClientTests: XCTestCase {
             let systemInstruction = try XCTUnwrap(payload["system_instruction"] as? [String: Any])
             let systemParts = try XCTUnwrap(systemInstruction["parts"] as? [[String: Any]])
             XCTAssertEqual(systemParts.first?["text"] as? String, """
-                You are an OCR assistant. Extract all visible text from the provided image and return only the extracted text in Markdown.
+                You are an Capture assistant. Extract all visible text from the provided image and return only the extracted text in Markdown.
                 Preserve headings, paragraphs, lists, tables, and code blocks when they are visually clear.
                 Do not add explanations, summaries, or commentary.
                 """)
@@ -205,7 +205,7 @@ final class GeminiClientTests: XCTestCase {
         }
     }
 
-    func testCorrectGrammarSuccessParsesOutput() async throws {
+    func testRefineTextSuccessParsesOutput() async throws {
         URLProtocolStub.configure(handler: { request in
             XCTAssertEqual(request.httpMethod, "POST")
             XCTAssertEqual(
@@ -227,7 +227,7 @@ final class GeminiClientTests: XCTestCase {
         })
 
         let client = makeClient()
-        let text = try await client.correctGrammar(
+        let text = try await client.refineText(
             apiKey: "test-key",
             modelID: "gemini-3.1-flash-lite-preview",
             customInstructions: "Keep concise",

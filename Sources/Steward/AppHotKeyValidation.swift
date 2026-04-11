@@ -25,11 +25,11 @@ enum AppHotKeyValidationError: LocalizedError, Equatable {
 }
 
 struct AppHotKeyValidator {
-    static func validateVoiceDictationHotKey(
+    static func validateDictateHotKey(
         _ hotKey: AppHotKey,
         isShortcutAvailable: (Key, NSEvent.ModifierFlags) -> Bool
     ) -> AppHotKeyValidationError? {
-        if hotKey == .grammarCheck {
+        if hotKey == .refine {
             return .conflictsWithFeature("Refine")
         }
 

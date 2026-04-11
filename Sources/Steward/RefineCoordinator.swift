@@ -1,12 +1,12 @@
 import Foundation
 
 @MainActor
-protocol GrammarCoordinating: AnyObject {
+protocol RefineCoordinating: AnyObject {
     func handleHotKeyPress() async throws
 }
 
 @MainActor
-final class GrammarCoordinator: GrammarCoordinating {
+final class RefineCoordinator: RefineCoordinating {
     private let router: LLMRouting
     private let textInteraction: TextInteractionPerforming
     private let settingsStore: AppSettingsProviding
@@ -19,26 +19,26 @@ final class GrammarCoordinator: GrammarCoordinating {
 
     func handleHotKeyPress() async throws {
         guard let selectedText = try await textInteraction.getSelectedText(), !selectedText.isEmpty else {
-            throw GrammarCoordinatorError.noSelectedText
+            throw RefineCoordinatorError.noSelectedText
         }
 
         let settings = settingsStore.loadSettings()
-        guard let selection = settings.grammar.selectedModel else {
-            throw LLMRouterError.featureNotConfigured(LLMFeature.grammar.displayName)
+        guard let selection = settings.refine.selectedModel else {
+            throw LLMRouterError.featureNotConfigured(LLMFeature.refine.displayName)
         }
 
         let request = LLMRequest(
             selection: selection,
-            task: .grammarCorrection(
+            task: .refineText(
                 text: selectedText,
-                customInstructions: settings.grammar.customInstructions
+                customInstructions: settings.refine.customInstructions
             )
         )
 
         let llmResult = try await router.perform(request)
 
         guard let correctedText = llmResult.textValue else {
-            throw GrammarCoordinatorError.invalidProviderResponse
+            throw RefineCoordinatorError.invalidProviderResponse
         }
 
         try await textInteraction.replaceSelectedText(with: correctedText)

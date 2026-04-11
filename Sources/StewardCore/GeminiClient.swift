@@ -183,7 +183,7 @@ public struct GeminiClient: Sendable {
         return extractedText
     }
 
-    public func correctGrammar(
+    public func refineText(
         apiKey: String,
         modelID: String,
         customInstructions: String,
@@ -195,7 +195,7 @@ public struct GeminiClient: Sendable {
         }
 
         let requestBody = GenerateContentRequest(
-            systemInstruction: .init(parts: [.init(text: buildGrammarPrompt(customInstructions: customInstructions))]),
+            systemInstruction: .init(parts: [.init(text: buildRefinePrompt(customInstructions: customInstructions))]),
             contents: [
                 .init(parts: [
                     .init(text: text)

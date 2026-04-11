@@ -3,19 +3,19 @@ import XCTest
 @testable import Steward
 
 @MainActor
-final class GrammarCoordinatorTests: XCTestCase {
+final class RefineCoordinatorTests: XCTestCase {
     func testHandleHotKeyPressSendsRequestThroughRouterAndReplacesTextOnSuccess() async throws {
         let router = FakeRouter(result: .success(.text("corrected")))
         let textInteraction = FakeTextInteraction(selectedText: "bad")
         var settings = LLMSettings.empty()
         settings.providerSettings[.openAI] = LLMProviderSettings(apiKey: "key")
-        settings.grammar = GrammarSettings(
+        settings.refine = RefineSettings(
             selectedModel: LLMModelSelection(providerID: .openAI, modelID: "gpt-5.4"),
             customInstructions: "Use concise language"
         )
         let settingsStore = CoordinatorSettingsStore(settings: settings)
 
-        let coordinator = GrammarCoordinator(router: router, textInteraction: textInteraction, settingsStore: settingsStore)
+        let coordinator = RefineCoordinator(router: router, textInteraction: textInteraction, settingsStore: settingsStore)
 
         try await coordinator.handleHotKeyPress()
 
@@ -25,8 +25,8 @@ final class GrammarCoordinatorTests: XCTestCase {
             return
         }
 
-        guard case let .grammarCorrection(text, customInstructions) = request.task else {
-            XCTFail("Expected grammar task")
+        guard case let .refineText(text, customInstructions) = request.task else {
+            XCTFail("Expected refine task")
             return
         }
 
@@ -40,13 +40,13 @@ final class GrammarCoordinatorTests: XCTestCase {
         let textInteraction = FakeTextInteraction(selectedText: nil)
         let settingsStore = CoordinatorSettingsStore(settings: .empty())
 
-        let coordinator = GrammarCoordinator(router: router, textInteraction: textInteraction, settingsStore: settingsStore)
+        let coordinator = RefineCoordinator(router: router, textInteraction: textInteraction, settingsStore: settingsStore)
 
         do {
             try await coordinator.handleHotKeyPress()
             XCTFail("Expected failure")
         } catch {
-            guard case GrammarCoordinatorError.noSelectedText = error else {
+            guard case RefineCoordinatorError.noSelectedText = error else {
                 XCTFail("Unexpected error: \(error)")
                 return
             }
@@ -63,10 +63,10 @@ final class GrammarCoordinatorTests: XCTestCase {
         let router = FakeRouter(result: .failure(TestError.failed))
         let textInteraction = FakeTextInteraction(selectedText: "bad")
         var settings = LLMSettings.empty()
-        settings.grammar.selectedModel = LLMModelSelection(providerID: .openAI, modelID: "gpt-5.4")
+        settings.refine.selectedModel = LLMModelSelection(providerID: .openAI, modelID: "gpt-5.4")
         let settingsStore = CoordinatorSettingsStore(settings: settings)
 
-        let coordinator = GrammarCoordinator(router: router, textInteraction: textInteraction, settingsStore: settingsStore)
+        let coordinator = RefineCoordinator(router: router, textInteraction: textInteraction, settingsStore: settingsStore)
 
         do {
             try await coordinator.handleHotKeyPress()

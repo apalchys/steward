@@ -9,7 +9,7 @@ Refactor the voice coordinator to support separate push-to-talk and manual-toggl
 
 # Scope
 
-- Extend `VoiceDictationCoordinating` with distinct actions for:
+- Extend `DictateCoordinating` with distinct actions for:
   - push-to-talk key down
   - push-to-talk key up
   - manual toggle action

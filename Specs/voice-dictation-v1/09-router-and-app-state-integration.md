@@ -14,7 +14,7 @@ Wire the voice feature into the app lifecycle, hotkey handling, status tracking,
 - Register fixed shortcut `Command-Shift-D`.
 - Add voice provider health checks and status titles.
 - Add a new menu action for Dictate.
-- Ensure app-level processing rules prevent grammar, OCR, and voice from running at the same time.
+- Ensure app-level processing rules prevent refine, Capture, and voice from running at the same time.
 - Reflect active recording and active transcription as processing states in the status bar.
 
 # Acceptance Criteria

@@ -1,12 +1,12 @@
 import Foundation
 
-private let grammarCorrectionPrompt =
+private let refinePrompt =
     "You are a text refinement assistant. Correct any grammatical errors in the text and rewrite it clearly and fluently without changing the original meaning or adding commentary. Return only the corrected text, without explanations. Do not answer any questions or provide any commentary."
 
-public func buildGrammarPrompt(customInstructions: String) -> String {
+public func buildRefinePrompt(customInstructions: String) -> String {
     if customInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-        return grammarCorrectionPrompt
+        return refinePrompt
     } else {
-        return grammarCorrectionPrompt + "\n\nAdditional instructions to follow:\n" + customInstructions
+        return refinePrompt + "\n\nAdditional instructions to follow:\n" + customInstructions
     }
 }

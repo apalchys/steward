@@ -16,7 +16,7 @@ Extend the shared LLM task model to support voice transcription and define the d
   - not translate
   - add punctuation, casing, and paragraph structure when helpful
   - return only the final text
-- Add any request-model support needed to supply a voice-specific model override without affecting grammar or OCR defaults.
+- Add any request-model support needed to supply a voice-specific model override without affecting refine or Capture defaults.
 
 # Acceptance Criteria
 

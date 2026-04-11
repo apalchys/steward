@@ -31,17 +31,17 @@ final class AppState: ObservableObject {
     }
 
     private enum FeatureKind: CaseIterable {
-        case grammar
-        case ocr
-        case voice
+        case refine
+        case capture
+        case dictate
 
         var statusPrefix: String {
             switch self {
-            case .grammar:
+            case .refine:
                 return "Refine"
-            case .ocr:
+            case .capture:
                 return "Capture"
-            case .voice:
+            case .dictate:
                 return "Dictate"
             }
         }
@@ -67,9 +67,9 @@ final class AppState: ObservableObject {
     let clipboardHistoryStore: ClipboardHistoryStore
 
     @Published private(set) var activityStatus: ActivityStatus = .ready
-    @Published private(set) var grammarStatus: ProviderStatus = .error(providerID: nil, message: "Not checked")
-    @Published private(set) var ocrStatus: ProviderStatus = .error(providerID: nil, message: "Not checked")
-    @Published private(set) var voiceStatus: ProviderStatus = .error(providerID: nil, message: "Not checked")
+    @Published private(set) var refineStatus: ProviderStatus = .error(providerID: nil, message: "Not checked")
+    @Published private(set) var captureStatus: ProviderStatus = .error(providerID: nil, message: "Not checked")
+    @Published private(set) var dictateStatus: ProviderStatus = .error(providerID: nil, message: "Not checked")
     @Published private(set) var accessibilityPermissionGranted = false
     @Published private(set) var microphonePermissionGranted = false
     @Published private(set) var screenRecordingPermissionGranted = false
@@ -81,48 +81,48 @@ final class AppState: ObservableObject {
 
     private let clipboardMonitor: any ClipboardMonitoring
     private let llmRouter: any LLMRouting
-    private let grammarCoordinator: any GrammarCoordinating
-    private let screenOCRCoordinator: any ScreenOCRCoordinating
-    private let voiceDictationCoordinator: any VoiceDictationCoordinating
+    private let refineCoordinator: any RefineCoordinating
+    private let captureCoordinator: any CaptureCoordinating
+    private let dictateCoordinator: any DictateCoordinating
     private let appSystemServices: AppSystemServices
 
-    private var grammarHotKey: HotKey?
-    private var screenOCRHotKey: HotKey?
-    private var voiceHotKey: HotKey?
-    private var voiceMouseButtonMonitor: (any MouseButtonShortcutMonitoring)?
+    private var refineHotKey: HotKey?
+    private var captureHotKey: HotKey?
+    private var dictateHotKey: HotKey?
+    private var dictateMouseButtonMonitor: (any MouseButtonShortcutMonitoring)?
     private var hasStarted = false
     private var initialHealthCheckTask: Task<Void, Never>?
     private var settingsHealthDebounceTask: Task<Void, Never>?
-    private var grammarHealthCheckTask: Task<Void, Never>?
-    private var ocrHealthCheckTask: Task<Void, Never>?
-    private var voiceHealthCheckTask: Task<Void, Never>?
+    private var refineHealthCheckTask: Task<Void, Never>?
+    private var captureHealthCheckTask: Task<Void, Never>?
+    private var dictateHealthCheckTask: Task<Void, Never>?
     private var fixedShortcutRegistrationMessage: String?
-    private var voiceShortcutRegistrationMessage: String?
+    private var dictateShortcutRegistrationMessage: String?
 
     private var isProcessing = false
     private var isScreenSelectionActive = false
     private var lastOperationFailed = false
     private var activeFeature: FeatureKind?
-    private var voiceWorkflowState: VoiceDictationWorkflowState = .idle
-    private var activeVoiceHotKey = AppHotKey.defaultVoiceDictation
+    private var dictateWorkflowState: DictateWorkflowState = .idle
+    private var activeDictateHotKey = AppHotKey.defaultVoiceDictation
 
     init(
         settingsStore: any AppSettingsProviding,
         clipboardHistoryStore: ClipboardHistoryStore,
         clipboardMonitor: any ClipboardMonitoring,
         llmRouter: any LLMRouting,
-        grammarCoordinator: any GrammarCoordinating,
-        screenOCRCoordinator: any ScreenOCRCoordinating,
-        voiceDictationCoordinator: any VoiceDictationCoordinating,
+        refineCoordinator: any RefineCoordinating,
+        captureCoordinator: any CaptureCoordinating,
+        dictateCoordinator: any DictateCoordinating,
         appSystemServices: AppSystemServices
     ) {
         self.settingsStore = settingsStore
         self.clipboardHistoryStore = clipboardHistoryStore
         self.clipboardMonitor = clipboardMonitor
         self.llmRouter = llmRouter
-        self.grammarCoordinator = grammarCoordinator
-        self.screenOCRCoordinator = screenOCRCoordinator
-        self.voiceDictationCoordinator = voiceDictationCoordinator
+        self.refineCoordinator = refineCoordinator
+        self.captureCoordinator = captureCoordinator
+        self.dictateCoordinator = dictateCoordinator
         self.appSystemServices = appSystemServices
 
         Task { [weak self] in
@@ -149,10 +149,10 @@ final class AppState: ObservableObject {
             if isScreenSelectionActive {
                 return "Status: Select an area..."
             }
-            if voiceWorkflowState == .recording {
+            if dictateWorkflowState == .recording {
                 return "Status: Listening..."
             }
-            if voiceWorkflowState == .transcribing {
+            if dictateWorkflowState == .transcribing {
                 return "Status: Transcribing..."
             }
             return "Status: Processing..."
@@ -183,16 +183,16 @@ final class AppState: ObservableObject {
         }
     }
 
-    var grammarStatusTitle: String {
-        featureStatusTitle(prefix: FeatureKind.grammar.statusPrefix, status: grammarStatus)
+    var refineStatusTitle: String {
+        featureStatusTitle(prefix: FeatureKind.refine.statusPrefix, status: refineStatus)
     }
 
-    var ocrStatusTitle: String {
-        featureStatusTitle(prefix: FeatureKind.ocr.statusPrefix, status: ocrStatus)
+    var captureStatusTitle: String {
+        featureStatusTitle(prefix: FeatureKind.capture.statusPrefix, status: captureStatus)
     }
 
-    var voiceStatusTitle: String {
-        featureStatusTitle(prefix: FeatureKind.voice.statusPrefix, status: voiceStatus)
+    var dictateStatusTitle: String {
+        featureStatusTitle(prefix: FeatureKind.dictate.statusPrefix, status: dictateStatus)
     }
 
     var accessibilityStatusTitle: String {
@@ -228,7 +228,7 @@ final class AppState: ObservableObject {
         setupHotKeys()
         applyClipboardHistorySettings()
 
-        screenOCRCoordinator.onSelectionActivityChanged = { [weak self] isActive in
+        captureCoordinator.onSelectionActivityChanged = { [weak self] isActive in
             Task { @MainActor in
                 guard let self else {
                     return
@@ -239,15 +239,15 @@ final class AppState: ObservableObject {
             }
         }
 
-        voiceDictationCoordinator.onStateChanged = { [weak self] state in
+        dictateCoordinator.onStateChanged = { [weak self] state in
             Task { @MainActor in
-                self?.handleVoiceWorkflowStateChanged(state)
+                self?.handleDictateWorkflowStateChanged(state)
             }
         }
 
-        voiceDictationCoordinator.onError = { [weak self] error in
+        dictateCoordinator.onError = { [weak self] error in
             Task { @MainActor in
-                self?.handleCoordinatorError(for: .voice, error: error)
+                self?.handleCoordinatorError(for: .dictate, error: error)
             }
         }
 
@@ -277,34 +277,34 @@ final class AppState: ObservableObject {
                 return
             }
 
-            self.checkGrammarProviderStatus()
-            self.checkOCRProviderStatus()
-            self.checkVoiceProviderStatus()
+            self.checkRefineProviderStatus()
+            self.checkCaptureProviderStatus()
+            self.checkDictateProviderStatus()
         }
     }
 
-    func runGrammarAction() {
-        handleHotKeyPress(for: .grammar)
+    func runRefineAction() {
+        handleHotKeyPress(for: .refine)
     }
 
-    func runScreenOCRAction() {
-        handleHotKeyPress(for: .ocr)
+    func runCaptureAction() {
+        handleHotKeyPress(for: .capture)
     }
 
-    func runVoiceDictationAction() {
-        handleHotKeyPress(for: .voice)
+    func runDictateAction() {
+        handleHotKeyPress(for: .dictate)
     }
 
-    func checkGrammarProviderStatus() {
-        checkProviderStatus(for: .grammar)
+    func checkRefineProviderStatus() {
+        checkProviderStatus(for: .refine)
     }
 
-    func checkOCRProviderStatus() {
-        checkProviderStatus(for: .ocr)
+    func checkCaptureProviderStatus() {
+        checkProviderStatus(for: .capture)
     }
 
-    func checkVoiceProviderStatus() {
-        checkProviderStatus(for: .voice)
+    func checkDictateProviderStatus() {
+        checkProviderStatus(for: .dictate)
     }
 
     func checkProviderStatus(for providerID: LLMProviderID) {
@@ -313,8 +313,8 @@ final class AppState: ObservableObject {
         }
     }
 
-    func validateVoiceHotKey(_ hotKey: AppHotKey) -> AppHotKeyValidationError? {
-        AppHotKeyValidator.validateVoiceDictationHotKey(
+    func validateDictateHotKey(_ hotKey: AppHotKey) -> AppHotKeyValidationError? {
+        AppHotKeyValidator.validateDictateHotKey(
             hotKey,
             isShortcutAvailable: appSystemServices.isShortcutAvailable
         )
@@ -322,7 +322,7 @@ final class AppState: ObservableObject {
 
     func settingsDidChange() {
         applyClipboardHistorySettings()
-        registerVoiceHotKey(using: settingsStore.loadSettings().voice.hotKey)
+        registerDictateHotKey(using: settingsStore.loadSettings().voice.hotKey)
         initialHealthCheckTask?.cancel()
         settingsHealthDebounceTask?.cancel()
         settingsHealthDebounceTask = Task { @MainActor [weak self] in
@@ -331,15 +331,10 @@ final class AppState: ObservableObject {
                 return
             }
 
-            self.checkGrammarProviderStatus()
-            self.checkOCRProviderStatus()
-            self.checkVoiceProviderStatus()
+            self.checkRefineProviderStatus()
+            self.checkCaptureProviderStatus()
+            self.checkDictateProviderStatus()
         }
-    }
-
-    func openPreferences() {
-        refreshLaunchAtLoginStatus()
-        openSettingsWindow()
     }
 
     func refreshPermissionStatuses() {
@@ -393,13 +388,13 @@ final class AppState: ObservableObject {
     }
 
     private func setupHotKeys() {
-        let grammarShortcut = AppShortcut(
+        let refineShortcut = AppShortcut(
             title: "Refine",
             key: .f,
             modifiers: [.command, .shift],
-            displayValue: AppHotKey.grammarCheck.readableDisplayValue
+            displayValue: AppHotKey.refine.readableDisplayValue
         )
-        let screenOCRShortcut = AppShortcut(
+        let captureShortcut = AppShortcut(
             title: "Capture",
             key: .r,
             modifiers: [.command, .shift],
@@ -409,29 +404,29 @@ final class AppState: ObservableObject {
         var unavailableShortcuts: [AppShortcut] = []
 
         if let hotKey = makeHotKey(
-            for: grammarShortcut,
+            for: refineShortcut,
             action: { [weak self] in
-                self?.handleHotKeyPress(for: .grammar)
+                self?.handleHotKeyPress(for: .refine)
             })
         {
-            grammarHotKey = hotKey
+            refineHotKey = hotKey
         } else {
-            unavailableShortcuts.append(grammarShortcut)
+            unavailableShortcuts.append(refineShortcut)
         }
 
         if let hotKey = makeHotKey(
-            for: screenOCRShortcut,
+            for: captureShortcut,
             action: { [weak self] in
-                self?.handleHotKeyPress(for: .ocr)
+                self?.handleHotKeyPress(for: .capture)
             })
         {
-            screenOCRHotKey = hotKey
+            captureHotKey = hotKey
         } else {
-            unavailableShortcuts.append(screenOCRShortcut)
+            unavailableShortcuts.append(captureShortcut)
         }
 
         fixedShortcutRegistrationMessage = shortcutConflictMessage(for: unavailableShortcuts)
-        registerVoiceHotKey(using: settingsStore.loadSettings().voice.hotKey)
+        registerDictateHotKey(using: settingsStore.loadSettings().voice.hotKey)
     }
 
     private func checkProviderStatus(for feature: FeatureKind) {
@@ -486,37 +481,24 @@ final class AppState: ObservableObject {
         Task {
             do {
                 try await performOperation(for: feature)
-                if feature != .voice || self.voiceWorkflowState == .idle {
+                if feature != .dictate || self.dictateWorkflowState == .idle {
                     self.lastOperationFailed = false
                     self.activeFeature = nil
                     self.markStatusFromCurrentConfiguration(for: feature, asError: false, message: nil)
                 }
             } catch {
-                if feature == .voice && self.voiceWorkflowState != .idle {
+                if feature == .dictate && self.dictateWorkflowState != .idle {
                     return
                 }
 
                 self.handleCoordinatorError(for: feature, error: error)
             }
 
-            if feature != .voice || self.voiceWorkflowState == .idle {
+            if feature != .dictate || self.dictateWorkflowState == .idle {
                 self.isProcessing = false
             }
             self.refreshStatusUI()
         }
-    }
-
-    private func shouldOpenSettings(for error: Error) -> Bool {
-        switch error {
-        case is LLMRouterError:
-            return true
-        default:
-            return false
-        }
-    }
-
-    private func openSettingsWindow() {
-        appSystemServices.openApplicationSettings()
     }
 
     private func markStatusFromCurrentConfiguration(for feature: FeatureKind, asError: Bool, message: String?) {
@@ -533,81 +515,81 @@ final class AppState: ObservableObject {
 
     private func modelSelection(for feature: FeatureKind) -> LLMModelSelection? {
         switch feature {
-        case .grammar:
-            return settingsStore.loadSettings().grammar.selectedModel
-        case .ocr:
+        case .refine:
+            return settingsStore.loadSettings().refine.selectedModel
+        case .capture:
             return settingsStore.loadSettings().screenText.selectedModel
-        case .voice:
+        case .dictate:
             return settingsStore.loadSettings().voice.selectedModel
         }
     }
 
     private func setStatus(_ status: ProviderStatus, for feature: FeatureKind) {
         switch feature {
-        case .grammar:
-            grammarStatus = status
-        case .ocr:
-            ocrStatus = status
-        case .voice:
-            voiceStatus = status
+        case .refine:
+            refineStatus = status
+        case .capture:
+            captureStatus = status
+        case .dictate:
+            dictateStatus = status
         }
     }
 
     private func status(for feature: FeatureKind) -> ProviderStatus {
         switch feature {
-        case .grammar:
-            return grammarStatus
-        case .ocr:
-            return ocrStatus
-        case .voice:
-            return voiceStatus
+        case .refine:
+            return refineStatus
+        case .capture:
+            return captureStatus
+        case .dictate:
+            return dictateStatus
         }
     }
 
     private func healthCheckTask(for feature: FeatureKind) -> Task<Void, Never>? {
         switch feature {
-        case .grammar:
-            return grammarHealthCheckTask
-        case .ocr:
-            return ocrHealthCheckTask
-        case .voice:
-            return voiceHealthCheckTask
+        case .refine:
+            return refineHealthCheckTask
+        case .capture:
+            return captureHealthCheckTask
+        case .dictate:
+            return dictateHealthCheckTask
         }
     }
 
     private func setHealthCheckTask(_ task: Task<Void, Never>, for feature: FeatureKind) {
         switch feature {
-        case .grammar:
-            grammarHealthCheckTask = task
-        case .ocr:
-            ocrHealthCheckTask = task
-        case .voice:
-            voiceHealthCheckTask = task
+        case .refine:
+            refineHealthCheckTask = task
+        case .capture:
+            captureHealthCheckTask = task
+        case .dictate:
+            dictateHealthCheckTask = task
         }
     }
 
     private func performOperation(for feature: FeatureKind) async throws {
         switch feature {
-        case .grammar:
-            try await grammarCoordinator.handleHotKeyPress()
-        case .ocr:
-            try await screenOCRCoordinator.handleHotKeyPress()
-        case .voice:
-            try await voiceDictationCoordinator.handleManualToggleAction()
+        case .refine:
+            try await refineCoordinator.handleHotKeyPress()
+        case .capture:
+            try await captureCoordinator.handleHotKeyPress()
+        case .dictate:
+            try await dictateCoordinator.handleManualToggleAction()
         }
     }
 
     private func shouldIgnoreFailure(for feature: FeatureKind, error: Error) -> Bool {
         switch feature {
-        case .grammar:
-            if case GrammarCoordinatorError.noSelectedText = error {
+        case .refine:
+            if case RefineCoordinatorError.noSelectedText = error {
                 return true
             }
-        case .ocr:
-            if case ScreenOCRCoordinatorError.cancelled = error {
+        case .capture:
+            if case CaptureCoordinatorError.cancelled = error {
                 return true
             }
-        case .voice:
+        case .dictate:
             break
         }
 
@@ -615,13 +597,13 @@ final class AppState: ObservableObject {
     }
 
     private func refreshStatusUI() {
-        if isScreenSelectionActive || isProcessing || voiceWorkflowState != .idle {
+        if isScreenSelectionActive || isProcessing || dictateWorkflowState != .idle {
             activityStatus = .processing
             return
         }
 
-        if lastOperationFailed || hasErrorStatus(grammarStatus) || hasErrorStatus(ocrStatus)
-            || hasErrorStatus(voiceStatus)
+        if lastOperationFailed || hasErrorStatus(refineStatus) || hasErrorStatus(captureStatus)
+            || hasErrorStatus(dictateStatus)
         {
             activityStatus = .error
             return
@@ -659,32 +641,32 @@ final class AppState: ObservableObject {
     }
 
     private func canRun(feature: FeatureKind) -> Bool {
-        activeFeature == nil || (feature == .voice && activeFeature == .voice)
+        activeFeature == nil || (feature == .dictate && activeFeature == .dictate)
     }
 
-    private func handleVoiceWorkflowStateChanged(_ state: VoiceDictationWorkflowState) {
-        voiceWorkflowState = state
+    private func handleDictateWorkflowStateChanged(_ state: DictateWorkflowState) {
+        dictateWorkflowState = state
 
         switch state {
         case .idle:
             activeFeature = nil
             isProcessing = false
 
-            if case .processing = voiceStatus {
-                markStatusFromCurrentConfiguration(for: .voice, asError: false, message: nil)
+            if case .processing = dictateStatus {
+                markStatusFromCurrentConfiguration(for: .dictate, asError: false, message: nil)
             }
         case .recording, .transcribing:
-            activeFeature = .voice
+            activeFeature = .dictate
             isProcessing = true
-            setStatus(.processing(providerID: modelSelection(for: .voice)?.providerID), for: .voice)
+            setStatus(.processing(providerID: modelSelection(for: .dictate)?.providerID), for: .dictate)
         }
 
         refreshStatusUI()
     }
 
     private func handleCoordinatorError(for feature: FeatureKind, error: Error) {
-        if feature == .voice {
-            voiceWorkflowState = .idle
+        if feature == .dictate {
+            dictateWorkflowState = .idle
         }
 
         activeFeature = nil
@@ -696,10 +678,6 @@ final class AppState: ObservableObject {
         } else {
             lastOperationFailed = true
             markStatusFromCurrentConfiguration(for: feature, asError: true, message: error.localizedDescription)
-
-            if shouldOpenSettings(for: error) {
-                openSettingsWindow()
-            }
 
             logger.error("\(feature.logLabel) error: \(error.localizedDescription)")
         }
@@ -806,18 +784,18 @@ final class AppState: ObservableObject {
         }
     }
 
-    private func registerVoiceHotKey(using requestedHotKey: AppHotKey) {
-        if let validationError = AppHotKeyValidator.validateVoiceDictationHotKey(
+    private func registerDictateHotKey(using requestedHotKey: AppHotKey) {
+        if let validationError = AppHotKeyValidator.validateDictateHotKey(
             requestedHotKey,
             isShortcutAvailable: appSystemServices.isShortcutAvailable
         ) {
-            voiceShortcutRegistrationMessage = voiceShortcutMessage(for: requestedHotKey, error: validationError)
+            dictateShortcutRegistrationMessage = dictateShortcutMessage(for: requestedHotKey, error: validationError)
             refreshShortcutRegistrationMessage()
             return
         }
 
-        guard requestedHotKey != activeVoiceHotKey || !hasRegisteredVoiceShortcut(for: requestedHotKey) else {
-            voiceShortcutRegistrationMessage = nil
+        guard requestedHotKey != activeDictateHotKey || !hasRegisteredDictateShortcut(for: requestedHotKey) else {
+            dictateShortcutRegistrationMessage = nil
             refreshShortcutRegistrationMessage()
             return
         }
@@ -829,33 +807,33 @@ final class AppState: ObservableObject {
                 { [weak self] in
                     Task { @MainActor [weak self] in
                         do {
-                            try await self?.voiceDictationCoordinator.handlePushToTalkKeyDown()
+                            try await self?.dictateCoordinator.handlePushToTalkKeyDown()
                         } catch {
-                            self?.handleCoordinatorError(for: .voice, error: error)
+                            self?.handleCoordinatorError(for: .dictate, error: error)
                         }
                     }
                 },
                 { [weak self] in
                     Task { @MainActor [weak self] in
                         do {
-                            try await self?.voiceDictationCoordinator.handlePushToTalkKeyUp()
+                            try await self?.dictateCoordinator.handlePushToTalkKeyUp()
                         } catch {
-                            self?.handleCoordinatorError(for: .voice, error: error)
+                            self?.handleCoordinatorError(for: .dictate, error: error)
                         }
                     }
                 }
             )
 
-            voiceHotKey = nil
-            voiceMouseButtonMonitor?.stop()
-            voiceMouseButtonMonitor = mouseButtonMonitor
-            activeVoiceHotKey = requestedHotKey
-            voiceShortcutRegistrationMessage = nil
+            dictateHotKey = nil
+            dictateMouseButtonMonitor?.stop()
+            dictateMouseButtonMonitor = mouseButtonMonitor
+            activeDictateHotKey = requestedHotKey
+            dictateShortcutRegistrationMessage = nil
             refreshShortcutRegistrationMessage()
             return
         }
 
-        let voiceShortcut = AppShortcut(
+        let dictateShortcut = AppShortcut(
             title: "Dictate",
             key: requestedHotKey.key ?? .d,
             modifiers: requestedHotKey.modifiers,
@@ -864,48 +842,48 @@ final class AppState: ObservableObject {
 
         guard
             let hotKey = makeHotKey(
-                for: voiceShortcut,
+                for: dictateShortcut,
                 action: { [weak self] in
                     Task { @MainActor [weak self] in
                         do {
-                            try await self?.voiceDictationCoordinator.handlePushToTalkKeyDown()
+                            try await self?.dictateCoordinator.handlePushToTalkKeyDown()
                         } catch {
-                            self?.handleCoordinatorError(for: .voice, error: error)
+                            self?.handleCoordinatorError(for: .dictate, error: error)
                         }
                     }
                 },
                 keyUpAction: { [weak self] in
                     Task { @MainActor [weak self] in
                         do {
-                            try await self?.voiceDictationCoordinator.handlePushToTalkKeyUp()
+                            try await self?.dictateCoordinator.handlePushToTalkKeyUp()
                         } catch {
-                            self?.handleCoordinatorError(for: .voice, error: error)
+                            self?.handleCoordinatorError(for: .dictate, error: error)
                         }
                     }
                 })
         else {
-            voiceShortcutRegistrationMessage = voiceShortcutMessage(for: requestedHotKey, error: .unavailable)
+            dictateShortcutRegistrationMessage = dictateShortcutMessage(for: requestedHotKey, error: .unavailable)
             refreshShortcutRegistrationMessage()
             return
         }
 
-        voiceMouseButtonMonitor?.stop()
-        voiceMouseButtonMonitor = nil
-        voiceHotKey = hotKey
-        activeVoiceHotKey = requestedHotKey
-        voiceShortcutRegistrationMessage = nil
+        dictateMouseButtonMonitor?.stop()
+        dictateMouseButtonMonitor = nil
+        dictateHotKey = hotKey
+        activeDictateHotKey = requestedHotKey
+        dictateShortcutRegistrationMessage = nil
         refreshShortcutRegistrationMessage()
     }
 
-    private func hasRegisteredVoiceShortcut(for hotKey: AppHotKey) -> Bool {
+    private func hasRegisteredDictateShortcut(for hotKey: AppHotKey) -> Bool {
         if hotKey.isMouseButton {
-            return voiceMouseButtonMonitor != nil
+            return dictateMouseButtonMonitor != nil
         }
 
-        return voiceHotKey != nil
+        return dictateHotKey != nil
     }
 
-    private func voiceShortcutMessage(for hotKey: AppHotKey, error: AppHotKeyValidationError) -> String {
+    private func dictateShortcutMessage(for hotKey: AppHotKey, error: AppHotKeyValidationError) -> String {
         switch error {
         case .conflictsWithFeature(let featureName):
             return "Shortcut unavailable: Dictate (\(hotKey.readableDisplayValue)) conflicts with \(featureName)."
@@ -917,7 +895,7 @@ final class AppState: ObservableObject {
     }
 
     private func refreshShortcutRegistrationMessage() {
-        let messages = [fixedShortcutRegistrationMessage, voiceShortcutRegistrationMessage].compactMap { $0 }
+        let messages = [fixedShortcutRegistrationMessage, dictateShortcutRegistrationMessage].compactMap { $0 }
         shortcutRegistrationMessage = messages.isEmpty ? nil : messages.joined(separator: "\n")
     }
 

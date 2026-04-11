@@ -41,7 +41,7 @@ final class LLMSettingsMigrationTests: XCTestCase {
         var settings = LLMSettings.empty()
         settings.providerSettings[.openAI] = LLMProviderSettings(apiKey: "openai-key")
         settings.providerSettings[.gemini] = LLMProviderSettings(apiKey: "gemini-key")
-        settings.grammar = GrammarSettings(
+        settings.refine = RefineSettings(
             selectedModel: LLMModelSelection(
                 providerID: .openAI,
                 modelID: LLMModelCatalog.defaultModelID(for: .openAI)
@@ -70,7 +70,7 @@ final class LLMSettingsMigrationTests: XCTestCase {
 
         XCTAssertEqual(loaded.providerSettings(for: .openAI).apiKey, "openai-key")
         XCTAssertEqual(loaded.providerSettings(for: .gemini).apiKey, "gemini-key")
-        XCTAssertEqual(loaded.grammar, settings.grammar)
+        XCTAssertEqual(loaded.refine, settings.refine)
         XCTAssertEqual(loaded.screenText, settings.screenText)
         XCTAssertEqual(loaded.voice, settings.voice)
         XCTAssertEqual(loaded.clipboardHistory, ClipboardHistorySettings(isEnabled: true, maxStoredRecords: 250))
@@ -88,113 +88,36 @@ final class LLMSettingsMigrationTests: XCTestCase {
 
         let settings = store.loadSettings()
 
-        XCTAssertEqual(settings.grammar.customInstructions, "")
+        XCTAssertEqual(settings.refine.customInstructions, "")
         XCTAssertEqual(settings.screenText.customInstructions, "")
-        XCTAssertNil(settings.grammar.selectedModel)
+        XCTAssertNil(settings.refine.selectedModel)
         XCTAssertNil(settings.screenText.selectedModel)
         XCTAssertNil(settings.voice.selectedModel)
         XCTAssertEqual(settings.voice.hotKey, .defaultVoiceDictation)
         XCTAssertEqual(settings.clipboardHistory, .default)
     }
 
-    func testLoadSettingsMigratesLegacySelections() {
+    func testSaveSettingsUsesRefineKeysOnly() {
         let suiteName = "LLMSettingsStoreTests.\(UUID().uuidString)"
         let defaults = try! XCTUnwrap(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
         defer {
             defaults.removePersistentDomain(forName: suiteName)
         }
-
-        defaults.set(LLMProviderID.openAI.rawValue, forKey: "voiceProviderID")
-        defaults.set("gpt-4o-mini-transcribe", forKey: "voiceOpenAIModelID")
-
-        let secretsStore = InMemoryLLMSecretsStore(
-            values: [.openAI: "openai-key", .gemini: "gemini-key"]
-        )
-        let store = UserDefaultsLLMSettingsStore(userDefaults: defaults, secretsStore: secretsStore)
-
-        let settings = store.loadSettings()
-
-        XCTAssertEqual(
-            settings.grammar.selectedModel,
-            LLMModelSelection(
-                providerID: .openAI,
-                modelID: LLMModelCatalog.defaultModelID(for: .openAI)
-            )
-        )
-        XCTAssertEqual(
-            settings.screenText.selectedModel,
-            LLMModelSelection(
-                providerID: .gemini,
-                modelID: LLMModelCatalog.defaultModelID(for: .gemini)
-            )
-        )
-        XCTAssertEqual(
-            settings.voice.selectedModel,
-            LLMModelSelection(providerID: .openAI, modelID: "gpt-4o-mini-transcribe")
-        )
-    }
-
-    func testLoadSettingsFallsBackWhenLegacyModelIsNotInCatalog() {
-        let suiteName = "LLMSettingsStoreTests.\(UUID().uuidString)"
-        let defaults = try! XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defaults.removePersistentDomain(forName: suiteName)
-        defer {
-            defaults.removePersistentDomain(forName: suiteName)
-        }
-
-        defaults.set("not-in-catalog", forKey: "llmProvider_openAI_modelID")
-        defaults.set("not-in-catalog", forKey: "llmProvider_gemini_modelID")
-        defaults.set(LLMProviderID.openAI.rawValue, forKey: "voiceProviderID")
-        defaults.set("not-in-catalog", forKey: "voiceOpenAIModelID")
-
-        let secretsStore = InMemoryLLMSecretsStore(
-            values: [.openAI: "openai-key"]
-        )
-        let store = UserDefaultsLLMSettingsStore(userDefaults: defaults, secretsStore: secretsStore)
-
-        let settings = store.loadSettings()
-
-        XCTAssertEqual(
-            settings.grammar.selectedModel,
-            LLMModelSelection(
-                providerID: .openAI,
-                modelID: LLMModelCatalog.defaultModelID(for: .openAI)
-            )
-        )
-        XCTAssertEqual(
-            settings.screenText.selectedModel,
-            LLMModelSelection(
-                providerID: .openAI,
-                modelID: LLMModelCatalog.defaultModelID(for: .openAI)
-            )
-        )
-        XCTAssertEqual(
-            settings.voice.selectedModel,
-            LLMModelSelection(providerID: .openAI, modelID: "gpt-4o-mini-transcribe")
-        )
-    }
-
-    func testSaveSettingsRemovesLegacyModelKeys() {
-        let suiteName = "LLMSettingsStoreTests.\(UUID().uuidString)"
-        let defaults = try! XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defaults.removePersistentDomain(forName: suiteName)
-        defer {
-            defaults.removePersistentDomain(forName: suiteName)
-        }
-
-        defaults.set("legacy-openai-model", forKey: "llmProvider_openAI_modelID")
-        defaults.set("legacy-gemini-model", forKey: "llmProvider_gemini_modelID")
-        defaults.set(LLMProviderID.openAI.rawValue, forKey: "voiceProviderID")
-        defaults.set("legacy-voice-model", forKey: "voiceOpenAIModelID")
 
         let store = UserDefaultsLLMSettingsStore(userDefaults: defaults, secretsStore: InMemoryLLMSecretsStore())
-        store.saveSettings(.empty())
+        var settings = LLMSettings.empty()
+        settings.providerSettings[.openAI] = LLMProviderSettings(apiKey: "openai-key")
+        settings.refine = RefineSettings(
+            selectedModel: LLMModelSelection(providerID: .openAI, modelID: "gpt-5.4"),
+            customInstructions: "Keep meaning"
+        )
 
-        XCTAssertNil(defaults.object(forKey: "llmProvider_openAI_modelID"))
-        XCTAssertNil(defaults.object(forKey: "llmProvider_gemini_modelID"))
-        XCTAssertNil(defaults.object(forKey: "voiceProviderID"))
-        XCTAssertNil(defaults.object(forKey: "voiceOpenAIModelID"))
+        store.saveSettings(settings)
+
+        XCTAssertEqual(defaults.string(forKey: "refineSelectedProviderID"), LLMProviderID.openAI.rawValue)
+        XCTAssertEqual(defaults.string(forKey: "refineSelectedModelID"), "gpt-5.4")
+        XCTAssertEqual(defaults.string(forKey: "customRefineInstructions"), "Keep meaning")
     }
 
     func testVoiceSettingsCustomHotKeyRoundTrips() {

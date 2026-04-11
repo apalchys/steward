@@ -2,13 +2,13 @@ import AppKit
 import Foundation
 
 @MainActor
-protocol ScreenOCRCoordinating: AnyObject {
+protocol CaptureCoordinating: AnyObject {
     var onSelectionActivityChanged: ((Bool) -> Void)? { get set }
     func handleHotKeyPress() async throws
 }
 
 @MainActor
-final class ScreenOCRCoordinator: ScreenOCRCoordinating {
+final class CaptureCoordinator: CaptureCoordinating {
     var onSelectionActivityChanged: ((Bool) -> Void)?
 
     private let router: any LLMRouting
@@ -33,7 +33,7 @@ final class ScreenOCRCoordinator: ScreenOCRCoordinating {
 
     func handleHotKeyPress() async throws {
         guard captureService.ensureScreenCaptureAccess() else {
-            throw ScreenOCRCoordinatorError.permissionDenied
+            throw CaptureCoordinatorError.permissionDenied
         }
 
         onSelectionActivityChanged?(true)
@@ -50,7 +50,7 @@ final class ScreenOCRCoordinator: ScreenOCRCoordinating {
                         continuation.resume()
                     },
                     onSelectionCancelled: {
-                        continuation.resume(throwing: ScreenOCRCoordinatorError.cancelled)
+                        continuation.resume(throwing: CaptureCoordinatorError.cancelled)
                     }
                 )
             }
@@ -64,11 +64,11 @@ final class ScreenOCRCoordinator: ScreenOCRCoordinating {
         onSelectionActivityChanged?(false)
 
         guard let screen = selectionScreen, let rect = selectionRect else {
-            throw ScreenOCRCoordinatorError.couldNotCaptureImage
+            throw CaptureCoordinatorError.couldNotCaptureImage
         }
 
         guard let captureRequest = ScreenCaptureRequest(screen: screen) else {
-            throw ScreenOCRCoordinatorError.couldNotCaptureImage
+            throw CaptureCoordinatorError.couldNotCaptureImage
         }
 
         guard
@@ -77,7 +77,7 @@ final class ScreenOCRCoordinator: ScreenOCRCoordinating {
                 selectionRect: rect
             )
         else {
-            throw ScreenOCRCoordinatorError.couldNotCaptureImage
+            throw CaptureCoordinatorError.couldNotCaptureImage
         }
 
         let settings = settingsStore.loadSettings()
@@ -97,7 +97,7 @@ final class ScreenOCRCoordinator: ScreenOCRCoordinating {
         let llmResult = try await router.perform(request)
 
         guard let extractedText = llmResult.textValue else {
-            throw ScreenOCRCoordinatorError.invalidProviderResponse
+            throw CaptureCoordinatorError.invalidProviderResponse
         }
 
         textInteraction.copyTextToClipboard(extractedText)

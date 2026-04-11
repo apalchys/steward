@@ -18,13 +18,13 @@ enum LLMProviderID: String, CaseIterable, Codable, Identifiable {
 }
 
 enum LLMFeature: String, CaseIterable, Hashable {
-    case grammar
+    case refine
     case screenText
     case voice
 
     var displayName: String {
         switch self {
-        case .grammar:
+        case .refine:
             return "Refine"
         case .screenText:
             return "Capture"
@@ -35,7 +35,7 @@ enum LLMFeature: String, CaseIterable, Hashable {
 }
 
 enum LLMTask {
-    case grammarCorrection(text: String, customInstructions: String)
+    case refineText(text: String, customInstructions: String)
     case screenOCR(imageData: Data, mimeType: String, customInstructions: String)
     case voiceTranscription(audioData: Data, mimeType: String, customInstructions: String)
 }
@@ -86,7 +86,6 @@ struct LLMProviderHealth {
 enum LLMRouterError: LocalizedError {
     case providerNotConfigured(LLMProviderID)
     case featureNotConfigured(String)
-    case unsupportedTask(String)
 
     var errorDescription: String? {
         switch self {
@@ -94,13 +93,11 @@ enum LLMRouterError: LocalizedError {
             return "Provider \(providerID.displayName) is missing an API key in Preferences."
         case .featureNotConfigured(let featureName):
             return "\(featureName) is missing a compatible model in Preferences."
-        case .unsupportedTask(let taskName):
-            return "\(taskName) is not supported yet."
         }
     }
 }
 
-enum GrammarCoordinatorError: LocalizedError {
+enum RefineCoordinatorError: LocalizedError {
     case noSelectedText
     case invalidProviderResponse
 
@@ -114,7 +111,7 @@ enum GrammarCoordinatorError: LocalizedError {
     }
 }
 
-enum ScreenOCRCoordinatorError: LocalizedError {
+enum CaptureCoordinatorError: LocalizedError {
     case permissionDenied
     case cancelled
     case couldNotCaptureImage

@@ -10,7 +10,7 @@ final class LLMRouterTests: XCTestCase {
         super.tearDown()
     }
 
-    func testPerformRoutesGrammarRequestsToOpenAI() async throws {
+    func testPerformRoutesRefineRequestsToOpenAI() async throws {
         URLProtocolStub.configure(handler: { request in
             XCTAssertEqual(request.httpMethod, "POST")
             XCTAssertEqual(request.url?.absoluteString, "https://api.openai.com/v1/responses")
@@ -32,7 +32,7 @@ final class LLMRouterTests: XCTestCase {
         let response = try await router.perform(
             LLMRequest(
                 selection: LLMModelSelection(providerID: .openAI, modelID: "model-openAI"),
-                task: .grammarCorrection(text: "bad text", customInstructions: "")
+                task: .refineText(text: "bad text", customInstructions: "")
             )
         )
 
@@ -73,7 +73,7 @@ final class LLMRouterTests: XCTestCase {
             _ = try await router.perform(
                 LLMRequest(
                     selection: LLMModelSelection(providerID: .openAI, modelID: "model-openAI"),
-                    task: .grammarCorrection(text: "text", customInstructions: "")
+                    task: .refineText(text: "text", customInstructions: "")
                 )
             )
             XCTFail("Expected configuration error")
@@ -105,7 +105,7 @@ final class LLMRouterTests: XCTestCase {
         let response = try await router.perform(
             LLMRequest(
                 selection: LLMModelSelection(providerID: .openAI, modelID: "voice-model-openai"),
-                task: .grammarCorrection(text: "bad text", customInstructions: "")
+                task: .refineText(text: "bad text", customInstructions: "")
             )
         )
 

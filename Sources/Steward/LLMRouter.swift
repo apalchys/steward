@@ -83,8 +83,8 @@ final class LLMRouter: LLMRouting {
         configuration: LLMProviderConfiguration
     ) async throws -> LLMResult {
         switch task {
-        case .grammarCorrection(let text, let customInstructions):
-            let correctedText = try await openAIClient.correctGrammar(
+        case .refineText(let text, let customInstructions):
+            let correctedText = try await openAIClient.refineText(
                 apiKey: configuration.apiKey,
                 modelID: configuration.modelID,
                 customInstructions: customInstructions,
@@ -117,8 +117,8 @@ final class LLMRouter: LLMRouting {
         configuration: LLMProviderConfiguration
     ) async throws -> LLMResult {
         switch task {
-        case .grammarCorrection(let text, let customInstructions):
-            let correctedText = try await geminiClient.correctGrammar(
+        case .refineText(let text, let customInstructions):
+            let correctedText = try await geminiClient.refineText(
                 apiKey: configuration.apiKey,
                 modelID: configuration.modelID,
                 customInstructions: customInstructions,

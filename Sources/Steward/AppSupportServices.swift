@@ -164,7 +164,6 @@ struct AppSystemServices {
     let makeMouseButtonMonitor:
         (Int, NSEvent.ModifierFlags, @escaping @MainActor () -> Void, @escaping @MainActor () -> Void)
             -> any MouseButtonShortcutMonitoring
-    let openApplicationSettings: () -> Void
     let openAccessibilityPrivacySettings: () -> Void
     let openMicrophonePrivacySettings: () -> Void
     let openScreenRecordingPrivacySettings: () -> Void
@@ -199,9 +198,6 @@ struct AppSystemServices {
                     onButtonUp: onButtonUp
                 )
             },
-            openApplicationSettings: {
-                openApplicationSettings()
-            },
             openAccessibilityPrivacySettings: {
                 openSystemSettings(at: accessibilityURL, workspace: workspace)
             },
@@ -223,7 +219,6 @@ struct AppSystemServices {
         )
     }
 
-    private static let applicationSettingsSelector = Selector(("showSettingsWindow:"))
     private static let accessibilityURL = URL(
         string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
     )!
@@ -235,15 +230,6 @@ struct AppSystemServices {
     )!
     private static let systemSettingsAppURL = URL(fileURLWithPath: "/System/Applications/System Settings.app")
     private static let probeSignature = fourCharCode("StPr")
-
-    private static func openApplicationSettings() {
-        NSApp.activate(ignoringOtherApps: true)
-
-        // AppState can request app settings outside a SwiftUI view hierarchy.
-        // There is no public equivalent to OpenSettingsAction there, so keep
-        // the selector fallback isolated to this adapter.
-        _ = NSApp.sendAction(Self.applicationSettingsSelector, to: nil, from: nil)
-    }
 
     private static func openSystemSettings(at url: URL, workspace: NSWorkspace) {
         guard !workspace.open(url) else {

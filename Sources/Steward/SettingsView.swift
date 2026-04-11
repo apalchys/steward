@@ -93,15 +93,15 @@ struct SettingsView: View {
             generalPane
         case .providers:
             providersPane
-        case .grammar:
+        case .refine:
             featurePane(
-                feature: .grammar,
-                selection: grammarModelBinding,
+                feature: .refine,
+                selection: refineModelBinding,
                 emptyStateMessage: "Add a provider API key in Providers to unlock Refine models.",
-                instructions: $settings.grammar.customInstructions,
+                instructions: $settings.refine.customInstructions,
                 instructionsDescription: "Optional guidance applied when Steward refines selected text.",
             )
-        case .screenText:
+        case .capture:
             featurePane(
                 feature: .screenText,
                 selection: screenTextModelBinding,
@@ -110,8 +110,8 @@ struct SettingsView: View {
                 instructionsDescription:
                     "Optional guidance applied when Capture converts selected content into Markdown.",
             )
-        case .voice:
-            voicePane
+        case .dictate:
+            dictatePane
         case .clipboard:
             clipboardPane
         case .about:
@@ -157,15 +157,15 @@ struct SettingsView: View {
         }
     }
 
-    private var voicePane: some View {
-        voiceControlsCard
+    private var dictatePane: some View {
+        dictateControlsCard
     }
 
-    private var voiceControlsCard: some View {
+    private var dictateControlsCard: some View {
         SettingsListCard {
             featureModelRows(
                 feature: .voice,
-                selection: voiceModelBinding,
+                selection: dictateModelBinding,
                 emptyStateMessage: "Add a provider API key in Providers to unlock Dictate models."
             )
 
@@ -174,7 +174,7 @@ struct SettingsView: View {
             HotKeyRecorderView(
                 hotKey: $settings.voice.hotKey,
                 defaultHotKey: .defaultVoiceDictation,
-                validate: { appState.validateVoiceHotKey($0) }
+                validate: { appState.validateDictateHotKey($0) }
             )
 
             SettingsListDivider()
@@ -248,7 +248,9 @@ struct SettingsView: View {
                     Text("Steward")
                         .font(.system(size: 28, weight: .semibold))
 
-                    Text("Steward helps you polish writing and turn screenshot text into clean Markdown in seconds.")
+                    Text(
+                        "Steward refines selected text, captures screen text as Markdown, dictates into focused apps, and keeps a searchable clipboard history."
+                    )
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -473,13 +475,13 @@ struct SettingsView: View {
         )
     }
 
-    private var grammarModelBinding: Binding<LLMModelSelection?> {
+    private var refineModelBinding: Binding<LLMModelSelection?> {
         Binding(
             get: {
-                settings.grammar.selectedModel
+                settings.refine.selectedModel
             },
             set: { newValue in
-                settings.grammar.selectedModel = newValue
+                settings.refine.selectedModel = newValue
             }
         )
     }
@@ -495,7 +497,7 @@ struct SettingsView: View {
         )
     }
 
-    private var voiceModelBinding: Binding<LLMModelSelection?> {
+    private var dictateModelBinding: Binding<LLMModelSelection?> {
         Binding(
             get: {
                 settings.voice.selectedModel
@@ -510,9 +512,9 @@ struct SettingsView: View {
 private enum SettingsPane: String, CaseIterable, Identifiable {
     case general
     case providers
-    case grammar
-    case screenText
-    case voice
+    case refine
+    case capture
+    case dictate
     case clipboard
     case about
 
@@ -524,11 +526,11 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
             return "General"
         case .providers:
             return "Providers"
-        case .grammar:
+        case .refine:
             return "Refine"
-        case .screenText:
+        case .capture:
             return "Capture"
-        case .voice:
+        case .dictate:
             return "Dictate"
         case .clipboard:
             return "Clipboard"
@@ -543,11 +545,11 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
             return "App-level behavior and launch preferences."
         case .providers:
             return "Manage API keys and review curated provider model coverage."
-        case .grammar:
+        case .refine:
             return "Model and prompt settings for text refinement."
-        case .screenText:
+        case .capture:
             return "Model and prompt settings for capture-to-Markdown extraction."
-        case .voice:
+        case .dictate:
             return "Model, shortcut, and prompt settings for Dictate push-to-talk."
         case .clipboard:
             return "Local clipboard history capture, retention, and cleanup."
@@ -562,11 +564,11 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
             return "gearshape"
         case .providers:
             return "key.horizontal"
-        case .grammar:
+        case .refine:
             return "text.book.closed"
-        case .screenText:
+        case .capture:
             return "text.viewfinder"
-        case .voice:
+        case .dictate:
             return "waveform"
         case .clipboard:
             return "clipboard"

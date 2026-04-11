@@ -9,12 +9,12 @@ final class LLMModelCatalogTests: XCTestCase {
                 LLMModelCatalogEntry(
                     providerID: .openAI,
                     modelID: "gpt-5.4",
-                    supportedFeatures: [.grammar, .screenText]
+                    supportedFeatures: [.refine, .screenText]
                 ),
                 LLMModelCatalogEntry(
                     providerID: .openAI,
                     modelID: "gpt-5.4-mini",
-                    supportedFeatures: [.grammar, .screenText]
+                    supportedFeatures: [.refine, .screenText]
                 ),
                 LLMModelCatalogEntry(
                     providerID: .openAI,
@@ -24,12 +24,12 @@ final class LLMModelCatalogTests: XCTestCase {
                 LLMModelCatalogEntry(
                     providerID: .gemini,
                     modelID: "gemini-3-flash-preview",
-                    supportedFeatures: [.grammar, .screenText, .voice]
+                    supportedFeatures: [.refine, .screenText, .voice]
                 ),
                 LLMModelCatalogEntry(
                     providerID: .gemini,
                     modelID: "gemini-3.1-flash-lite-preview",
-                    supportedFeatures: [.grammar, .screenText, .voice]
+                    supportedFeatures: [.refine, .screenText, .voice]
                 ),
             ]
         )
@@ -46,7 +46,7 @@ final class LLMModelCatalogTests: XCTestCase {
 
     func testDefaultSelectionPrefersProviderDefault() {
         let selection = LLMModelCatalog.defaultSelection(
-            for: .grammar,
+            for: .refine,
             preferredProviderID: .openAI,
             enabledProviders: [.openAI, .gemini]
         )
@@ -94,7 +94,7 @@ final class LLMModelCatalogTests: XCTestCase {
                     providerID: .openAI,
                     defaultModelID: "dup",
                     models: [
-                        LLMProviderModel(modelID: "dup", capabilities: [.grammar]),
+                        LLMProviderModel(modelID: "dup", capabilities: [.refine]),
                         LLMProviderModel(modelID: "dup", capabilities: [.voice]),
                     ]
                 )
@@ -116,7 +116,7 @@ final class LLMModelCatalogTests: XCTestCase {
                     models: [
                         LLMProviderModel(
                             modelID: "gemini-test",
-                            capabilities: [.grammar]
+                            capabilities: [.refine]
                         )
                     ]
                 )

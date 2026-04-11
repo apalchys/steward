@@ -37,7 +37,7 @@ final class OpenAIClientTests: XCTestCase {
         XCTAssertEqual(result.status, .invalidCredentials)
     }
 
-    func testCorrectGrammarSuccessReturnsCorrectedTextAndSendsReasoningForGPT5() async throws {
+    func testRefineTextSuccessReturnsCorrectedTextAndSendsReasoningForGPT5() async throws {
         URLProtocolStub.configure(handler: { request in
             XCTAssertEqual(request.httpMethod, "POST")
             XCTAssertEqual(request.url?.absoluteString, "https://api.openai.com/v1/responses")
@@ -47,31 +47,31 @@ final class OpenAIClientTests: XCTestCase {
             let requestBody = try XCTUnwrap(request.bodyData())
             let payload = try XCTUnwrap(try JSONSerialization.jsonObject(with: requestBody) as? [String: Any])
             XCTAssertEqual(payload["model"] as? String, "gpt-5.4")
-            XCTAssertEqual(payload["input"] as? String, "This are bad grammar.")
+            XCTAssertEqual(payload["input"] as? String, "This are awkward.")
             XCTAssertTrue((payload["instructions"] as? String)?.contains("Additional instructions to follow:") ?? false)
 
             let reasoning = try XCTUnwrap(payload["reasoning"] as? [String: Any])
             XCTAssertEqual(reasoning["effort"] as? String, "none")
 
             let data = """
-                {"output":[{"type":"message","content":[{"type":"output_text","text":"This is bad grammar."}]}]}
+                {"output":[{"type":"message","content":[{"type":"output_text","text":"This is awkward."}]}]}
                 """.data(using: .utf8)
             let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, data)
         })
 
         let client = makeClient()
-        let correctedText = try await client.correctGrammar(
+        let correctedText = try await client.refineText(
             apiKey: "sk-test",
             modelID: "gpt-5.4",
             customInstructions: "Use concise language.",
-            text: "This are bad grammar."
+            text: "This are awkward."
         )
 
-        XCTAssertEqual(correctedText, "This is bad grammar.")
+        XCTAssertEqual(correctedText, "This is awkward.")
     }
 
-    func testCorrectGrammarOmitsReasoningForNonGPT5Model() async throws {
+    func testRefineTextOmitsReasoningForNonGPT5Model() async throws {
         URLProtocolStub.configure(handler: { request in
             let requestBody = try XCTUnwrap(request.bodyData())
             let payload = try XCTUnwrap(try JSONSerialization.jsonObject(with: requestBody) as? [String: Any])
@@ -85,7 +85,7 @@ final class OpenAIClientTests: XCTestCase {
         })
 
         let client = makeClient()
-        let correctedText = try await client.correctGrammar(
+        let correctedText = try await client.refineText(
             apiKey: "sk-test",
             modelID: "gpt-4.1-mini",
             customInstructions: "",
@@ -95,7 +95,7 @@ final class OpenAIClientTests: XCTestCase {
         XCTAssertEqual(correctedText, "ok")
     }
 
-    func testCorrectGrammarReturnsNormalizedErrorMessageForInvalidCredentials() async {
+    func testRefineTextReturnsNormalizedErrorMessageForInvalidCredentials() async {
         URLProtocolStub.configure(handler: { request in
             let data = """
                 {"error":{"message":"Invalid API key."}}
@@ -106,7 +106,7 @@ final class OpenAIClientTests: XCTestCase {
 
         let client = makeClient()
         await assertThrowsErrorMessage("OpenAI API key is invalid.") {
-            try await client.correctGrammar(
+            try await client.refineText(
                 apiKey: "bad-key",
                 modelID: "gpt-5.4",
                 customInstructions: "",
@@ -115,7 +115,7 @@ final class OpenAIClientTests: XCTestCase {
         }
     }
 
-    func testCorrectGrammarReturnsProviderMessageForBadRequest() async {
+    func testRefineTextReturnsProviderMessageForBadRequest() async {
         URLProtocolStub.configure(handler: { request in
             let data = """
                 {"error":{"message":"Unsupported response format."}}
@@ -126,7 +126,7 @@ final class OpenAIClientTests: XCTestCase {
 
         let client = makeClient()
         await assertThrowsErrorMessage("Unsupported response format.") {
-            try await client.correctGrammar(
+            try await client.refineText(
                 apiKey: "sk-test",
                 modelID: "gpt-5.4",
                 customInstructions: "",
@@ -135,7 +135,7 @@ final class OpenAIClientTests: XCTestCase {
         }
     }
 
-    func testCorrectGrammarReturnsServiceMessageForTemporaryFailure() async {
+    func testRefineTextReturnsServiceMessageForTemporaryFailure() async {
         URLProtocolStub.configure(handler: { request in
             let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 503, httpVersion: nil, headerFields: nil)!
             return (response, nil)
@@ -143,7 +143,7 @@ final class OpenAIClientTests: XCTestCase {
 
         let client = makeClient()
         await assertThrowsErrorMessage("OpenAI is temporarily unavailable.") {
-            try await client.correctGrammar(
+            try await client.refineText(
                 apiKey: "sk-test",
                 modelID: "gpt-5.4",
                 customInstructions: "",
@@ -152,7 +152,7 @@ final class OpenAIClientTests: XCTestCase {
         }
     }
 
-    func testCorrectGrammarReturnsEmptyResponseErrorWhenDataIsMissing() async {
+    func testRefineTextReturnsEmptyResponseErrorWhenDataIsMissing() async {
         URLProtocolStub.configure(handler: { request in
             let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, nil)
@@ -160,7 +160,7 @@ final class OpenAIClientTests: XCTestCase {
 
         let client = makeClient()
         await assertThrowsErrorMessage("OpenAI returned an empty response.") {
-            try await client.correctGrammar(
+            try await client.refineText(
                 apiKey: "sk-test",
                 modelID: "gpt-5.4",
                 customInstructions: "",
@@ -169,7 +169,7 @@ final class OpenAIClientTests: XCTestCase {
         }
     }
 
-    func testCorrectGrammarReturnsEmptyOutputErrorWhenNoOutputTextPresent() async {
+    func testRefineTextReturnsEmptyOutputErrorWhenNoOutputTextPresent() async {
         URLProtocolStub.configure(handler: { request in
             let data = """
                 {"output":[{"type":"message","content":[{"type":"input_text","text":"ignored"}]}]}
@@ -180,7 +180,7 @@ final class OpenAIClientTests: XCTestCase {
 
         let client = makeClient()
         await assertThrowsErrorMessage("OpenAI returned no corrected text.") {
-            try await client.correctGrammar(
+            try await client.refineText(
                 apiKey: "sk-test",
                 modelID: "gpt-5.4",
                 customInstructions: "",
@@ -189,12 +189,12 @@ final class OpenAIClientTests: XCTestCase {
         }
     }
 
-    func testCorrectGrammarPropagatesTransportError() async {
+    func testRefineTextPropagatesTransportError() async {
         URLProtocolStub.configure(stubError: URLError(.timedOut))
 
         let client = makeClient()
         do {
-            _ = try await client.correctGrammar(
+            _ = try await client.refineText(
                 apiKey: "sk-test",
                 modelID: "gpt-5.4",
                 customInstructions: "",

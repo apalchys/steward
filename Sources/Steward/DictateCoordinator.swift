@@ -2,7 +2,7 @@ import AVFoundation
 import Foundation
 
 @MainActor
-enum VoiceDictationWorkflowState: Equatable {
+enum DictateWorkflowState: Equatable {
     case idle
     case recording
     case transcribing
@@ -30,8 +30,8 @@ final class SystemMicrophoneAccessService: MicrophoneAccessProviding {
 }
 
 @MainActor
-protocol VoiceDictationCoordinating: AnyObject {
-    var onStateChanged: ((VoiceDictationWorkflowState) -> Void)? { get set }
+protocol DictateCoordinating: AnyObject {
+    var onStateChanged: ((DictateWorkflowState) -> Void)? { get set }
     var onError: ((Error) -> Void)? { get set }
 
     func handleManualToggleAction() async throws
@@ -39,7 +39,7 @@ protocol VoiceDictationCoordinating: AnyObject {
     func handlePushToTalkKeyUp() async throws
 }
 
-enum VoiceDictationCoordinatorError: LocalizedError, Equatable {
+enum DictateCoordinatorError: LocalizedError, Equatable {
     case permissionDenied
     case invalidProviderResponse
     case insertionFailedCopiedToClipboard
@@ -57,13 +57,13 @@ enum VoiceDictationCoordinatorError: LocalizedError, Equatable {
 }
 
 @MainActor
-final class VoiceDictationCoordinator: VoiceDictationCoordinating {
+final class DictateCoordinator: DictateCoordinating {
     private enum RecordingSource {
         case pushToTalkHotKey
         case manualToggle
     }
 
-    var onStateChanged: ((VoiceDictationWorkflowState) -> Void)?
+    var onStateChanged: ((DictateWorkflowState) -> Void)?
     var onError: ((Error) -> Void)?
 
     private let microphoneAccess: any MicrophoneAccessProviding
@@ -73,7 +73,7 @@ final class VoiceDictationCoordinator: VoiceDictationCoordinating {
     private let textInteraction: any TextInteractionPerforming
     private let settingsStore: any AppSettingsProviding
 
-    private(set) var state: VoiceDictationWorkflowState = .idle {
+    private(set) var state: DictateWorkflowState = .idle {
         didSet {
             onStateChanged?(state)
         }
@@ -168,7 +168,7 @@ final class VoiceDictationCoordinator: VoiceDictationCoordinating {
 
     private func startRecording(triggeredBy source: RecordingSource) async throws {
         guard await microphoneAccess.ensureAccess() else {
-            throw VoiceDictationCoordinatorError.permissionDenied
+            throw DictateCoordinatorError.permissionDenied
         }
 
         try audioRecordingService.startRecording()
@@ -204,14 +204,14 @@ final class VoiceDictationCoordinator: VoiceDictationCoordinating {
             let result = try await router.perform(request)
 
             guard let transcript = result.textValue?.trimmed, !transcript.isEmpty else {
-                throw VoiceDictationCoordinatorError.invalidProviderResponse
+                throw DictateCoordinatorError.invalidProviderResponse
             }
 
             do {
                 try await textInteraction.replaceSelectedText(with: transcript)
             } catch {
                 textInteraction.copyTextToClipboard(transcript)
-                throw VoiceDictationCoordinatorError.insertionFailedCopiedToClipboard
+                throw DictateCoordinatorError.insertionFailedCopiedToClipboard
             }
 
             finishWorkflow()
@@ -243,7 +243,7 @@ final class VoiceDictationCoordinator: VoiceDictationCoordinating {
         }
     }
 
-    private func transition(to newState: VoiceDictationWorkflowState) {
+    private func transition(to newState: DictateWorkflowState) {
         guard state != newState else {
             return
         }

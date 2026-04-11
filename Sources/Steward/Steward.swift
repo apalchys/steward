@@ -16,19 +16,19 @@ struct StewardApp: App {
         let llmRouter = LLMRouter(
             settingsStore: settingsStore
         )
-        let grammarCoordinator = GrammarCoordinator(
+        let refineCoordinator = RefineCoordinator(
             router: llmRouter,
             textInteraction: textInteractionService,
             settingsStore: settingsStore
         )
-        let screenOCRCoordinator = ScreenOCRCoordinator(
+        let captureCoordinator = CaptureCoordinator(
             router: llmRouter,
             textInteraction: textInteractionService,
             captureService: SystemScreenCaptureService(),
             selectionPresenter: ScreenSelectionOverlayController(),
             settingsStore: settingsStore
         )
-        let voiceDictationCoordinator = VoiceDictationCoordinator(
+        let dictateCoordinator = DictateCoordinator(
             microphoneAccess: SystemMicrophoneAccessService(),
             audioRecordingService: SystemAudioRecordingService(),
             recordingPillPresenter: VoiceRecordingPillController(),
@@ -43,9 +43,9 @@ struct StewardApp: App {
                 clipboardHistoryStore: clipboardHistoryStore,
                 clipboardMonitor: clipboardMonitor,
                 llmRouter: llmRouter,
-                grammarCoordinator: grammarCoordinator,
-                screenOCRCoordinator: screenOCRCoordinator,
-                voiceDictationCoordinator: voiceDictationCoordinator,
+                refineCoordinator: refineCoordinator,
+                captureCoordinator: captureCoordinator,
+                dictateCoordinator: dictateCoordinator,
                 appSystemServices: appSystemServices
             )
         )
@@ -86,17 +86,17 @@ private struct AppMenuView: View {
     var body: some View {
         Group {
             Button("Refine") {
-                appState.runGrammarAction()
+                appState.runRefineAction()
             }
             .keyboardShortcut("f", modifiers: [.command, .shift])
 
             Button("Capture") {
-                appState.runScreenOCRAction()
+                appState.runCaptureAction()
             }
             .keyboardShortcut("r", modifiers: [.command, .shift])
 
             Button("Dictate") {
-                appState.runVoiceDictationAction()
+                appState.runDictateAction()
             }
 
             Divider()

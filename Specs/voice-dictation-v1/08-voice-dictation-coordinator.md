@@ -9,7 +9,7 @@ Add a coordinator that owns the full voice workflow from permission check throug
 
 # Scope
 
-- Introduce `VoiceDictationCoordinator` following the same architectural role as the grammar and OCR coordinators.
+- Introduce `DictateCoordinator` following the same architectural role as the refine and Capture coordinators.
 - Responsibilities:
   - check microphone permission before recording
   - start and stop the audio recording service

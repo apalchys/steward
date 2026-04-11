@@ -4,14 +4,14 @@ import XCTest
 @testable import Steward
 
 @MainActor
-final class ScreenOCRCoordinatorTests: XCTestCase {
+final class CaptureCoordinatorTests: XCTestCase {
     func testHandleHotKeyPressFailsWhenPermissionDenied() async {
         let router = ScreenFakeRouter(result: .success(.text("ok")))
         let textInteraction = ScreenFakeTextInteraction()
         let captureService = FakeCaptureService(permissionGranted: false, imageData: Data())
         let selectionPresenter = FakeSelectionPresenter()
         let settingsStore = CoordinatorSettingsStore(settings: .empty())
-        let coordinator = ScreenOCRCoordinator(
+        let coordinator = CaptureCoordinator(
             router: router,
             textInteraction: textInteraction,
             captureService: captureService,
@@ -23,7 +23,7 @@ final class ScreenOCRCoordinatorTests: XCTestCase {
             try await coordinator.handleHotKeyPress()
             XCTFail("Expected permission error")
         } catch {
-            guard case ScreenOCRCoordinatorError.permissionDenied = error else {
+            guard case CaptureCoordinatorError.permissionDenied = error else {
                 XCTFail("Unexpected error: \(error)")
                 return
             }
@@ -37,7 +37,7 @@ final class ScreenOCRCoordinatorTests: XCTestCase {
         let captureService = FakeCaptureService(permissionGranted: true, imageData: Data("image".utf8))
         let selectionPresenter = FakeSelectionPresenter(mode: .cancel)
         let settingsStore = CoordinatorSettingsStore(settings: .empty())
-        let coordinator = ScreenOCRCoordinator(
+        let coordinator = CaptureCoordinator(
             router: router,
             textInteraction: textInteraction,
             captureService: captureService,
@@ -49,7 +49,7 @@ final class ScreenOCRCoordinatorTests: XCTestCase {
             try await coordinator.handleHotKeyPress()
             XCTFail("Expected cancellation")
         } catch {
-            guard case ScreenOCRCoordinatorError.cancelled = error else {
+            guard case CaptureCoordinatorError.cancelled = error else {
                 XCTFail("Unexpected error: \(error)")
                 return
             }
@@ -76,7 +76,7 @@ final class ScreenOCRCoordinatorTests: XCTestCase {
         )
         let settingsStore = CoordinatorSettingsStore(settings: settings)
 
-        let coordinator = ScreenOCRCoordinator(
+        let coordinator = CaptureCoordinator(
             router: router,
             textInteraction: textInteraction,
             captureService: captureService,
@@ -88,12 +88,12 @@ final class ScreenOCRCoordinatorTests: XCTestCase {
 
         XCTAssertEqual(textInteraction.copiedText, "ocr text")
         guard let request = router.lastRequest else {
-            XCTFail("Expected OCR request")
+            XCTFail("Expected Capture request")
             return
         }
 
         guard case .screenOCR(_, _, let customInstructions) = request.task else {
-            XCTFail("Expected OCR task")
+            XCTFail("Expected Capture task")
             return
         }
         XCTAssertEqual(request.selection, LLMModelSelection(providerID: .gemini, modelID: "model"))
@@ -118,7 +118,7 @@ final class ScreenOCRCoordinatorTests: XCTestCase {
         var settings = LLMSettings.empty()
         settings.screenText.selectedModel = LLMModelSelection(providerID: .gemini, modelID: "model")
         let settingsStore = CoordinatorSettingsStore(settings: settings)
-        let coordinator = ScreenOCRCoordinator(
+        let coordinator = CaptureCoordinator(
             router: router,
             textInteraction: textInteraction,
             captureService: captureService,

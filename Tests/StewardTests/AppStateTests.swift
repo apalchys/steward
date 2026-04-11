@@ -13,18 +13,18 @@ final class AppStateTests: XCTestCase {
         let clipboardHistoryStore = ClipboardHistoryStore(autoLoad: false)
         let clipboardMonitor = FakeClipboardMonitor()
         let router = FakeAppRouter()
-        let grammarCoordinator = FakeGrammarCoordinator()
-        let screenOCRCoordinator = FakeScreenOCRCoordinator()
-        let voiceDictationCoordinator = FakeVoiceDictationCoordinator()
+        let refineCoordinator = FakeRefineCoordinator()
+        let captureCoordinator = FakeCaptureCoordinator()
+        let dictateCoordinator = FakeDictateCoordinator()
         let appSystemServices = FakeAppSystemServices()
         let appState = AppState(
             settingsStore: settingsStore,
             clipboardHistoryStore: clipboardHistoryStore,
             clipboardMonitor: clipboardMonitor,
             llmRouter: router,
-            grammarCoordinator: grammarCoordinator,
-            screenOCRCoordinator: screenOCRCoordinator,
-            voiceDictationCoordinator: voiceDictationCoordinator,
+            refineCoordinator: refineCoordinator,
+            captureCoordinator: captureCoordinator,
+            dictateCoordinator: dictateCoordinator,
             appSystemServices: appSystemServices.services
         )
 
@@ -47,9 +47,9 @@ final class AppStateTests: XCTestCase {
             clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
             clipboardMonitor: FakeClipboardMonitor(),
             llmRouter: FakeAppRouter(),
-            grammarCoordinator: FakeGrammarCoordinator(),
-            screenOCRCoordinator: FakeScreenOCRCoordinator(),
-            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
+            refineCoordinator: FakeRefineCoordinator(),
+            captureCoordinator: FakeCaptureCoordinator(),
+            dictateCoordinator: FakeDictateCoordinator(),
             appSystemServices: appSystemServices.services
         )
 
@@ -76,9 +76,9 @@ final class AppStateTests: XCTestCase {
             clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
             clipboardMonitor: FakeClipboardMonitor(),
             llmRouter: FakeAppRouter(),
-            grammarCoordinator: FakeGrammarCoordinator(),
-            screenOCRCoordinator: FakeScreenOCRCoordinator(),
-            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
+            refineCoordinator: FakeRefineCoordinator(),
+            captureCoordinator: FakeCaptureCoordinator(),
+            dictateCoordinator: FakeDictateCoordinator(),
             appSystemServices: appSystemServices.services
         )
 
@@ -96,9 +96,9 @@ final class AppStateTests: XCTestCase {
             clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
             clipboardMonitor: FakeClipboardMonitor(),
             llmRouter: FakeAppRouter(),
-            grammarCoordinator: FakeGrammarCoordinator(),
-            screenOCRCoordinator: FakeScreenOCRCoordinator(),
-            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
+            refineCoordinator: FakeRefineCoordinator(),
+            captureCoordinator: FakeCaptureCoordinator(),
+            dictateCoordinator: FakeDictateCoordinator(),
             appSystemServices: appSystemServices.services
         )
 
@@ -115,9 +115,9 @@ final class AppStateTests: XCTestCase {
             clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
             clipboardMonitor: FakeClipboardMonitor(),
             llmRouter: FakeAppRouter(),
-            grammarCoordinator: FakeGrammarCoordinator(),
-            screenOCRCoordinator: FakeScreenOCRCoordinator(),
-            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
+            refineCoordinator: FakeRefineCoordinator(),
+            captureCoordinator: FakeCaptureCoordinator(),
+            dictateCoordinator: FakeDictateCoordinator(),
             appSystemServices: appSystemServices.services
         )
 
@@ -130,7 +130,7 @@ final class AppStateTests: XCTestCase {
         )
     }
 
-    func testStartPublishesVoiceShortcutConflictMessageWhenVoiceShortcutIsUnavailable() async {
+    func testStartPublishesDictateShortcutConflictMessageWhenShortcutIsUnavailable() async {
         _ = NSApplication.shared
         let appSystemServices = FakeAppSystemServices(unavailableKeyCodes: [Key.d.carbonKeyCode])
         let appState = AppState(
@@ -138,9 +138,9 @@ final class AppStateTests: XCTestCase {
             clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
             clipboardMonitor: FakeClipboardMonitor(),
             llmRouter: FakeAppRouter(),
-            grammarCoordinator: FakeGrammarCoordinator(),
-            screenOCRCoordinator: FakeScreenOCRCoordinator(),
-            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
+            refineCoordinator: FakeRefineCoordinator(),
+            captureCoordinator: FakeCaptureCoordinator(),
+            dictateCoordinator: FakeDictateCoordinator(),
             appSystemServices: appSystemServices.services
         )
 
@@ -153,7 +153,7 @@ final class AppStateTests: XCTestCase {
         )
     }
 
-    func testSettingsDidChangeRegistersCustomVoiceShortcutImmediately() async {
+    func testSettingsDidChangeRegistersCustomDictateShortcutImmediately() async {
         _ = NSApplication.shared
         let settingsStore = FakeAppSettingsStore()
         let appSystemServices = FakeAppSystemServices()
@@ -162,9 +162,9 @@ final class AppStateTests: XCTestCase {
             clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
             clipboardMonitor: FakeClipboardMonitor(),
             llmRouter: FakeAppRouter(),
-            grammarCoordinator: FakeGrammarCoordinator(),
-            screenOCRCoordinator: FakeScreenOCRCoordinator(),
-            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
+            refineCoordinator: FakeRefineCoordinator(),
+            captureCoordinator: FakeCaptureCoordinator(),
+            dictateCoordinator: FakeDictateCoordinator(),
             appSystemServices: appSystemServices.services
         )
 
@@ -184,7 +184,7 @@ final class AppStateTests: XCTestCase {
         XCTAssertNil(appState.shortcutRegistrationMessage)
     }
 
-    func testSettingsDidChangeRegistersMouseButtonVoiceShortcutImmediately() async {
+    func testSettingsDidChangeRegistersMouseButtonDictateShortcutImmediately() async {
         _ = NSApplication.shared
         let settingsStore = FakeAppSettingsStore()
         let appSystemServices = FakeAppSystemServices()
@@ -193,9 +193,9 @@ final class AppStateTests: XCTestCase {
             clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
             clipboardMonitor: FakeClipboardMonitor(),
             llmRouter: FakeAppRouter(),
-            grammarCoordinator: FakeGrammarCoordinator(),
-            screenOCRCoordinator: FakeScreenOCRCoordinator(),
-            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
+            refineCoordinator: FakeRefineCoordinator(),
+            captureCoordinator: FakeCaptureCoordinator(),
+            dictateCoordinator: FakeDictateCoordinator(),
             appSystemServices: appSystemServices.services
         )
 
@@ -213,7 +213,7 @@ final class AppStateTests: XCTestCase {
         XCTAssertNil(appState.shortcutRegistrationMessage)
     }
 
-    func testSettingsDidChangeRejectsVoiceShortcutThatConflictsWithGrammar() async {
+    func testSettingsDidChangeRejectsVoiceShortcutThatConflictsWithRefine() async {
         _ = NSApplication.shared
         let settingsStore = FakeAppSettingsStore()
         let appSystemServices = FakeAppSystemServices()
@@ -222,9 +222,9 @@ final class AppStateTests: XCTestCase {
             clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
             clipboardMonitor: FakeClipboardMonitor(),
             llmRouter: FakeAppRouter(),
-            grammarCoordinator: FakeGrammarCoordinator(),
-            screenOCRCoordinator: FakeScreenOCRCoordinator(),
-            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
+            refineCoordinator: FakeRefineCoordinator(),
+            captureCoordinator: FakeCaptureCoordinator(),
+            dictateCoordinator: FakeDictateCoordinator(),
             appSystemServices: appSystemServices.services
         )
 
@@ -232,7 +232,7 @@ final class AppStateTests: XCTestCase {
         await Task.yield()
         appSystemServices.resetCheckedHotKeys()
 
-        settingsStore.settings.voice.hotKey = .grammarCheck
+        settingsStore.settings.voice.hotKey = .refine
 
         appState.settingsDidChange()
         await Task.yield()
@@ -244,26 +244,26 @@ final class AppStateTests: XCTestCase {
         )
     }
 
-    func testValidateVoiceHotKeyRejectsGrammarConflict() {
+    func testValidateDictateHotKeyRejectsRefineConflict() {
         _ = NSApplication.shared
         let appState = AppState(
             settingsStore: FakeAppSettingsStore(),
             clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
             clipboardMonitor: FakeClipboardMonitor(),
             llmRouter: FakeAppRouter(),
-            grammarCoordinator: FakeGrammarCoordinator(),
-            screenOCRCoordinator: FakeScreenOCRCoordinator(),
-            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
+            refineCoordinator: FakeRefineCoordinator(),
+            captureCoordinator: FakeCaptureCoordinator(),
+            dictateCoordinator: FakeDictateCoordinator(),
             appSystemServices: FakeAppSystemServices().services
         )
 
         XCTAssertEqual(
-            appState.validateVoiceHotKey(.grammarCheck),
+            appState.validateDictateHotKey(.refine),
             .conflictsWithFeature("Refine")
         )
     }
 
-    func testValidateVoiceHotKeyRejectsUnavailableShortcut() {
+    func testValidateDictateHotKeyRejectsUnavailableShortcut() {
         _ = NSApplication.shared
         let unavailableHotKey = AppHotKey(
             carbonKeyCode: Key.v.carbonKeyCode,
@@ -276,45 +276,45 @@ final class AppStateTests: XCTestCase {
             clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
             clipboardMonitor: FakeClipboardMonitor(),
             llmRouter: FakeAppRouter(),
-            grammarCoordinator: FakeGrammarCoordinator(),
-            screenOCRCoordinator: FakeScreenOCRCoordinator(),
-            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
+            refineCoordinator: FakeRefineCoordinator(),
+            captureCoordinator: FakeCaptureCoordinator(),
+            dictateCoordinator: FakeDictateCoordinator(),
             appSystemServices: appSystemServices.services
         )
 
-        XCTAssertEqual(appState.validateVoiceHotKey(unavailableHotKey), AppHotKeyValidationError.unavailable)
+        XCTAssertEqual(appState.validateDictateHotKey(unavailableHotKey), AppHotKeyValidationError.unavailable)
     }
 
-    func testValidateVoiceHotKeyAllowsMouseButtonWithoutModifier() {
+    func testValidateDictateHotKeyAllowsMouseButtonWithoutModifier() {
         _ = NSApplication.shared
         let appState = AppState(
             settingsStore: FakeAppSettingsStore(),
             clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
             clipboardMonitor: FakeClipboardMonitor(),
             llmRouter: FakeAppRouter(),
-            grammarCoordinator: FakeGrammarCoordinator(),
-            screenOCRCoordinator: FakeScreenOCRCoordinator(),
-            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
+            refineCoordinator: FakeRefineCoordinator(),
+            captureCoordinator: FakeCaptureCoordinator(),
+            dictateCoordinator: FakeDictateCoordinator(),
             appSystemServices: FakeAppSystemServices().services
         )
 
-        XCTAssertNil(appState.validateVoiceHotKey(AppHotKey(mouseButtonNumber: 4)))
+        XCTAssertNil(appState.validateDictateHotKey(AppHotKey(mouseButtonNumber: 4)))
     }
 
-    func testMouseVoiceShortcutInvokesPushToTalkHandlers() async {
+    func testMouseDictateShortcutInvokesPushToTalkHandlers() async {
         _ = NSApplication.shared
         let settingsStore = FakeAppSettingsStore()
         settingsStore.settings.voice.hotKey = AppHotKey(mouseButtonNumber: 4)
-        let voiceDictationCoordinator = FakeVoiceDictationCoordinator()
+        let dictateCoordinator = FakeDictateCoordinator()
         let appSystemServices = FakeAppSystemServices()
         let appState = AppState(
             settingsStore: settingsStore,
             clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
             clipboardMonitor: FakeClipboardMonitor(),
             llmRouter: FakeAppRouter(),
-            grammarCoordinator: FakeGrammarCoordinator(),
-            screenOCRCoordinator: FakeScreenOCRCoordinator(),
-            voiceDictationCoordinator: voiceDictationCoordinator,
+            refineCoordinator: FakeRefineCoordinator(),
+            captureCoordinator: FakeCaptureCoordinator(),
+            dictateCoordinator: dictateCoordinator,
             appSystemServices: appSystemServices.services
         )
 
@@ -326,27 +326,8 @@ final class AppStateTests: XCTestCase {
         appSystemServices.lastMouseMonitor?.simulateButtonUp()
         await Task.yield()
 
-        XCTAssertEqual(voiceDictationCoordinator.handlePushToTalkKeyDownCallCount, 1)
-        XCTAssertEqual(voiceDictationCoordinator.handlePushToTalkKeyUpCallCount, 1)
-    }
-
-    func testOpenPreferencesUsesSettingsOpener() {
-        _ = NSApplication.shared
-        let appSystemServices = FakeAppSystemServices()
-        let appState = AppState(
-            settingsStore: FakeAppSettingsStore(),
-            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
-            clipboardMonitor: FakeClipboardMonitor(),
-            llmRouter: FakeAppRouter(),
-            grammarCoordinator: FakeGrammarCoordinator(),
-            screenOCRCoordinator: FakeScreenOCRCoordinator(),
-            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
-            appSystemServices: appSystemServices.services
-        )
-
-        appState.openPreferences()
-
-        XCTAssertEqual(appSystemServices.openApplicationSettingsCallCount, 1)
+        XCTAssertEqual(dictateCoordinator.handlePushToTalkKeyDownCallCount, 1)
+        XCTAssertEqual(dictateCoordinator.handlePushToTalkKeyUpCallCount, 1)
     }
 
     func testStartRefreshesLaunchAtLoginStatus() async {
@@ -357,9 +338,9 @@ final class AppStateTests: XCTestCase {
             clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
             clipboardMonitor: FakeClipboardMonitor(),
             llmRouter: FakeAppRouter(),
-            grammarCoordinator: FakeGrammarCoordinator(),
-            screenOCRCoordinator: FakeScreenOCRCoordinator(),
-            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
+            refineCoordinator: FakeRefineCoordinator(),
+            captureCoordinator: FakeCaptureCoordinator(),
+            dictateCoordinator: FakeDictateCoordinator(),
             appSystemServices: appSystemServices.services
         )
 
@@ -379,9 +360,9 @@ final class AppStateTests: XCTestCase {
             clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
             clipboardMonitor: FakeClipboardMonitor(),
             llmRouter: FakeAppRouter(),
-            grammarCoordinator: FakeGrammarCoordinator(),
-            screenOCRCoordinator: FakeScreenOCRCoordinator(),
-            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
+            refineCoordinator: FakeRefineCoordinator(),
+            captureCoordinator: FakeCaptureCoordinator(),
+            dictateCoordinator: FakeDictateCoordinator(),
             appSystemServices: appSystemServices.services
         )
 
@@ -401,9 +382,9 @@ final class AppStateTests: XCTestCase {
             clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
             clipboardMonitor: FakeClipboardMonitor(),
             llmRouter: FakeAppRouter(),
-            grammarCoordinator: FakeGrammarCoordinator(),
-            screenOCRCoordinator: FakeScreenOCRCoordinator(),
-            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
+            refineCoordinator: FakeRefineCoordinator(),
+            captureCoordinator: FakeCaptureCoordinator(),
+            dictateCoordinator: FakeDictateCoordinator(),
             appSystemServices: appSystemServices.services
         )
 
@@ -423,9 +404,9 @@ final class AppStateTests: XCTestCase {
             clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
             clipboardMonitor: FakeClipboardMonitor(),
             llmRouter: FakeAppRouter(),
-            grammarCoordinator: FakeGrammarCoordinator(),
-            screenOCRCoordinator: FakeScreenOCRCoordinator(),
-            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
+            refineCoordinator: FakeRefineCoordinator(),
+            captureCoordinator: FakeCaptureCoordinator(),
+            dictateCoordinator: FakeDictateCoordinator(),
             appSystemServices: appSystemServices.services
         )
 
@@ -444,9 +425,9 @@ final class AppStateTests: XCTestCase {
             clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
             clipboardMonitor: FakeClipboardMonitor(),
             llmRouter: FakeAppRouter(),
-            grammarCoordinator: FakeGrammarCoordinator(),
-            screenOCRCoordinator: FakeScreenOCRCoordinator(),
-            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
+            refineCoordinator: FakeRefineCoordinator(),
+            captureCoordinator: FakeCaptureCoordinator(),
+            dictateCoordinator: FakeDictateCoordinator(),
             appSystemServices: appSystemServices.services
         )
 
@@ -465,9 +446,9 @@ final class AppStateTests: XCTestCase {
             clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
             clipboardMonitor: FakeClipboardMonitor(),
             llmRouter: FakeAppRouter(),
-            grammarCoordinator: FakeGrammarCoordinator(),
-            screenOCRCoordinator: FakeScreenOCRCoordinator(),
-            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
+            refineCoordinator: FakeRefineCoordinator(),
+            captureCoordinator: FakeCaptureCoordinator(),
+            dictateCoordinator: FakeDictateCoordinator(),
             appSystemServices: appSystemServices.services
         )
 
@@ -486,9 +467,9 @@ final class AppStateTests: XCTestCase {
             clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
             clipboardMonitor: FakeClipboardMonitor(),
             llmRouter: FakeAppRouter(),
-            grammarCoordinator: FakeGrammarCoordinator(),
-            screenOCRCoordinator: FakeScreenOCRCoordinator(),
-            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
+            refineCoordinator: FakeRefineCoordinator(),
+            captureCoordinator: FakeCaptureCoordinator(),
+            dictateCoordinator: FakeDictateCoordinator(),
             appSystemServices: appSystemServices.services
         )
 
@@ -497,59 +478,59 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(appSystemServices.openLoginItemsSettingsCallCount, 1)
     }
 
-    func testRunVoiceDictationActionInvokesVoiceCoordinator() async {
+    func testRunDictateActionInvokesDictateCoordinator() async {
         _ = NSApplication.shared
-        let voiceDictationCoordinator = FakeVoiceDictationCoordinator()
+        let dictateCoordinator = FakeDictateCoordinator()
         let appState = AppState(
             settingsStore: FakeAppSettingsStore(),
             clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
             clipboardMonitor: FakeClipboardMonitor(),
             llmRouter: FakeAppRouter(),
-            grammarCoordinator: FakeGrammarCoordinator(),
-            screenOCRCoordinator: FakeScreenOCRCoordinator(),
-            voiceDictationCoordinator: voiceDictationCoordinator,
+            refineCoordinator: FakeRefineCoordinator(),
+            captureCoordinator: FakeCaptureCoordinator(),
+            dictateCoordinator: dictateCoordinator,
             appSystemServices: FakeAppSystemServices().services
         )
 
-        appState.runVoiceDictationAction()
+        appState.runDictateAction()
         await Task.yield()
 
-        XCTAssertEqual(voiceDictationCoordinator.handleManualToggleActionCallCount, 1)
+        XCTAssertEqual(dictateCoordinator.handleManualToggleActionCallCount, 1)
     }
 
-    func testVoiceRecordingUpdatesActivityStatusTitle() async {
+    func testDictateRecordingUpdatesActivityStatusTitle() async {
         _ = NSApplication.shared
-        let voiceDictationCoordinator = FakeVoiceDictationCoordinator()
+        let dictateCoordinator = FakeDictateCoordinator()
         let appState = AppState(
             settingsStore: FakeAppSettingsStore(),
             clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
             clipboardMonitor: FakeClipboardMonitor(),
             llmRouter: FakeAppRouter(),
-            grammarCoordinator: FakeGrammarCoordinator(),
-            screenOCRCoordinator: FakeScreenOCRCoordinator(),
-            voiceDictationCoordinator: voiceDictationCoordinator,
+            refineCoordinator: FakeRefineCoordinator(),
+            captureCoordinator: FakeCaptureCoordinator(),
+            dictateCoordinator: dictateCoordinator,
             appSystemServices: FakeAppSystemServices().services
         )
 
         appState.start()
-        appState.checkGrammarProviderStatus()
-        appState.checkOCRProviderStatus()
-        appState.checkVoiceProviderStatus()
+        appState.checkRefineProviderStatus()
+        appState.checkCaptureProviderStatus()
+        appState.checkDictateProviderStatus()
         await Task.yield()
 
-        voiceDictationCoordinator.onStateChanged?(.recording)
+        dictateCoordinator.onStateChanged?(.recording)
         await Task.yield()
 
         XCTAssertEqual(appState.activityStatus, .processing)
         XCTAssertTrue(appState.shouldShowActivityStatusTitle)
         XCTAssertEqual(appState.activityStatusTitle, "Status: Listening...")
 
-        voiceDictationCoordinator.onStateChanged?(.transcribing)
+        dictateCoordinator.onStateChanged?(.transcribing)
         await Task.yield()
 
         XCTAssertEqual(appState.activityStatusTitle, "Status: Transcribing...")
 
-        voiceDictationCoordinator.onStateChanged?(.idle)
+        dictateCoordinator.onStateChanged?(.idle)
         await Task.yield()
 
         XCTAssertEqual(appState.activityStatus, .ready)
@@ -557,40 +538,40 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(appState.activityStatusTitle, "Status: Ready")
     }
 
-    func testVoiceRecordingBlocksGrammarActionUntilIdle() async {
+    func testDictateRecordingBlocksRefineActionUntilIdle() async {
         _ = NSApplication.shared
-        let grammarCoordinator = FakeGrammarCoordinator()
-        let voiceDictationCoordinator = FakeVoiceDictationCoordinator()
+        let refineCoordinator = FakeRefineCoordinator()
+        let dictateCoordinator = FakeDictateCoordinator()
         let appState = AppState(
             settingsStore: FakeAppSettingsStore(),
             clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
             clipboardMonitor: FakeClipboardMonitor(),
             llmRouter: FakeAppRouter(),
-            grammarCoordinator: grammarCoordinator,
-            screenOCRCoordinator: FakeScreenOCRCoordinator(),
-            voiceDictationCoordinator: voiceDictationCoordinator,
+            refineCoordinator: refineCoordinator,
+            captureCoordinator: FakeCaptureCoordinator(),
+            dictateCoordinator: dictateCoordinator,
             appSystemServices: FakeAppSystemServices().services
         )
 
         appState.start()
-        voiceDictationCoordinator.onStateChanged?(.recording)
+        dictateCoordinator.onStateChanged?(.recording)
         await Task.yield()
 
-        appState.runGrammarAction()
+        appState.runRefineAction()
         await Task.yield()
 
-        XCTAssertEqual(grammarCoordinator.handleHotKeyPressCallCount, 0)
+        XCTAssertEqual(refineCoordinator.handleHotKeyPressCallCount, 0)
 
-        voiceDictationCoordinator.onStateChanged?(.idle)
+        dictateCoordinator.onStateChanged?(.idle)
         await Task.yield()
 
-        appState.runGrammarAction()
+        appState.runRefineAction()
         await Task.yield()
 
-        XCTAssertEqual(grammarCoordinator.handleHotKeyPressCallCount, 1)
+        XCTAssertEqual(refineCoordinator.handleHotKeyPressCallCount, 1)
     }
 
-    func testCheckVoiceProviderStatusUsesSelectedVoiceProviderAndUpdatesTitle() async {
+    func testCheckDictateProviderStatusUsesSelectedProviderAndUpdatesTitle() async {
         _ = NSApplication.shared
         let settingsStore = FakeAppSettingsStore()
         let voiceSelection = LLMModelSelection(providerID: .openAI, modelID: "gpt-4o-mini-transcribe")
@@ -602,17 +583,17 @@ final class AppStateTests: XCTestCase {
             clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
             clipboardMonitor: FakeClipboardMonitor(),
             llmRouter: router,
-            grammarCoordinator: FakeGrammarCoordinator(),
-            screenOCRCoordinator: FakeScreenOCRCoordinator(),
-            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
+            refineCoordinator: FakeRefineCoordinator(),
+            captureCoordinator: FakeCaptureCoordinator(),
+            dictateCoordinator: FakeDictateCoordinator(),
             appSystemServices: FakeAppSystemServices().services
         )
 
-        appState.checkVoiceProviderStatus()
+        appState.checkDictateProviderStatus()
         await Task.yield()
 
         XCTAssertEqual(router.checkedSelections, [voiceSelection])
-        XCTAssertEqual(appState.voiceStatusTitle, "Dictate: OpenAI Ready")
+        XCTAssertEqual(appState.dictateStatusTitle, "Dictate: OpenAI Ready")
     }
 
     func testProviderMenuStatusesShowUniqueProvidersInsteadOfFeatures() async {
@@ -622,15 +603,15 @@ final class AppStateTests: XCTestCase {
             clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
             clipboardMonitor: FakeClipboardMonitor(),
             llmRouter: FakeAppRouter(),
-            grammarCoordinator: FakeGrammarCoordinator(),
-            screenOCRCoordinator: FakeScreenOCRCoordinator(),
-            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
+            refineCoordinator: FakeRefineCoordinator(),
+            captureCoordinator: FakeCaptureCoordinator(),
+            dictateCoordinator: FakeDictateCoordinator(),
             appSystemServices: FakeAppSystemServices().services
         )
 
-        appState.checkGrammarProviderStatus()
-        appState.checkOCRProviderStatus()
-        appState.checkVoiceProviderStatus()
+        appState.checkRefineProviderStatus()
+        appState.checkCaptureProviderStatus()
+        appState.checkDictateProviderStatus()
         await Task.yield()
         await Task.yield()
 
@@ -651,9 +632,9 @@ final class AppStateTests: XCTestCase {
             clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
             clipboardMonitor: FakeClipboardMonitor(),
             llmRouter: router,
-            grammarCoordinator: FakeGrammarCoordinator(),
-            screenOCRCoordinator: FakeScreenOCRCoordinator(),
-            voiceDictationCoordinator: FakeVoiceDictationCoordinator(),
+            refineCoordinator: FakeRefineCoordinator(),
+            captureCoordinator: FakeCaptureCoordinator(),
+            dictateCoordinator: FakeDictateCoordinator(),
             appSystemServices: FakeAppSystemServices().services
         )
 
@@ -695,7 +676,7 @@ private final class FakeAppRouter: LLMRouting {
     }
 }
 
-private final class FakeGrammarCoordinator: GrammarCoordinating {
+private final class FakeRefineCoordinator: RefineCoordinating {
     private(set) var handleHotKeyPressCallCount = 0
 
     func handleHotKeyPress() async throws {
@@ -703,14 +684,14 @@ private final class FakeGrammarCoordinator: GrammarCoordinating {
     }
 }
 
-private final class FakeScreenOCRCoordinator: ScreenOCRCoordinating {
+private final class FakeCaptureCoordinator: CaptureCoordinating {
     var onSelectionActivityChanged: ((Bool) -> Void)?
 
     func handleHotKeyPress() async throws {}
 }
 
-private final class FakeVoiceDictationCoordinator: VoiceDictationCoordinating {
-    var onStateChanged: ((VoiceDictationWorkflowState) -> Void)?
+private final class FakeDictateCoordinator: DictateCoordinating {
+    var onStateChanged: ((DictateWorkflowState) -> Void)?
     var onError: ((any Error) -> Void)?
     private(set) var handleManualToggleActionCallCount = 0
     private(set) var handlePushToTalkKeyDownCallCount = 0
@@ -735,7 +716,7 @@ private final class FakeAppSettingsStore: AppSettingsProviding {
     init(historySettings: ClipboardHistorySettings = ClipboardHistorySettings()) {
         settings.providerSettings[.openAI] = LLMProviderSettings(apiKey: "openai-key")
         settings.providerSettings[.gemini] = LLMProviderSettings(apiKey: "gemini-key")
-        settings.grammar.selectedModel = LLMModelSelection(providerID: .openAI, modelID: "gpt-5.4")
+        settings.refine.selectedModel = LLMModelSelection(providerID: .openAI, modelID: "gpt-5.4")
         settings.screenText.selectedModel = LLMModelSelection(
             providerID: .gemini,
             modelID: "gemini-3.1-flash-lite-preview"
@@ -765,7 +746,6 @@ private final class FakeAppSystemServices {
     var unavailableKeyCodes: Set<UInt32> = []
     var unavailableHotKeys: Set<AppHotKey> = []
     var setLaunchAtLoginEnabledError: Error?
-    private(set) var openApplicationSettingsCallCount = 0
     private(set) var openAccessibilityPrivacySettingsCallCount = 0
     private(set) var openMicrophonePrivacySettingsCallCount = 0
     private(set) var openScreenRecordingPrivacySettingsCallCount = 0
@@ -815,9 +795,6 @@ private final class FakeAppSystemServices {
                 )
                 self.lastMouseMonitor = monitor
                 return monitor
-            },
-            openApplicationSettings: {
-                self.openApplicationSettingsCallCount += 1
             },
             openAccessibilityPrivacySettings: {
                 self.openAccessibilityPrivacySettingsCallCount += 1

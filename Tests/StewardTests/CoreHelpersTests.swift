@@ -2,16 +2,16 @@ import XCTest
 @testable import StewardCore
 
 final class CoreHelpersTests: XCTestCase {
-    func testBuildGrammarPromptReturnsBasePromptWhenRulesAreEmpty() {
-        let defaultPrompt = buildGrammarPrompt(customInstructions: "")
-        let whitespacePrompt = buildGrammarPrompt(customInstructions: "  \n\t")
+    func testBuildRefinePromptReturnsBasePromptWhenRulesAreEmpty() {
+        let defaultPrompt = buildRefinePrompt(customInstructions: "")
+        let whitespacePrompt = buildRefinePrompt(customInstructions: "  \n\t")
 
         XCTAssertEqual(whitespacePrompt, defaultPrompt)
     }
 
-    func testBuildGrammarPromptAppendsCustomInstructions() {
+    func testBuildRefinePromptAppendsCustomInstructions() {
         let customInstructions = "Prefer short sentences."
-        let prompt = buildGrammarPrompt(customInstructions: customInstructions)
+        let prompt = buildRefinePrompt(customInstructions: customInstructions)
 
         XCTAssertTrue(prompt.contains("Additional instructions to follow:"))
         XCTAssertTrue(prompt.hasSuffix(customInstructions))
