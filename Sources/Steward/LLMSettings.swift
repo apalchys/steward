@@ -46,19 +46,77 @@ struct ScreenTextSettings: Equatable {
 
 struct VoiceSettings: Equatable {
     static let `default` = VoiceSettings(selectedModel: nil)
+    static let maxPreferredRecognitionLanguages = 5
 
     var selectedModel: LLMModelSelection?
     var customInstructions: String
-    var hotKey: AppHotKey
+    var pushToTalkHotKey: AppHotKey
+    var regularModeHotKey: AppHotKey
+    var preferredRecognitionLanguages: [VoiceLanguage]
+    var translateToLanguageEnabled: Bool
+    var translationTargetLanguage: VoiceLanguage?
 
     init(
         selectedModel: LLMModelSelection? = VoiceSettings.default.selectedModel,
         customInstructions: String = "",
-        hotKey: AppHotKey = .defaultVoiceDictation
+        pushToTalkHotKey: AppHotKey = .defaultVoiceDictation,
+        regularModeHotKey: AppHotKey = .defaultVoiceDictationRegular,
+        preferredRecognitionLanguages: [VoiceLanguage] = [],
+        translateToLanguageEnabled: Bool = false,
+        translationTargetLanguage: VoiceLanguage? = nil
     ) {
         self.selectedModel = selectedModel
         self.customInstructions = customInstructions
-        self.hotKey = hotKey
+        self.pushToTalkHotKey = pushToTalkHotKey
+        self.regularModeHotKey = regularModeHotKey
+        self.preferredRecognitionLanguages = Self.sanitizedPreferredRecognitionLanguages(preferredRecognitionLanguages)
+        self.translateToLanguageEnabled = translateToLanguageEnabled
+        self.translationTargetLanguage = translationTargetLanguage
+    }
+
+    init(
+        selectedModel: LLMModelSelection? = VoiceSettings.default.selectedModel,
+        customInstructions: String = "",
+        hotKey: AppHotKey
+    ) {
+        self.init(
+            selectedModel: selectedModel,
+            customInstructions: customInstructions,
+            pushToTalkHotKey: hotKey
+        )
+    }
+
+    var hotKey: AppHotKey {
+        get { pushToTalkHotKey }
+        set { pushToTalkHotKey = newValue }
+    }
+
+    func sanitized() -> VoiceSettings {
+        VoiceSettings(
+            selectedModel: selectedModel,
+            customInstructions: customInstructions,
+            pushToTalkHotKey: pushToTalkHotKey,
+            regularModeHotKey: regularModeHotKey,
+            preferredRecognitionLanguages: Self.sanitizedPreferredRecognitionLanguages(preferredRecognitionLanguages),
+            translateToLanguageEnabled: translateToLanguageEnabled,
+            translationTargetLanguage: translationTargetLanguage
+        )
+    }
+
+    private static func sanitizedPreferredRecognitionLanguages(_ languages: [VoiceLanguage]) -> [VoiceLanguage] {
+        var seen: Set<VoiceLanguage> = []
+        var result: [VoiceLanguage] = []
+
+        for language in languages where !seen.contains(language) {
+            seen.insert(language)
+            result.append(language)
+
+            if result.count == maxPreferredRecognitionLanguages {
+                break
+            }
+        }
+
+        return result
     }
 }
 
@@ -79,6 +137,10 @@ struct AppHotKey: Equatable, Hashable {
     static let defaultVoiceDictation = AppHotKey(
         carbonKeyCode: Key.d.carbonKeyCode,
         carbonModifiers: NSEvent.ModifierFlags([.command, .shift]).carbonFlags
+    )
+    static let defaultVoiceDictationRegular = AppHotKey(
+        carbonKeyCode: Key.d.carbonKeyCode,
+        carbonModifiers: NSEvent.ModifierFlags([.command, .option]).carbonFlags
     )
 
     var triggerKind: TriggerKind
@@ -239,6 +301,7 @@ struct LLMSettings: Equatable {
             for: .voice,
             enabledProviders: enabledProviders
         )
+        sanitizedSettings.voice = sanitizedSettings.voice.sanitized()
 
         return sanitizedSettings
     }
@@ -315,6 +378,13 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
         let voiceHotKeyCode: Defaults.Key<Int>
         let voiceHotKeyModifiers: Defaults.Key<Int>
         let voiceHotKeyMouseButtonNumber: Defaults.Key<Int>
+        let voiceRegularHotKeyTriggerKind: Defaults.Key<String>
+        let voiceRegularHotKeyCode: Defaults.Key<Int>
+        let voiceRegularHotKeyModifiers: Defaults.Key<Int>
+        let voiceRegularHotKeyMouseButtonNumber: Defaults.Key<Int>
+        let voicePreferredRecognitionLanguageIDs: Defaults.Key<[String]>
+        let voiceTranslateToLanguageEnabled: Defaults.Key<Bool>
+        let voiceTranslationTargetLanguageID: Defaults.Key<String>
         let clipboardHistoryEnabled: Defaults.Key<Bool>
         let clipboardHistoryMaxStoredRecords: Defaults.Key<Int>
 
@@ -384,6 +454,41 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
                 default: 0,
                 suite: userDefaults
             )
+            voiceRegularHotKeyTriggerKind = Defaults.Key<String>(
+                "voiceRegularHotKeyTriggerKind",
+                default: AppHotKey.TriggerKind.keyboard.rawValue,
+                suite: userDefaults
+            )
+            voiceRegularHotKeyCode = Defaults.Key<Int>(
+                "voiceRegularHotKeyCode",
+                default: Int(AppHotKey.defaultVoiceDictationRegular.carbonKeyCode),
+                suite: userDefaults
+            )
+            voiceRegularHotKeyModifiers = Defaults.Key<Int>(
+                "voiceRegularHotKeyModifiers",
+                default: Int(AppHotKey.defaultVoiceDictationRegular.carbonModifiers),
+                suite: userDefaults
+            )
+            voiceRegularHotKeyMouseButtonNumber = Defaults.Key<Int>(
+                "voiceRegularHotKeyMouseButtonNumber",
+                default: 0,
+                suite: userDefaults
+            )
+            voicePreferredRecognitionLanguageIDs = Defaults.Key<[String]>(
+                "voicePreferredRecognitionLanguageIDs",
+                default: [],
+                suite: userDefaults
+            )
+            voiceTranslateToLanguageEnabled = Defaults.Key<Bool>(
+                "voiceTranslateToLanguageEnabled",
+                default: false,
+                suite: userDefaults
+            )
+            voiceTranslationTargetLanguageID = Defaults.Key<String>(
+                "voiceTranslationTargetLanguageID",
+                default: "",
+                suite: userDefaults
+            )
             clipboardHistoryEnabled = Defaults.Key<Bool>(
                 "clipboardHistoryEnabled",
                 default: ClipboardHistorySettings.default.isEnabled,
@@ -432,19 +537,25 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
 
         let voiceHotKeyTriggerKind =
             AppHotKey.TriggerKind(rawValue: Defaults[keys.voiceHotKeyTriggerKind]) ?? .keyboard
-        let voiceHotKey: AppHotKey
-        switch voiceHotKeyTriggerKind {
-        case .keyboard:
-            voiceHotKey = AppHotKey(
-                carbonKeyCode: UInt32(max(0, Defaults[keys.voiceHotKeyCode])),
-                carbonModifiers: UInt32(max(0, Defaults[keys.voiceHotKeyModifiers]))
-            )
-        case .mouseButton:
-            voiceHotKey = AppHotKey(
-                mouseButtonNumber: max(0, Defaults[keys.voiceHotKeyMouseButtonNumber]),
-                carbonModifiers: UInt32(max(0, Defaults[keys.voiceHotKeyModifiers]))
-            )
-        }
+        let pushToTalkHotKey = readHotKey(
+            triggerKind: voiceHotKeyTriggerKind,
+            code: Defaults[keys.voiceHotKeyCode],
+            modifiers: Defaults[keys.voiceHotKeyModifiers],
+            mouseButtonNumber: Defaults[keys.voiceHotKeyMouseButtonNumber]
+        )
+
+        let voiceRegularHotKeyTriggerKind =
+            AppHotKey.TriggerKind(rawValue: Defaults[keys.voiceRegularHotKeyTriggerKind]) ?? .keyboard
+        let regularModeHotKey = readHotKey(
+            triggerKind: voiceRegularHotKeyTriggerKind,
+            code: Defaults[keys.voiceRegularHotKeyCode],
+            modifiers: Defaults[keys.voiceRegularHotKeyModifiers],
+            mouseButtonNumber: Defaults[keys.voiceRegularHotKeyMouseButtonNumber]
+        )
+
+        let preferredRecognitionLanguages = Defaults[keys.voicePreferredRecognitionLanguageIDs].compactMap(
+            VoiceLanguage.init(rawValue:))
+        let translationTargetLanguage = VoiceLanguage(rawValue: Defaults[keys.voiceTranslationTargetLanguageID].trimmed)
 
         let settings = LLMSettings(
             providerSettings: providerSettings,
@@ -459,7 +570,11 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
             voice: VoiceSettings(
                 selectedModel: voiceSelection,
                 customInstructions: Defaults[keys.voiceCustomInstructions],
-                hotKey: voiceHotKey
+                pushToTalkHotKey: pushToTalkHotKey,
+                regularModeHotKey: regularModeHotKey,
+                preferredRecognitionLanguages: preferredRecognitionLanguages,
+                translateToLanguageEnabled: Defaults[keys.voiceTranslateToLanguageEnabled],
+                translationTargetLanguage: translationTargetLanguage
             ),
             clipboardHistory: ClipboardHistorySettings(
                 isEnabled: Defaults[keys.clipboardHistoryEnabled],
@@ -497,12 +612,41 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
         Defaults[keys.customRefineInstructions] = sanitizedSettings.refine.customInstructions
         Defaults[keys.customScreenshotInstructions] = sanitizedSettings.screenText.customInstructions
         Defaults[keys.voiceCustomInstructions] = sanitizedSettings.voice.customInstructions
-        Defaults[keys.voiceHotKeyTriggerKind] = sanitizedSettings.voice.hotKey.triggerKind.rawValue
-        Defaults[keys.voiceHotKeyCode] = Int(sanitizedSettings.voice.hotKey.carbonKeyCode)
-        Defaults[keys.voiceHotKeyModifiers] = Int(sanitizedSettings.voice.hotKey.carbonModifiers)
-        Defaults[keys.voiceHotKeyMouseButtonNumber] = sanitizedSettings.voice.hotKey.mouseButtonNumber
+        Defaults[keys.voiceHotKeyTriggerKind] = sanitizedSettings.voice.pushToTalkHotKey.triggerKind.rawValue
+        Defaults[keys.voiceHotKeyCode] = Int(sanitizedSettings.voice.pushToTalkHotKey.carbonKeyCode)
+        Defaults[keys.voiceHotKeyModifiers] = Int(sanitizedSettings.voice.pushToTalkHotKey.carbonModifiers)
+        Defaults[keys.voiceHotKeyMouseButtonNumber] = sanitizedSettings.voice.pushToTalkHotKey.mouseButtonNumber
+        Defaults[keys.voiceRegularHotKeyTriggerKind] = sanitizedSettings.voice.regularModeHotKey.triggerKind.rawValue
+        Defaults[keys.voiceRegularHotKeyCode] = Int(sanitizedSettings.voice.regularModeHotKey.carbonKeyCode)
+        Defaults[keys.voiceRegularHotKeyModifiers] = Int(sanitizedSettings.voice.regularModeHotKey.carbonModifiers)
+        Defaults[keys.voiceRegularHotKeyMouseButtonNumber] = sanitizedSettings.voice.regularModeHotKey.mouseButtonNumber
+        Defaults[keys.voicePreferredRecognitionLanguageIDs] = sanitizedSettings.voice.preferredRecognitionLanguages.map(
+            \.rawValue)
+        Defaults[keys.voiceTranslateToLanguageEnabled] = sanitizedSettings.voice.translateToLanguageEnabled
+        Defaults[keys.voiceTranslationTargetLanguageID] =
+            sanitizedSettings.voice.translationTargetLanguage?.rawValue ?? ""
         Defaults[keys.clipboardHistoryEnabled] = sanitizedSettings.clipboardHistory.isEnabled
         Defaults[keys.clipboardHistoryMaxStoredRecords] = sanitizedSettings.clipboardHistory.maxStoredRecords
+    }
+
+    private func readHotKey(
+        triggerKind: AppHotKey.TriggerKind,
+        code: Int,
+        modifiers: Int,
+        mouseButtonNumber: Int
+    ) -> AppHotKey {
+        switch triggerKind {
+        case .keyboard:
+            return AppHotKey(
+                carbonKeyCode: UInt32(max(0, code)),
+                carbonModifiers: UInt32(max(0, modifiers))
+            )
+        case .mouseButton:
+            return AppHotKey(
+                mouseButtonNumber: max(0, mouseButtonNumber),
+                carbonModifiers: UInt32(max(0, modifiers))
+            )
+        }
     }
 
     private func readSelection(

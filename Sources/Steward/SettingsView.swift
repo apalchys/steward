@@ -251,10 +251,10 @@ struct SettingsView: View {
                     Text(
                         "Steward refines selected text, captures screen text as Markdown, dictates into focused apps, and keeps a searchable clipboard history."
                     )
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: 420)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 420)
                 }
 
                 VStack(spacing: 4) {
