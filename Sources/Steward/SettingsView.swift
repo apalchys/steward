@@ -180,11 +180,6 @@ struct SettingsView: View {
                     validate: { appState.validateVoiceHotKey($0) }
                 )
             }
-
-            Text("Version 1 is optimized for recordings up to 120 seconds.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
         }
     }
 

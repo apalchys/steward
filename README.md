@@ -71,7 +71,7 @@ First launch:
 - Global Dictate uses push-to-talk: hold to record, release to transcribe
 - The menu item remains available as a manual toggle fallback
 - Dictate can preserve mixed-language speech and apply punctuation and paragraph formatting
-- Version 1 is optimized for recordings up to 120 seconds
+- Optimized for recordings up to 120 seconds
 - If Steward cannot insert the transcript into the focused app, it copies the transcript to the clipboard instead
 
 ## Build
