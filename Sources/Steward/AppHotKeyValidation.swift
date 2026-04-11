@@ -27,6 +27,7 @@ enum AppHotKeyValidationError: LocalizedError, Equatable {
 struct AppHotKeyValidator {
     static func validateDictateHotKey(
         _ hotKey: AppHotKey,
+        conflictingDictateHotKeys: [(AppHotKey, String)] = [],
         isShortcutAvailable: (Key, NSEvent.ModifierFlags) -> Bool
     ) -> AppHotKeyValidationError? {
         if hotKey == .refine {
@@ -35,6 +36,10 @@ struct AppHotKeyValidator {
 
         if hotKey == .screenTextCapture {
             return .conflictsWithFeature("Capture")
+        }
+
+        for (conflictingHotKey, featureName) in conflictingDictateHotKeys where hotKey == conflictingHotKey {
+            return .conflictsWithFeature(featureName)
         }
 
         if hotKey.isMouseButton {

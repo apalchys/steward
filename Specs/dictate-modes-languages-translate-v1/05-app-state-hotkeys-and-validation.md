@@ -1,6 +1,6 @@
 ---
 name: App State Hotkeys And Validation
-status: todo
+status: done
 ---
 
 # Summary
@@ -22,4 +22,3 @@ Register and validate separate Dictate shortcuts for push-to-talk and regular mo
 - Both Dictate shortcuts activate the intended coordinator entrypoints.
 - Conflicting Dictate shortcuts are rejected immediately.
 - Existing Refine and Capture shortcut behavior remains unchanged.
-

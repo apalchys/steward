@@ -51,6 +51,29 @@ final class AppState: ObservableObject {
         }
     }
 
+    private enum DictateShortcutKind {
+        case pushToTalk
+        case regularMode
+
+        var title: String {
+            switch self {
+            case .pushToTalk:
+                return "Dictate Push-to-Talk"
+            case .regularMode:
+                return "Dictate Regular"
+            }
+        }
+
+        var conflictLabel: String {
+            switch self {
+            case .pushToTalk:
+                return "Dictate Regular"
+            case .regularMode:
+                return "Dictate Push-to-Talk"
+            }
+        }
+    }
+
     private enum StatusSymbolName {
         static let readyFallback = "pencil.and.outline"
         static let error = "exclamationmark.triangle"
@@ -88,8 +111,10 @@ final class AppState: ObservableObject {
 
     private var refineHotKey: HotKey?
     private var captureHotKey: HotKey?
-    private var dictateHotKey: HotKey?
-    private var dictateMouseButtonMonitor: (any MouseButtonShortcutMonitoring)?
+    private var dictatePushToTalkHotKey: HotKey?
+    private var dictatePushToTalkMouseButtonMonitor: (any MouseButtonShortcutMonitoring)?
+    private var dictateRegularHotKey: HotKey?
+    private var dictateRegularMouseButtonMonitor: (any MouseButtonShortcutMonitoring)?
     private var hasStarted = false
     private var initialHealthCheckTask: Task<Void, Never>?
     private var settingsHealthDebounceTask: Task<Void, Never>?
@@ -97,14 +122,16 @@ final class AppState: ObservableObject {
     private var captureHealthCheckTask: Task<Void, Never>?
     private var dictateHealthCheckTask: Task<Void, Never>?
     private var fixedShortcutRegistrationMessage: String?
-    private var dictateShortcutRegistrationMessage: String?
+    private var dictatePushToTalkShortcutRegistrationMessage: String?
+    private var dictateRegularShortcutRegistrationMessage: String?
 
     private var isProcessing = false
     private var isScreenSelectionActive = false
     private var lastOperationFailed = false
     private var activeFeature: FeatureKind?
     private var dictateWorkflowState: DictateWorkflowState = .idle
-    private var activeDictateHotKey = AppHotKey.defaultVoiceDictation
+    private var activePushToTalkDictateHotKey = AppHotKey.defaultVoiceDictation
+    private var activeRegularDictateHotKey = AppHotKey.defaultVoiceDictationRegular
 
     init(
         settingsStore: any AppSettingsProviding,
@@ -314,15 +341,28 @@ final class AppState: ObservableObject {
     }
 
     func validateDictateHotKey(_ hotKey: AppHotKey) -> AppHotKeyValidationError? {
+        validatePushToTalkDictateHotKey(hotKey)
+    }
+
+    func validatePushToTalkDictateHotKey(_ hotKey: AppHotKey) -> AppHotKeyValidationError? {
         AppHotKeyValidator.validateDictateHotKey(
             hotKey,
+            conflictingDictateHotKeys: [(settingsStore.loadSettings().voice.regularModeHotKey, "Dictate Regular")],
+            isShortcutAvailable: appSystemServices.isShortcutAvailable
+        )
+    }
+
+    func validateRegularDictateHotKey(_ hotKey: AppHotKey) -> AppHotKeyValidationError? {
+        AppHotKeyValidator.validateDictateHotKey(
+            hotKey,
+            conflictingDictateHotKeys: [(settingsStore.loadSettings().voice.pushToTalkHotKey, "Dictate Push-to-Talk")],
             isShortcutAvailable: appSystemServices.isShortcutAvailable
         )
     }
 
     func settingsDidChange() {
         applyClipboardHistorySettings()
-        registerDictateHotKey(using: settingsStore.loadSettings().voice.hotKey)
+        registerDictateHotKeys()
         initialHealthCheckTask?.cancel()
         settingsHealthDebounceTask?.cancel()
         settingsHealthDebounceTask = Task { @MainActor [weak self] in
@@ -426,7 +466,7 @@ final class AppState: ObservableObject {
         }
 
         fixedShortcutRegistrationMessage = shortcutConflictMessage(for: unavailableShortcuts)
-        registerDictateHotKey(using: settingsStore.loadSettings().voice.hotKey)
+        registerDictateHotKeys()
     }
 
     private func checkProviderStatus(for feature: FeatureKind) {
@@ -784,18 +824,35 @@ final class AppState: ObservableObject {
         }
     }
 
-    private func registerDictateHotKey(using requestedHotKey: AppHotKey) {
-        if let validationError = AppHotKeyValidator.validateDictateHotKey(
-            requestedHotKey,
-            isShortcutAvailable: appSystemServices.isShortcutAvailable
-        ) {
-            dictateShortcutRegistrationMessage = dictateShortcutMessage(for: requestedHotKey, error: validationError)
+    private func registerDictateHotKeys() {
+        let voiceSettings = settingsStore.loadSettings().voice
+        registerDictateHotKey(using: voiceSettings.pushToTalkHotKey, kind: .pushToTalk)
+        registerDictateHotKey(using: voiceSettings.regularModeHotKey, kind: .regularMode)
+    }
+
+    private func registerDictateHotKey(using requestedHotKey: AppHotKey, kind: DictateShortcutKind) {
+        let validationError: AppHotKeyValidationError?
+        switch kind {
+        case .pushToTalk:
+            validationError = validatePushToTalkDictateHotKey(requestedHotKey)
+        case .regularMode:
+            validationError = validateRegularDictateHotKey(requestedHotKey)
+        }
+
+        if let validationError {
+            setDictateShortcutRegistrationMessage(
+                dictateShortcutMessage(for: requestedHotKey, kind: kind, error: validationError),
+                for: kind
+            )
             refreshShortcutRegistrationMessage()
             return
         }
 
-        guard requestedHotKey != activeDictateHotKey || !hasRegisteredDictateShortcut(for: requestedHotKey) else {
-            dictateShortcutRegistrationMessage = nil
+        guard
+            requestedHotKey != activeDictateHotKey(for: kind)
+                || !hasRegisteredDictateShortcut(for: requestedHotKey, kind: kind)
+        else {
+            setDictateShortcutRegistrationMessage(nil, for: kind)
             refreshShortcutRegistrationMessage()
             return
         }
@@ -805,98 +862,188 @@ final class AppState: ObservableObject {
                 requestedHotKey.mouseButtonNumber,
                 requestedHotKey.modifiers,
                 { [weak self] in
-                    Task { @MainActor [weak self] in
-                        do {
-                            try await self?.dictateCoordinator.handlePushToTalkKeyDown()
-                        } catch {
-                            self?.handleCoordinatorError(for: .dictate, error: error)
-                        }
-                    }
+                    self?.handleDictateShortcutDown(kind: kind)
                 },
                 { [weak self] in
-                    Task { @MainActor [weak self] in
-                        do {
-                            try await self?.dictateCoordinator.handlePushToTalkKeyUp()
-                        } catch {
-                            self?.handleCoordinatorError(for: .dictate, error: error)
-                        }
-                    }
+                    self?.handleDictateShortcutUp(kind: kind)
                 }
             )
 
-            dictateHotKey = nil
-            dictateMouseButtonMonitor?.stop()
-            dictateMouseButtonMonitor = mouseButtonMonitor
-            activeDictateHotKey = requestedHotKey
-            dictateShortcutRegistrationMessage = nil
+            setDictateHotKey(nil, for: kind)
+            dictateMouseButtonMonitor(for: kind)?.stop()
+            setDictateMouseButtonMonitor(mouseButtonMonitor, for: kind)
+            setActiveDictateHotKey(requestedHotKey, for: kind)
+            setDictateShortcutRegistrationMessage(nil, for: kind)
             refreshShortcutRegistrationMessage()
             return
         }
 
         let dictateShortcut = AppShortcut(
-            title: "Dictate",
+            title: kind.title,
             key: requestedHotKey.key ?? .d,
             modifiers: requestedHotKey.modifiers,
             displayValue: requestedHotKey.readableDisplayValue
         )
+        let keyUpAction: (@MainActor () -> Void)?
+        if kind == .pushToTalk {
+            keyUpAction = { [weak self] in
+                self?.handleDictateShortcutUp(kind: kind)
+            }
+        } else {
+            keyUpAction = nil
+        }
 
         guard
             let hotKey = makeHotKey(
                 for: dictateShortcut,
                 action: { [weak self] in
-                    Task { @MainActor [weak self] in
-                        do {
-                            try await self?.dictateCoordinator.handlePushToTalkKeyDown()
-                        } catch {
-                            self?.handleCoordinatorError(for: .dictate, error: error)
-                        }
-                    }
+                    self?.handleDictateShortcutDown(kind: kind)
                 },
-                keyUpAction: { [weak self] in
-                    Task { @MainActor [weak self] in
-                        do {
-                            try await self?.dictateCoordinator.handlePushToTalkKeyUp()
-                        } catch {
-                            self?.handleCoordinatorError(for: .dictate, error: error)
-                        }
-                    }
-                })
+                keyUpAction: keyUpAction
+            )
         else {
-            dictateShortcutRegistrationMessage = dictateShortcutMessage(for: requestedHotKey, error: .unavailable)
+            setDictateShortcutRegistrationMessage(
+                dictateShortcutMessage(for: requestedHotKey, kind: kind, error: .unavailable),
+                for: kind
+            )
             refreshShortcutRegistrationMessage()
             return
         }
 
-        dictateMouseButtonMonitor?.stop()
-        dictateMouseButtonMonitor = nil
-        dictateHotKey = hotKey
-        activeDictateHotKey = requestedHotKey
-        dictateShortcutRegistrationMessage = nil
+        dictateMouseButtonMonitor(for: kind)?.stop()
+        setDictateMouseButtonMonitor(nil, for: kind)
+        setDictateHotKey(hotKey, for: kind)
+        setActiveDictateHotKey(requestedHotKey, for: kind)
+        setDictateShortcutRegistrationMessage(nil, for: kind)
         refreshShortcutRegistrationMessage()
     }
 
-    private func hasRegisteredDictateShortcut(for hotKey: AppHotKey) -> Bool {
+    private func hasRegisteredDictateShortcut(for hotKey: AppHotKey, kind: DictateShortcutKind) -> Bool {
         if hotKey.isMouseButton {
-            return dictateMouseButtonMonitor != nil
+            return dictateMouseButtonMonitor(for: kind) != nil
         }
 
-        return dictateHotKey != nil
+        return dictateHotKey(for: kind) != nil
     }
 
-    private func dictateShortcutMessage(for hotKey: AppHotKey, error: AppHotKeyValidationError) -> String {
+    private func dictateShortcutMessage(
+        for hotKey: AppHotKey,
+        kind: DictateShortcutKind,
+        error: AppHotKeyValidationError
+    ) -> String {
         switch error {
         case .conflictsWithFeature(let featureName):
-            return "Shortcut unavailable: Dictate (\(hotKey.readableDisplayValue)) conflicts with \(featureName)."
+            return "Shortcut unavailable: \(kind.title) (\(hotKey.readableDisplayValue)) conflicts with \(featureName)."
         case .unavailable:
-            return "Shortcut unavailable: Dictate (\(hotKey.readableDisplayValue)) is already in use by another app."
+            return
+                "Shortcut unavailable: \(kind.title) (\(hotKey.readableDisplayValue)) is already in use by another app."
         case .requiresModifier, .requiresNonModifierKey, .requiresMouseButton:
             return error.localizedDescription
         }
     }
 
     private func refreshShortcutRegistrationMessage() {
-        let messages = [fixedShortcutRegistrationMessage, dictateShortcutRegistrationMessage].compactMap { $0 }
+        let messages = [
+            fixedShortcutRegistrationMessage,
+            dictatePushToTalkShortcutRegistrationMessage,
+            dictateRegularShortcutRegistrationMessage,
+        ].compactMap { $0 }
         shortcutRegistrationMessage = messages.isEmpty ? nil : messages.joined(separator: "\n")
+    }
+
+    private func handleDictateShortcutDown(kind: DictateShortcutKind) {
+        Task { @MainActor [weak self] in
+            do {
+                switch kind {
+                case .pushToTalk:
+                    try await self?.dictateCoordinator.handlePushToTalkKeyDown()
+                case .regularMode:
+                    try await self?.dictateCoordinator.handleRegularHotKeyToggleAction()
+                }
+            } catch {
+                self?.handleCoordinatorError(for: .dictate, error: error)
+            }
+        }
+    }
+
+    private func handleDictateShortcutUp(kind: DictateShortcutKind) {
+        guard kind == .pushToTalk else {
+            return
+        }
+
+        Task { @MainActor [weak self] in
+            do {
+                try await self?.dictateCoordinator.handlePushToTalkKeyUp()
+            } catch {
+                self?.handleCoordinatorError(for: .dictate, error: error)
+            }
+        }
+    }
+
+    private func dictateHotKey(for kind: DictateShortcutKind) -> HotKey? {
+        switch kind {
+        case .pushToTalk:
+            return dictatePushToTalkHotKey
+        case .regularMode:
+            return dictateRegularHotKey
+        }
+    }
+
+    private func setDictateHotKey(_ hotKey: HotKey?, for kind: DictateShortcutKind) {
+        switch kind {
+        case .pushToTalk:
+            dictatePushToTalkHotKey = hotKey
+        case .regularMode:
+            dictateRegularHotKey = hotKey
+        }
+    }
+
+    private func dictateMouseButtonMonitor(for kind: DictateShortcutKind) -> (any MouseButtonShortcutMonitoring)? {
+        switch kind {
+        case .pushToTalk:
+            return dictatePushToTalkMouseButtonMonitor
+        case .regularMode:
+            return dictateRegularMouseButtonMonitor
+        }
+    }
+
+    private func setDictateMouseButtonMonitor(
+        _ monitor: (any MouseButtonShortcutMonitoring)?,
+        for kind: DictateShortcutKind
+    ) {
+        switch kind {
+        case .pushToTalk:
+            dictatePushToTalkMouseButtonMonitor = monitor
+        case .regularMode:
+            dictateRegularMouseButtonMonitor = monitor
+        }
+    }
+
+    private func activeDictateHotKey(for kind: DictateShortcutKind) -> AppHotKey {
+        switch kind {
+        case .pushToTalk:
+            return activePushToTalkDictateHotKey
+        case .regularMode:
+            return activeRegularDictateHotKey
+        }
+    }
+
+    private func setActiveDictateHotKey(_ hotKey: AppHotKey, for kind: DictateShortcutKind) {
+        switch kind {
+        case .pushToTalk:
+            activePushToTalkDictateHotKey = hotKey
+        case .regularMode:
+            activeRegularDictateHotKey = hotKey
+        }
+    }
+
+    private func setDictateShortcutRegistrationMessage(_ message: String?, for kind: DictateShortcutKind) {
+        switch kind {
+        case .pushToTalk:
+            dictatePushToTalkShortcutRegistrationMessage = message
+        case .regularMode:
+            dictateRegularShortcutRegistrationMessage = message
+        }
     }
 
     private func makeHotKey(
