@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import StewardCore
 
 @MainActor
 enum DictateWorkflowState: Equatable {
@@ -197,7 +198,12 @@ final class DictateCoordinator: DictateCoordinating {
                 task: .voiceTranscription(
                     audioData: payload.data,
                     mimeType: payload.mimeType,
-                    customInstructions: voiceSettings.customInstructions
+                    options: VoiceTranscriptionOptions(
+                        preferredRecognitionLanguages: voiceSettings.preferredRecognitionLanguages,
+                        translateToLanguageEnabled: voiceSettings.translateToLanguageEnabled,
+                        translationTargetLanguage: voiceSettings.translationTargetLanguage,
+                        customInstructions: voiceSettings.customInstructions
+                    )
                 )
             )
 

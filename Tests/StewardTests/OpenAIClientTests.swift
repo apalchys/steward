@@ -248,6 +248,11 @@ final class OpenAIClientTests: XCTestCase {
 
     func testTranscribeAudioSuccessReturnsTranscriptAndUploadsMultipartAudio() async throws {
         let audioData = Data("audio-bytes".utf8)
+        let options = VoiceTranscriptionOptions(
+            preferredRecognitionLanguages: [.english, .spanish],
+            translateToLanguageEnabled: true,
+            translationTargetLanguage: .german
+        )
 
         URLProtocolStub.configure(handler: { request in
             XCTAssertEqual(request.httpMethod, "POST")
@@ -259,7 +264,8 @@ final class OpenAIClientTests: XCTestCase {
             XCTAssertTrue(body.contains("name=\"model\""))
             XCTAssertTrue(body.contains("gpt-4o-mini-transcribe"))
             XCTAssertTrue(body.contains("name=\"prompt\""))
-            XCTAssertTrue(body.contains("do not translate"))
+            XCTAssertTrue(body.contains("English, Spanish"))
+            XCTAssertTrue(body.contains("translate the final result into German"))
             XCTAssertTrue(body.contains("name=\"response_format\""))
             XCTAssertTrue(body.contains("text"))
             XCTAssertTrue(body.contains("name=\"file\"; filename=\"dictation.wav\""))
@@ -276,7 +282,7 @@ final class OpenAIClientTests: XCTestCase {
             modelID: "gpt-4o-mini-transcribe",
             audioData: audioData,
             mimeType: "audio/wav",
-            customInstructions: ""
+            options: options
         )
 
         XCTAssertEqual(transcript, "Hello from OpenAI.")
@@ -295,7 +301,7 @@ final class OpenAIClientTests: XCTestCase {
                 modelID: "gpt-4o-mini-transcribe",
                 audioData: Data("audio".utf8),
                 mimeType: "audio/wav",
-                customInstructions: ""
+                options: VoiceTranscriptionOptions()
             )
         }
     }

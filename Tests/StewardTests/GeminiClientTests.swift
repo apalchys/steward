@@ -239,6 +239,11 @@ final class GeminiClientTests: XCTestCase {
 
     func testTranscribeAudioSuccessParsesOutputAndSendsInlineAudio() async throws {
         let audioData = Data("audio-bytes".utf8)
+        let options = VoiceTranscriptionOptions(
+            preferredRecognitionLanguages: [.english, .french],
+            translateToLanguageEnabled: true,
+            translationTargetLanguage: .japanese
+        )
 
         URLProtocolStub.configure(handler: { request in
             XCTAssertEqual(request.httpMethod, "POST")
@@ -252,7 +257,10 @@ final class GeminiClientTests: XCTestCase {
 
             let systemInstruction = try XCTUnwrap(payload["system_instruction"] as? [String: Any])
             let systemParts = try XCTUnwrap(systemInstruction["parts"] as? [[String: Any]])
-            XCTAssertTrue((systemParts.first?["text"] as? String)?.contains("do not translate") == true)
+            let systemPrompt = systemParts.first?["text"] as? String
+            XCTAssertTrue(systemPrompt?.contains("Japanese") == true)
+            XCTAssertTrue(systemPrompt?.contains("translate the final result into Japanese") == true)
+            XCTAssertTrue(systemPrompt?.contains("English, French") == true)
 
             let contents = try XCTUnwrap(payload["contents"] as? [[String: Any]])
             let parts = try XCTUnwrap(contents.first?["parts"] as? [[String: Any]])
@@ -275,7 +283,7 @@ final class GeminiClientTests: XCTestCase {
             modelID: "gemini-3.1-flash-lite-preview",
             audioData: audioData,
             mimeType: "audio/wav",
-            customInstructions: ""
+            options: options
         )
 
         XCTAssertEqual(text, "Hello world.")
@@ -297,7 +305,7 @@ final class GeminiClientTests: XCTestCase {
                 modelID: "gemini-3.1-flash-lite-preview",
                 audioData: Data("audio".utf8),
                 mimeType: "audio/wav",
-                customInstructions: ""
+                options: VoiceTranscriptionOptions()
             )
         }
     }

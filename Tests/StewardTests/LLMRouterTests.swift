@@ -133,7 +133,7 @@ final class LLMRouterTests: XCTestCase {
                 task: .voiceTranscription(
                     audioData: Data("audio".utf8),
                     mimeType: "audio/wav",
-                    customInstructions: ""
+                    options: VoiceTranscriptionOptions()
                 )
             )
         )
@@ -156,7 +156,7 @@ final class LLMRouterTests: XCTestCase {
                 task: .voiceTranscription(
                     audioData: Data("audio".utf8),
                     mimeType: "audio/wav",
-                    customInstructions: ""
+                    options: VoiceTranscriptionOptions()
                 )
             )
         )

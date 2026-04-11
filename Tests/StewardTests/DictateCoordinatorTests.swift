@@ -36,7 +36,10 @@ final class DictateCoordinatorTests: XCTestCase {
         let settingsStore = VoiceDictationSettingsStore()
         settingsStore.settings.voice = VoiceSettings(
             selectedModel: LLMModelSelection(providerID: .gemini, modelID: "voice-model-gemini"),
-            customInstructions: "Keep mixed languages"
+            customInstructions: "Keep mixed languages",
+            preferredRecognitionLanguages: [.english, .spanish],
+            translateToLanguageEnabled: true,
+            translationTargetLanguage: .german
         )
         let coordinator = DictateCoordinator(
             microphoneAccess: microphoneAccess,
@@ -58,6 +61,13 @@ final class DictateCoordinatorTests: XCTestCase {
             return XCTFail("Expected routed voice request")
         }
         XCTAssertEqual(request.selection, LLMModelSelection(providerID: .gemini, modelID: "voice-model-gemini"))
+        guard case let .voiceTranscription(_, _, options) = request.task else {
+            return XCTFail("Expected voice transcription task")
+        }
+        XCTAssertEqual(options.preferredRecognitionLanguages, [.english, .spanish])
+        XCTAssertTrue(options.translateToLanguageEnabled)
+        XCTAssertEqual(options.translationTargetLanguage, .german)
+        XCTAssertEqual(options.customInstructions, "Keep mixed languages")
     }
 
     func testCancelDiscardsRecordingWithoutCallingRouter() async throws {

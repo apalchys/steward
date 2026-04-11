@@ -100,13 +100,13 @@ final class LLMRouter: LLMRouting {
                 customInstructions: customInstructions
             )
             return .text(extractedText)
-        case .voiceTranscription(let audioData, let mimeType, let customInstructions):
+        case .voiceTranscription(let audioData, let mimeType, let options):
             let transcript = try await openAIClient.transcribeAudio(
                 apiKey: configuration.apiKey,
                 modelID: configuration.modelID,
                 audioData: audioData,
                 mimeType: mimeType,
-                customInstructions: customInstructions
+                options: options
             )
             return .text(transcript)
         }
@@ -134,13 +134,13 @@ final class LLMRouter: LLMRouting {
                 customInstructions: customInstructions
             )
             return .text(extractedText)
-        case .voiceTranscription(let audioData, let mimeType, let customInstructions):
+        case .voiceTranscription(let audioData, let mimeType, let options):
             let transcript = try await geminiClient.transcribeAudio(
                 apiKey: configuration.apiKey,
                 modelID: configuration.modelID,
                 audioData: audioData,
                 mimeType: mimeType,
-                customInstructions: customInstructions
+                options: options
             )
             return .text(transcript)
         }

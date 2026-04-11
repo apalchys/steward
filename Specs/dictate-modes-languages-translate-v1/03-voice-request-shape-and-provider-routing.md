@@ -1,6 +1,6 @@
 ---
 name: Voice Request Shape And Provider Routing
-status: todo
+status: done
 ---
 
 # Summary
@@ -19,4 +19,3 @@ Carry Dictate language and translation options through the shared voice request 
 - Both providers receive the same Dictate options through the shared request model.
 - Existing Dictate routing behavior remains intact.
 - Provider tests cover the new prompt content.
-

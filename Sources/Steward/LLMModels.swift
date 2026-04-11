@@ -37,7 +37,7 @@ enum LLMFeature: String, CaseIterable, Hashable {
 enum LLMTask {
     case refineText(text: String, customInstructions: String)
     case screenOCR(imageData: Data, mimeType: String, customInstructions: String)
-    case voiceTranscription(audioData: Data, mimeType: String, customInstructions: String)
+    case voiceTranscription(audioData: Data, mimeType: String, options: VoiceTranscriptionOptions)
 }
 
 struct LLMRequest {

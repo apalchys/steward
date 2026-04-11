@@ -229,7 +229,7 @@ public struct OpenAIClient: Sendable {
         modelID: String,
         audioData: Data,
         mimeType: String,
-        customInstructions: String
+        options: VoiceTranscriptionOptions
     ) async throws -> String {
         let resolvedModelID = resolvedModelID(modelID)
         guard !resolvedModelID.isEmpty else {
@@ -240,7 +240,7 @@ public struct OpenAIClient: Sendable {
         let httpBody = multipartTranscriptionBody(
             boundary: boundary,
             modelID: resolvedModelID,
-            prompt: buildVoiceTranscriptionPrompt(customInstructions: customInstructions),
+            prompt: buildVoiceTranscriptionPrompt(options: options),
             audioData: audioData,
             mimeType: mimeType
         )

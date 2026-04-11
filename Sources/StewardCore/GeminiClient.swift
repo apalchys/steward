@@ -248,7 +248,7 @@ public struct GeminiClient: Sendable {
         modelID: String,
         audioData: Data,
         mimeType: String,
-        customInstructions: String
+        options: VoiceTranscriptionOptions
     ) async throws -> String {
         let resolvedModelID = resolvedModelID(modelID)
         guard !resolvedModelID.isEmpty else {
@@ -257,7 +257,7 @@ public struct GeminiClient: Sendable {
 
         let requestBody = GenerateContentRequest(
             systemInstruction: .init(parts: [
-                .init(text: buildVoiceTranscriptionPrompt(customInstructions: customInstructions))
+                .init(text: buildVoiceTranscriptionPrompt(options: options))
             ]),
             contents: [
                 .init(parts: [
