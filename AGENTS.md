@@ -1,5 +1,9 @@
 # Guidelines
 
+## Communication
+
+- Use telegram-style communication. Be ultra concise: cut all unnecessary words. Omit grammar, punctuation, articles, conjunctions, filler, hedges, greetings etc. No emojis, no apologies, no explanations unless required. Strip everything nonessential to maximize information per token.
+
 ## Project Structure & Module Organization
 
 - Source code lives in `Sources/Steward` (app target) and `Sources/StewardCore` (provider clients + shared prompt helpers).
