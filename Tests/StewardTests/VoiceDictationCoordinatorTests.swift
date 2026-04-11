@@ -35,9 +35,7 @@ final class VoiceDictationCoordinatorTests: XCTestCase {
         let textInteraction = VoiceDictationFakeTextInteraction()
         let settingsStore = VoiceDictationSettingsStore()
         settingsStore.settings.voice = VoiceSettings(
-            providerID: .gemini,
-            geminiModelID: "voice-model-gemini",
-            openAIModelID: "voice-model-openai",
+            selectedModel: LLMModelSelection(providerID: .gemini, modelID: "voice-model-gemini"),
             customInstructions: "Keep mixed languages"
         )
         let coordinator = VoiceDictationCoordinator(
@@ -59,8 +57,7 @@ final class VoiceDictationCoordinatorTests: XCTestCase {
         guard let request = router.lastRequest else {
             return XCTFail("Expected routed voice request")
         }
-        XCTAssertEqual(request.providerID, .gemini)
-        XCTAssertEqual(request.modelIDOverride, "voice-model-gemini")
+        XCTAssertEqual(request.selection, LLMModelSelection(providerID: .gemini, modelID: "voice-model-gemini"))
     }
 
     func testCancelDiscardsRecordingWithoutCallingRouter() async throws {
@@ -325,8 +322,8 @@ private final class VoiceDictationFakeRouter: LLMRouting {
         return try result.get()
     }
 
-    func checkAccess(for providerID: LLMProviderID) async throws -> LLMProviderHealth {
-        LLMProviderHealth(providerID: providerID, state: .available, message: "Ready")
+    func checkAccess(for selection: LLMModelSelection) async throws -> LLMProviderHealth {
+        LLMProviderHealth(providerID: selection.providerID, state: .available, message: "Ready")
     }
 }
 
@@ -357,7 +354,11 @@ private final class VoiceDictationFakeTextInteraction: TextInteractionPerforming
 }
 
 private final class VoiceDictationSettingsStore: AppSettingsProviding {
-    var settings = LLMSettings.empty()
+    var settings: LLMSettings = {
+        var settings = LLMSettings.empty()
+        settings.voice.selectedModel = LLMModelSelection(providerID: .gemini, modelID: "voice-model-gemini")
+        return settings
+    }()
 
     func loadSettings() -> LLMSettings {
         settings

@@ -23,9 +23,16 @@ final class GrammarCoordinator: GrammarCoordinating {
         }
 
         let settings = settingsStore.loadSettings()
+        guard let selection = settings.grammar.selectedModel else {
+            throw LLMRouterError.featureNotConfigured(LLMFeature.grammar.displayName)
+        }
+
         let request = LLMRequest(
-            providerID: LLMSettings.grammarProvider,
-            task: .grammarCorrection(text: selectedText, customInstructions: settings.grammarCustomInstructions)
+            selection: selection,
+            task: .grammarCorrection(
+                text: selectedText,
+                customInstructions: settings.grammar.customInstructions
+            )
         )
 
         let llmResult = try await router.perform(request)

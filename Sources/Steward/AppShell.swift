@@ -48,6 +48,7 @@ final class AppState: ObservableObject {
         static let readyFallback = "pencil.and.outline"
         static let error = "exclamationmark.triangle"
         static let processing = "ellipsis.circle"
+        static let needsSetupMessage = "Needs setup in Preferences"
     }
 
     private static let readyStatusIconImage = StatusBarIcon.readyImage()
@@ -402,7 +403,13 @@ final class AppState: ObservableObject {
     }
 
     private func checkProviderStatus(for feature: FeatureKind) {
-        let providerID = providerID(for: feature)
+        guard let selection = modelSelection(for: feature) else {
+            setStatus(.error(providerID: nil, message: StatusSymbolName.needsSetupMessage), for: feature)
+            refreshStatusUI()
+            return
+        }
+
+        let providerID = selection.providerID
         setStatus(.processing(providerID: providerID), for: feature)
         refreshStatusUI()
 
@@ -414,7 +421,7 @@ final class AppState: ObservableObject {
                 }
 
                 do {
-                    let health = try await self.llmRouter.checkAccess(for: providerID)
+                    let health = try await self.llmRouter.checkAccess(for: selection)
                     guard !Task.isCancelled else {
                         return
                     }
@@ -441,7 +448,7 @@ final class AppState: ObservableObject {
         isProcessing = true
         activeFeature = feature
 
-        setStatus(.processing(providerID: providerID(for: feature)), for: feature)
+        setStatus(.processing(providerID: modelSelection(for: feature)?.providerID), for: feature)
         refreshStatusUI()
 
         Task {
@@ -481,22 +488,25 @@ final class AppState: ObservableObject {
     }
 
     private func markStatusFromCurrentConfiguration(for feature: FeatureKind, asError: Bool, message: String?) {
-        let providerID = providerID(for: feature)
-        let status: ProviderStatus =
-            asError
-            ? .error(providerID: providerID, message: message ?? "Error")
-            : .ok(providerID: providerID)
+        let status: ProviderStatus
+        if asError {
+            status = .error(providerID: modelSelection(for: feature)?.providerID, message: message ?? "Error")
+        } else if let providerID = modelSelection(for: feature)?.providerID {
+            status = .ok(providerID: providerID)
+        } else {
+            status = .error(providerID: nil, message: StatusSymbolName.needsSetupMessage)
+        }
         setStatus(status, for: feature)
     }
 
-    private func providerID(for feature: FeatureKind) -> LLMProviderID {
+    private func modelSelection(for feature: FeatureKind) -> LLMModelSelection? {
         switch feature {
         case .grammar:
-            return LLMSettings.grammarProvider
+            return settingsStore.loadSettings().grammar.selectedModel
         case .ocr:
-            return LLMSettings.screenshotProvider
+            return settingsStore.loadSettings().screenText.selectedModel
         case .voice:
-            return settingsStore.loadSettings().voice.providerID
+            return settingsStore.loadSettings().voice.selectedModel
         }
     }
 
@@ -603,7 +613,7 @@ final class AppState: ObservableObject {
         case .recording, .transcribing:
             activeFeature = .voice
             isProcessing = true
-            setStatus(.processing(providerID: providerID(for: .voice)), for: .voice)
+            setStatus(.processing(providerID: modelSelection(for: .voice)?.providerID), for: .voice)
         }
 
         refreshStatusUI()
@@ -700,7 +710,7 @@ final class AppState: ObservableObject {
         case .available:
             return "Ready"
         case .notConfigured:
-            return "Needs setup in Preferences"
+            return StatusSymbolName.needsSetupMessage
         case .invalidCredentials:
             return "Check API key"
         case .invalidModel:

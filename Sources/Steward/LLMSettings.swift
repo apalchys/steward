@@ -7,58 +7,58 @@ import StewardCore
 
 private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.steward", category: "settings")
 
-struct LLMProviderProfile: Equatable {
+struct LLMProviderSettings: Equatable {
     var apiKey: String
-    var modelID: String
 
-    static var empty: LLMProviderProfile {
-        LLMProviderProfile(apiKey: "", modelID: "")
+    static var empty: LLMProviderSettings {
+        LLMProviderSettings(apiKey: "")
     }
 
-    var configuration: LLMProviderConfiguration? {
-        let configuration = LLMProviderConfiguration(
-            apiKey: apiKey.trimmed,
-            modelID: modelID.trimmed
-        )
+    var isEnabled: Bool {
+        !apiKey.trimmed.isEmpty
+    }
+}
 
-        return configuration.isConfigured ? configuration : nil
+struct GrammarSettings: Equatable {
+    static let `default` = GrammarSettings(selectedModel: nil)
+
+    var selectedModel: LLMModelSelection?
+    var customInstructions: String
+
+    init(selectedModel: LLMModelSelection? = GrammarSettings.default.selectedModel, customInstructions: String = "") {
+        self.selectedModel = selectedModel
+        self.customInstructions = customInstructions
+    }
+}
+
+struct ScreenTextSettings: Equatable {
+    static let `default` = ScreenTextSettings(selectedModel: nil)
+
+    var selectedModel: LLMModelSelection?
+    var customInstructions: String
+
+    init(selectedModel: LLMModelSelection? = ScreenTextSettings.default.selectedModel, customInstructions: String = "")
+    {
+        self.selectedModel = selectedModel
+        self.customInstructions = customInstructions
     }
 }
 
 struct VoiceSettings: Equatable {
-    static let defaultGeminiModelID = "gemini-3.1-flash-lite-preview"
-    static let defaultOpenAIModelID = "gpt-4o-mini-transcribe"
-    static let `default` = VoiceSettings()
+    static let `default` = VoiceSettings(selectedModel: nil)
 
-    var providerID: LLMProviderID
-    var geminiModelID: String
-    var openAIModelID: String
+    var selectedModel: LLMModelSelection?
     var customInstructions: String
     var hotKey: AppHotKey
 
     init(
-        providerID: LLMProviderID = .gemini,
-        geminiModelID: String = VoiceSettings.defaultGeminiModelID,
-        openAIModelID: String = VoiceSettings.defaultOpenAIModelID,
+        selectedModel: LLMModelSelection? = VoiceSettings.default.selectedModel,
         customInstructions: String = "",
         hotKey: AppHotKey = .defaultVoiceDictation
     ) {
-        self.providerID = providerID
-        self.geminiModelID = geminiModelID
-        self.openAIModelID = openAIModelID
+        self.selectedModel = selectedModel
         self.customInstructions = customInstructions
         self.hotKey = hotKey
-    }
-
-    func modelID(for providerID: LLMProviderID) -> String {
-        switch providerID {
-        case .gemini:
-            let trimmedModelID = geminiModelID.trimmed
-            return trimmedModelID.isEmpty ? Self.defaultGeminiModelID : trimmedModelID
-        case .openAI:
-            let trimmedModelID = openAIModelID.trimmed
-            return trimmedModelID.isEmpty ? Self.defaultOpenAIModelID : trimmedModelID
-        }
     }
 }
 
@@ -188,31 +188,59 @@ private extension Key {
 }
 
 struct LLMSettings: Equatable {
-    static let grammarProvider = LLMProviderID.openAI
-    static let screenshotProvider = LLMProviderID.gemini
-
-    var providerProfiles: [LLMProviderID: LLMProviderProfile]
-    var grammarCustomInstructions: String
-    var screenshotCustomInstructions: String
+    var providerSettings: [LLMProviderID: LLMProviderSettings]
+    var grammar: GrammarSettings
+    var screenText: ScreenTextSettings
     var voice: VoiceSettings
     var clipboardHistory: ClipboardHistorySettings
 
     static func empty() -> LLMSettings {
         LLMSettings(
-            providerProfiles: [:],
-            grammarCustomInstructions: "",
-            screenshotCustomInstructions: "",
+            providerSettings: [:],
+            grammar: .default,
+            screenText: .default,
             voice: .default,
             clipboardHistory: .default
         )
     }
 
-    func profile(for providerID: LLMProviderID) -> LLMProviderProfile {
-        providerProfiles[providerID] ?? .empty
+    func providerSettings(for providerID: LLMProviderID) -> LLMProviderSettings {
+        providerSettings[providerID] ?? .empty
     }
 
-    func configuration(for providerID: LLMProviderID) -> LLMProviderConfiguration? {
-        profile(for: providerID).configuration
+    var enabledProviderIDs: Set<LLMProviderID> {
+        Set(
+            LLMProviderID.allCases.filter {
+                providerSettings(for: $0).isEnabled
+            }
+        )
+    }
+
+    func availableModels(for feature: LLMFeature) -> [LLMModelCatalogEntry] {
+        LLMModelCatalog.entries(for: feature, enabledProviders: enabledProviderIDs)
+    }
+
+    func sanitized() -> LLMSettings {
+        var sanitizedSettings = self
+        let enabledProviders = sanitizedSettings.enabledProviderIDs
+
+        sanitizedSettings.grammar.selectedModel = LLMModelCatalog.sanitizedSelection(
+            sanitizedSettings.grammar.selectedModel,
+            for: .grammar,
+            enabledProviders: enabledProviders
+        )
+        sanitizedSettings.screenText.selectedModel = LLMModelCatalog.sanitizedSelection(
+            sanitizedSettings.screenText.selectedModel,
+            for: .screenText,
+            enabledProviders: enabledProviders
+        )
+        sanitizedSettings.voice.selectedModel = LLMModelCatalog.sanitizedSelection(
+            sanitizedSettings.voice.selectedModel,
+            for: .voice,
+            enabledProviders: enabledProviders
+        )
+
+        return sanitizedSettings
     }
 }
 
@@ -274,11 +302,14 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
     static let supportedProviders: [LLMProviderID] = [.openAI, .gemini]
 
     private struct Keys {
+        let grammarSelectedProviderID: Defaults.Key<String>
+        let grammarSelectedModelID: Defaults.Key<String>
         let customGrammarInstructions: Defaults.Key<String>
+        let screenTextSelectedProviderID: Defaults.Key<String>
+        let screenTextSelectedModelID: Defaults.Key<String>
         let customScreenshotInstructions: Defaults.Key<String>
-        let voiceProviderID: Defaults.Key<String>
-        let voiceGeminiModelID: Defaults.Key<String>
-        let voiceOpenAIModelID: Defaults.Key<String>
+        let voiceSelectedProviderID: Defaults.Key<String>
+        let voiceSelectedModelID: Defaults.Key<String>
         let voiceCustomInstructions: Defaults.Key<String>
         let voiceHotKeyTriggerKind: Defaults.Key<String>
         let voiceHotKeyCode: Defaults.Key<Int>
@@ -290,8 +321,28 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
 
         init(userDefaults: UserDefaults) {
             self.userDefaults = userDefaults
+            grammarSelectedProviderID = Defaults.Key<String>(
+                "grammarSelectedProviderID",
+                default: "",
+                suite: userDefaults
+            )
+            grammarSelectedModelID = Defaults.Key<String>(
+                "grammarSelectedModelID",
+                default: "",
+                suite: userDefaults
+            )
             customGrammarInstructions = Defaults.Key<String>(
                 "customGrammarInstructions",
+                default: "",
+                suite: userDefaults
+            )
+            screenTextSelectedProviderID = Defaults.Key<String>(
+                "screenTextSelectedProviderID",
+                default: "",
+                suite: userDefaults
+            )
+            screenTextSelectedModelID = Defaults.Key<String>(
+                "screenTextSelectedModelID",
                 default: "",
                 suite: userDefaults
             )
@@ -300,19 +351,14 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
                 default: "",
                 suite: userDefaults
             )
-            voiceProviderID = Defaults.Key<String>(
-                "voiceProviderID",
-                default: LLMProviderID.gemini.rawValue,
+            voiceSelectedProviderID = Defaults.Key<String>(
+                "voiceSelectedProviderID",
+                default: "",
                 suite: userDefaults
             )
-            voiceGeminiModelID = Defaults.Key<String>(
-                "voiceGeminiModelID",
-                default: VoiceSettings.defaultGeminiModelID,
-                suite: userDefaults
-            )
-            voiceOpenAIModelID = Defaults.Key<String>(
-                "voiceOpenAIModelID",
-                default: VoiceSettings.defaultOpenAIModelID,
+            voiceSelectedModelID = Defaults.Key<String>(
+                "voiceSelectedModelID",
+                default: "",
                 suite: userDefaults
             )
             voiceCustomInstructions = Defaults.Key<String>(
@@ -352,14 +398,9 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
             )
         }
 
-        func modelID(for providerID: LLMProviderID) -> Defaults.Key<String> {
-            Defaults.Key<String>(
-                "llmProvider_\(providerID.rawValue)_modelID",
-                default: providerID.defaultModelID,
-                suite: userDefaults
-            )
+        func legacyProviderModelKey(for providerID: LLMProviderID) -> String {
+            "llmProvider_\(providerID.rawValue)_modelID"
         }
-
     }
 
     private let keys: Keys
@@ -374,20 +415,30 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
     }
 
     func loadSettings() -> LLMSettings {
-        var profiles: [LLMProviderID: LLMProviderProfile] = [:]
+        var providerSettings: [LLMProviderID: LLMProviderSettings] = [:]
 
         for providerID in Self.supportedProviders {
-            let rawModelID = Defaults[keys.modelID(for: providerID)].trimmed
-            let modelID = rawModelID.isEmpty ? providerID.defaultModelID : rawModelID
-
-            profiles[providerID] = LLMProviderProfile(
-                apiKey: secretsStore.apiKey(for: providerID),
-                modelID: modelID
+            providerSettings[providerID] = LLMProviderSettings(
+                apiKey: secretsStore.apiKey(for: providerID)
             )
         }
 
-        let rawVoiceProviderID = Defaults[keys.voiceProviderID].trimmed
-        let voiceProviderID = LLMProviderID(rawValue: rawVoiceProviderID) ?? .gemini
+        let grammarSelection =
+            readSelection(
+                providerKey: keys.grammarSelectedProviderID,
+                modelKey: keys.grammarSelectedModelID
+            ) ?? legacySelection(for: .grammar)
+        let screenTextSelection =
+            readSelection(
+                providerKey: keys.screenTextSelectedProviderID,
+                modelKey: keys.screenTextSelectedModelID
+            ) ?? legacySelection(for: .screenText)
+        let voiceSelection =
+            readSelection(
+                providerKey: keys.voiceSelectedProviderID,
+                modelKey: keys.voiceSelectedModelID
+            ) ?? legacySelection(for: .voice)
+
         let voiceHotKeyTriggerKind =
             AppHotKey.TriggerKind(rawValue: Defaults[keys.voiceHotKeyTriggerKind]) ?? .keyboard
         let voiceHotKey: AppHotKey
@@ -404,14 +455,18 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
             )
         }
 
-        return LLMSettings(
-            providerProfiles: profiles,
-            grammarCustomInstructions: Defaults[keys.customGrammarInstructions],
-            screenshotCustomInstructions: Defaults[keys.customScreenshotInstructions],
+        let settings = LLMSettings(
+            providerSettings: providerSettings,
+            grammar: GrammarSettings(
+                selectedModel: grammarSelection,
+                customInstructions: Defaults[keys.customGrammarInstructions]
+            ),
+            screenText: ScreenTextSettings(
+                selectedModel: screenTextSelection,
+                customInstructions: Defaults[keys.customScreenshotInstructions]
+            ),
             voice: VoiceSettings(
-                providerID: voiceProviderID,
-                geminiModelID: Defaults[keys.voiceGeminiModelID],
-                openAIModelID: Defaults[keys.voiceOpenAIModelID],
+                selectedModel: voiceSelection,
                 customInstructions: Defaults[keys.voiceCustomInstructions],
                 hotKey: voiceHotKey
             ),
@@ -420,30 +475,121 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
                 maxStoredRecords: Defaults[keys.clipboardHistoryMaxStoredRecords]
             )
         )
+
+        return settings.sanitized()
     }
 
     func saveSettings(_ settings: LLMSettings) {
+        let sanitizedSettings = settings.sanitized()
+
         for providerID in Self.supportedProviders {
-            let profile = settings.profile(for: providerID)
-
-            secretsStore.setAPIKey(profile.apiKey, for: providerID)
-
-            let normalizedModelID = profile.modelID.trimmed
-            Defaults[keys.modelID(for: providerID)] =
-                normalizedModelID.isEmpty ? providerID.defaultModelID : normalizedModelID
+            let providerSetting = sanitizedSettings.providerSettings(for: providerID)
+            secretsStore.setAPIKey(providerSetting.apiKey, for: providerID)
         }
 
-        Defaults[keys.customGrammarInstructions] = settings.grammarCustomInstructions
-        Defaults[keys.customScreenshotInstructions] = settings.screenshotCustomInstructions
-        Defaults[keys.voiceProviderID] = settings.voice.providerID.rawValue
-        Defaults[keys.voiceGeminiModelID] = settings.voice.modelID(for: .gemini)
-        Defaults[keys.voiceOpenAIModelID] = settings.voice.modelID(for: .openAI)
-        Defaults[keys.voiceCustomInstructions] = settings.voice.customInstructions
-        Defaults[keys.voiceHotKeyTriggerKind] = settings.voice.hotKey.triggerKind.rawValue
-        Defaults[keys.voiceHotKeyCode] = Int(settings.voice.hotKey.carbonKeyCode)
-        Defaults[keys.voiceHotKeyModifiers] = Int(settings.voice.hotKey.carbonModifiers)
-        Defaults[keys.voiceHotKeyMouseButtonNumber] = settings.voice.hotKey.mouseButtonNumber
-        Defaults[keys.clipboardHistoryEnabled] = settings.clipboardHistory.isEnabled
-        Defaults[keys.clipboardHistoryMaxStoredRecords] = settings.clipboardHistory.maxStoredRecords
+        saveSelection(
+            sanitizedSettings.grammar.selectedModel,
+            providerKey: keys.grammarSelectedProviderID,
+            modelKey: keys.grammarSelectedModelID
+        )
+        saveSelection(
+            sanitizedSettings.screenText.selectedModel,
+            providerKey: keys.screenTextSelectedProviderID,
+            modelKey: keys.screenTextSelectedModelID
+        )
+        saveSelection(
+            sanitizedSettings.voice.selectedModel,
+            providerKey: keys.voiceSelectedProviderID,
+            modelKey: keys.voiceSelectedModelID
+        )
+
+        Defaults[keys.customGrammarInstructions] = sanitizedSettings.grammar.customInstructions
+        Defaults[keys.customScreenshotInstructions] = sanitizedSettings.screenText.customInstructions
+        Defaults[keys.voiceCustomInstructions] = sanitizedSettings.voice.customInstructions
+        Defaults[keys.voiceHotKeyTriggerKind] = sanitizedSettings.voice.hotKey.triggerKind.rawValue
+        Defaults[keys.voiceHotKeyCode] = Int(sanitizedSettings.voice.hotKey.carbonKeyCode)
+        Defaults[keys.voiceHotKeyModifiers] = Int(sanitizedSettings.voice.hotKey.carbonModifiers)
+        Defaults[keys.voiceHotKeyMouseButtonNumber] = sanitizedSettings.voice.hotKey.mouseButtonNumber
+        Defaults[keys.clipboardHistoryEnabled] = sanitizedSettings.clipboardHistory.isEnabled
+        Defaults[keys.clipboardHistoryMaxStoredRecords] = sanitizedSettings.clipboardHistory.maxStoredRecords
+
+        clearLegacyModelKeys()
+    }
+
+    private func readSelection(
+        providerKey: Defaults.Key<String>,
+        modelKey: Defaults.Key<String>
+    ) -> LLMModelSelection? {
+        let rawProviderID = Defaults[providerKey].trimmed
+        let rawModelID = Defaults[modelKey].trimmed
+
+        guard !rawProviderID.isEmpty, !rawModelID.isEmpty, let providerID = LLMProviderID(rawValue: rawProviderID)
+        else {
+            return nil
+        }
+
+        return LLMModelSelection(providerID: providerID, modelID: rawModelID)
+    }
+
+    private func saveSelection(
+        _ selection: LLMModelSelection?,
+        providerKey: Defaults.Key<String>,
+        modelKey: Defaults.Key<String>
+    ) {
+        Defaults[providerKey] = selection?.providerID.rawValue ?? ""
+        Defaults[modelKey] = selection?.modelID ?? ""
+    }
+
+    private func legacySelection(for feature: LLMFeature) -> LLMModelSelection? {
+        switch feature {
+        case .grammar:
+            return LLMModelSelection(
+                providerID: .openAI,
+                modelID: legacyProviderModelID(for: .openAI, defaultModelID: OpenAIClient.defaultModelID)
+            )
+        case .screenText:
+            return LLMModelSelection(
+                providerID: .gemini,
+                modelID: legacyProviderModelID(for: .gemini, defaultModelID: GeminiClient.defaultModelID)
+            )
+        case .voice:
+            let providerID = legacyVoiceProviderID()
+            return LLMModelSelection(
+                providerID: providerID,
+                modelID: legacyVoiceModelID(for: providerID)
+            )
+        }
+    }
+
+    private func legacyProviderModelID(for providerID: LLMProviderID, defaultModelID: String) -> String {
+        let key = keys.legacyProviderModelKey(for: providerID)
+        let rawModelID = (keys.userDefaults.string(forKey: key) ?? "").trimmed
+        return rawModelID.isEmpty ? defaultModelID : rawModelID
+    }
+
+    private func legacyVoiceProviderID() -> LLMProviderID {
+        let rawVoiceProviderID = (keys.userDefaults.string(forKey: "voiceProviderID") ?? "").trimmed
+        return LLMProviderID(rawValue: rawVoiceProviderID) ?? .gemini
+    }
+
+    private func legacyVoiceModelID(for providerID: LLMProviderID) -> String {
+        switch providerID {
+        case .gemini:
+            let rawModelID = (keys.userDefaults.string(forKey: "voiceGeminiModelID") ?? "").trimmed
+            return rawModelID.isEmpty ? GeminiClient.defaultModelID : rawModelID
+        case .openAI:
+            let rawModelID = (keys.userDefaults.string(forKey: "voiceOpenAIModelID") ?? "").trimmed
+            return rawModelID.isEmpty ? "gpt-4o-mini-transcribe" : rawModelID
+        }
+    }
+
+    private func clearLegacyModelKeys() {
+        for providerID in Self.supportedProviders {
+            keys.userDefaults.removeObject(forKey: keys.legacyProviderModelKey(for: providerID))
+        }
+
+        keys.userDefaults.removeObject(forKey: "voiceProviderID")
+        keys.userDefaults.removeObject(forKey: "voiceGeminiModelID")
+        keys.userDefaults.removeObject(forKey: "voiceOpenAIModelID")
     }
 }

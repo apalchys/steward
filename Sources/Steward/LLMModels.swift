@@ -15,13 +15,21 @@ enum LLMProviderID: String, CaseIterable, Codable, Identifiable {
             return "Gemini"
         }
     }
+}
 
-    var defaultModelID: String {
+enum LLMFeature: String, CaseIterable, Hashable {
+    case grammar
+    case screenText
+    case voice
+
+    var displayName: String {
         switch self {
-        case .openAI:
-            return OpenAIClient.defaultModelID
-        case .gemini:
-            return GeminiClient.defaultModelID
+        case .grammar:
+            return "Grammar"
+        case .screenText:
+            return "Screen Text"
+        case .voice:
+            return "Voice Dictation"
         }
     }
 }
@@ -33,16 +41,15 @@ enum LLMTask {
 }
 
 struct LLMRequest {
-    let providerID: LLMProviderID
+    let selection: LLMModelSelection
     let task: LLMTask
-    let modelIDOverride: String?
 
-    init(providerID: LLMProviderID, task: LLMTask, modelIDOverride: String? = nil) {
-        let normalizedModelIDOverride = modelIDOverride?.trimmed ?? ""
+    var providerID: LLMProviderID {
+        selection.providerID
+    }
 
-        self.providerID = providerID
-        self.task = task
-        self.modelIDOverride = normalizedModelIDOverride.isEmpty ? nil : normalizedModelIDOverride
+    var modelID: String {
+        selection.modelID
     }
 }
 
@@ -78,12 +85,15 @@ struct LLMProviderHealth {
 
 enum LLMRouterError: LocalizedError {
     case providerNotConfigured(LLMProviderID)
+    case featureNotConfigured(String)
     case unsupportedTask(String)
 
     var errorDescription: String? {
         switch self {
         case .providerNotConfigured(let providerID):
-            return "Provider \(providerID.displayName) is missing API key or model ID in Preferences."
+            return "Provider \(providerID.displayName) is missing an API key in Preferences."
+        case .featureNotConfigured(let featureName):
+            return "\(featureName) is missing a compatible model in Preferences."
         case .unsupportedTask(let taskName):
             return "\(taskName) is not supported yet."
         }

@@ -190,14 +190,16 @@ final class VoiceDictationCoordinator: VoiceDictationCoordinating {
             let payload = try await audioRecordingService.stopRecording()
             let settings = settingsStore.loadSettings()
             let voiceSettings = settings.voice
+            guard let selection = voiceSettings.selectedModel else {
+                throw LLMRouterError.featureNotConfigured(LLMFeature.voice.displayName)
+            }
             let request = LLMRequest(
-                providerID: voiceSettings.providerID,
+                selection: selection,
                 task: .voiceTranscription(
                     audioData: payload.data,
                     mimeType: payload.mimeType,
                     customInstructions: voiceSettings.customInstructions
-                ),
-                modelIDOverride: voiceSettings.modelID(for: voiceSettings.providerID)
+                )
             )
 
             let result = try await router.perform(request)

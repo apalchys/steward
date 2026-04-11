@@ -10,14 +10,6 @@ struct SettingsView: View {
     private let settingsStore: any AppSettingsProviding
     private let onSettingsChanged: (() -> Void)?
 
-    private var grammarProviderID: LLMProviderID {
-        LLMSettings.grammarProvider
-    }
-
-    private var screenshotProviderID: LLMProviderID {
-        LLMSettings.screenshotProvider
-    }
-
     init(
         appState: AppState,
         settingsStore: any AppSettingsProviding = UserDefaultsLLMSettingsStore(),
@@ -63,7 +55,7 @@ struct SettingsView: View {
                     Label("About", systemImage: "info.circle")
                 }
         }
-        .frame(width: 760, height: 520)
+        .frame(width: 760, height: 560)
         .onAppear {
             settings = settingsStore.loadSettings()
             appState.refreshLaunchAtLoginStatus()
@@ -72,7 +64,7 @@ struct SettingsView: View {
             appState.refreshLaunchAtLoginStatus()
         }
         .onChange(of: settings) { _, newSettings in
-            persistSettings(newSettings)
+            normalizeAndPersist(newSettings)
         }
         .alert("Clear clipboard history?", isPresented: $showClearHistoryConfirmation) {
             Button("Clear History", role: .destructive) {
@@ -86,7 +78,7 @@ struct SettingsView: View {
 
     private var generalTab: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 20) {
                 Text("General")
                     .font(.headline)
 
@@ -108,6 +100,19 @@ struct SettingsView: View {
                         appState.openLoginItemsSettings()
                     }
                 }
+
+                Divider()
+
+                Text("Providers")
+                    .font(.headline)
+
+                Text("Set an API key to unlock that provider's compatible curated models on the feature tabs.")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+
+                ForEach(LLMProviderID.allCases) { providerID in
+                    providerCard(for: providerID)
+                }
             }
             .padding(20)
         }
@@ -119,30 +124,17 @@ struct SettingsView: View {
                 Text("Grammar")
                     .font(.headline)
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Provider")
-                        .font(.subheadline)
-
-                    Text(grammarProviderID.displayName)
-                        .foregroundColor(.secondary)
-                }
-
-                ContinuousSecureField(
-                    placeholder: "\(grammarProviderID.displayName) API Key",
-                    text: profileBinding(for: grammarProviderID, keyPath: \.apiKey)
+                modelPickerSection(
+                    title: "Model",
+                    feature: .grammar,
+                    selection: grammarModelBinding,
+                    unavailableMessage: "Add a provider API key in General to unlock grammar models."
                 )
-                .frame(height: 22)
-
-                TextField(
-                    "Model (default: \(grammarProviderID.defaultModelID))",
-                    text: profileBinding(for: grammarProviderID, keyPath: \.modelID)
-                )
-                .textFieldStyle(.roundedBorder)
 
                 Text("Custom instructions for grammar check")
                     .font(.subheadline)
 
-                TextEditor(text: $settings.grammarCustomInstructions)
+                TextEditor(text: $settings.grammar.customInstructions)
                     .font(.system(.body, design: .monospaced))
                     .padding(8)
                     .background(Color(NSColor.textBackgroundColor))
@@ -167,30 +159,17 @@ struct SettingsView: View {
                 Text("Screenshot to Markdown")
                     .font(.headline)
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Provider")
-                        .font(.subheadline)
-
-                    Text(screenshotProviderID.displayName)
-                        .foregroundColor(.secondary)
-                }
-
-                ContinuousSecureField(
-                    placeholder: "\(screenshotProviderID.displayName) API Key",
-                    text: profileBinding(for: screenshotProviderID, keyPath: \.apiKey)
+                modelPickerSection(
+                    title: "Model",
+                    feature: .screenText,
+                    selection: screenTextModelBinding,
+                    unavailableMessage: "Add a provider API key in General to unlock screen capture models."
                 )
-                .frame(height: 22)
-
-                TextField(
-                    "Model (default: \(screenshotProviderID.defaultModelID))",
-                    text: profileBinding(for: screenshotProviderID, keyPath: \.modelID)
-                )
-                .textFieldStyle(.roundedBorder)
 
                 Text("Custom instructions for screenshot to markdown")
                     .font(.subheadline)
 
-                TextEditor(text: $settings.screenshotCustomInstructions)
+                TextEditor(text: $settings.screenText.customInstructions)
                     .font(.system(.body, design: .monospaced))
                     .padding(8)
                     .background(Color(NSColor.textBackgroundColor))
@@ -202,6 +181,58 @@ struct SettingsView: View {
                     .frame(minHeight: 220)
 
                 Text("Used as additional guidance when extracting text from screenshots.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .padding(20)
+        }
+    }
+
+    private var voiceTab: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Voice Dictation")
+                    .font(.headline)
+
+                modelPickerSection(
+                    title: "Model",
+                    feature: .voice,
+                    selection: voiceModelBinding,
+                    unavailableMessage: "Add a provider API key in General to unlock dictation models."
+                )
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Shortcut")
+                        .font(.subheadline)
+
+                    HotKeyRecorderView(
+                        hotKey: $settings.voice.hotKey,
+                        defaultHotKey: .defaultVoiceDictation,
+                        validate: { appState.validateVoiceHotKey($0) }
+                    )
+                }
+
+                Text("Custom instructions for voice transcription")
+                    .font(.subheadline)
+
+                TextEditor(text: $settings.voice.customInstructions)
+                    .font(.system(.body, design: .monospaced))
+                    .padding(8)
+                    .background(Color(NSColor.textBackgroundColor))
+                    .cornerRadius(6)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                    )
+                    .frame(minHeight: 220)
+
+                Text(
+                    "Dictation keeps the spoken language(s), applies punctuation and formatting automatically, and uses push-to-talk: hold the shortcut to record, release to transcribe."
+                )
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+                Text("Version 1 is optimized for recordings up to 120 seconds.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -261,76 +292,6 @@ struct SettingsView: View {
         }
     }
 
-    private var voiceTab: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Voice Dictation")
-                    .font(.headline)
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Provider")
-                        .font(.subheadline)
-
-                    Picker("Voice provider", selection: $settings.voice.providerID) {
-                        ForEach(LLMProviderID.allCases) { providerID in
-                            Text(providerID.displayName)
-                                .tag(providerID)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                }
-
-                ContinuousSecureField(
-                    placeholder: "\(selectedVoiceProviderID.displayName) API Key",
-                    text: profileBinding(for: selectedVoiceProviderID, keyPath: \.apiKey)
-                )
-                .frame(height: 22)
-
-                TextField(
-                    "Model (default: \(selectedVoiceDefaultModelID))",
-                    text: voiceModelBinding(for: selectedVoiceProviderID)
-                )
-                .textFieldStyle(.roundedBorder)
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Shortcut")
-                        .font(.subheadline)
-
-                    HotKeyRecorderView(
-                        hotKey: $settings.voice.hotKey,
-                        defaultHotKey: .defaultVoiceDictation,
-                        validate: { appState.validateVoiceHotKey($0) }
-                    )
-                }
-
-                Text("Custom instructions for voice transcription")
-                    .font(.subheadline)
-
-                TextEditor(text: $settings.voice.customInstructions)
-                    .font(.system(.body, design: .monospaced))
-                    .padding(8)
-                    .background(Color(NSColor.textBackgroundColor))
-                    .cornerRadius(6)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color(NSColor.separatorColor), lineWidth: 1)
-                    )
-                    .frame(minHeight: 220)
-
-                Text(
-                    "Dictation keeps the spoken language(s), applies punctuation and formatting automatically, and uses push-to-talk: hold the shortcut to record, release to transcribe."
-                )
-                .font(.caption)
-                .foregroundColor(.secondary)
-
-                Text("Version 1 is optimized for recordings up to 120 seconds.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            .padding(20)
-        }
-    }
-
     private var aboutTab: some View {
         VStack(alignment: .center, spacing: 12) {
             if let appIcon = NSImage(named: "AppIcon") {
@@ -370,45 +331,85 @@ struct SettingsView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func profileBinding(
-        for providerID: LLMProviderID,
-        keyPath: WritableKeyPath<LLMProviderProfile, String>
-    ) -> Binding<String> {
-        Binding(
-            get: {
-                settings.profile(for: providerID)[keyPath: keyPath]
-            },
-            set: { newValue in
-                var profile = settings.profile(for: providerID)
-                profile[keyPath: keyPath] = newValue
-                settings.providerProfiles[providerID] = profile
+    private func providerCard(for providerID: LLMProviderID) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(providerID.displayName)
+                    .font(.title3)
+                    .bold()
+
+                Spacer()
+
+                Text(settings.providerSettings(for: providerID).isEnabled ? "Unlocked" : "Locked")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
-        )
+
+            ContinuousSecureField(
+                placeholder: "\(providerID.displayName) API Key",
+                text: providerAPIKeyBinding(for: providerID)
+            )
+            .frame(height: 22)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Curated models")
+                    .font(.subheadline)
+
+                ForEach(LLMModelCatalog.entries(for: providerID)) { entry in
+                    HStack(alignment: .top, spacing: 12) {
+                        Text(entry.modelID)
+                            .font(.system(.body, design: .monospaced))
+
+                        Spacer()
+
+                        Text(entry.capabilitySummary)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .background(Color(NSColor.controlBackgroundColor))
+        .cornerRadius(8)
     }
 
-    private func voiceModelBinding(for providerID: LLMProviderID) -> Binding<String> {
-        Binding(
-            get: {
-                switch providerID {
-                case .gemini:
-                    settings.voice.geminiModelID
-                case .openAI:
-                    settings.voice.openAIModelID
+    private func modelPickerSection(
+        title: String,
+        feature: LLMFeature,
+        selection: Binding<LLMModelSelection?>,
+        unavailableMessage: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.subheadline)
+
+            let availableModels = settings.availableModels(for: feature)
+            if availableModels.isEmpty {
+                Text(unavailableMessage)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            } else {
+                Picker(title, selection: selection) {
+                    ForEach(availableModels) { entry in
+                        Text(entry.selection.pickerLabel)
+                            .tag(Optional(entry.selection))
+                    }
                 }
-            },
-            set: { newValue in
-                switch providerID {
-                case .gemini:
-                    settings.voice.geminiModelID = newValue
-                case .openAI:
-                    settings.voice.openAIModelID = newValue
-                }
+                .pickerStyle(.menu)
             }
-        )
+        }
     }
 
-    private func persistSettings(_ settings: LLMSettings) {
-        settingsStore.saveSettings(settings)
+    private func normalizeAndPersist(_ newSettings: LLMSettings) {
+        let normalizedSettings = newSettings.sanitized()
+
+        if normalizedSettings != newSettings {
+            settings = normalizedSettings
+            return
+        }
+
+        settingsStore.saveSettings(normalizedSettings)
         onSettingsChanged?()
     }
 
@@ -423,16 +424,49 @@ struct SettingsView: View {
         )
     }
 
-    private var selectedVoiceProviderID: LLMProviderID {
-        settings.voice.providerID
+    private func providerAPIKeyBinding(for providerID: LLMProviderID) -> Binding<String> {
+        Binding(
+            get: {
+                settings.providerSettings(for: providerID).apiKey
+            },
+            set: { newValue in
+                var providerSettings = settings.providerSettings(for: providerID)
+                providerSettings.apiKey = newValue
+                settings.providerSettings[providerID] = providerSettings
+            }
+        )
     }
 
-    private var selectedVoiceDefaultModelID: String {
-        switch selectedVoiceProviderID {
-        case .gemini:
-            VoiceSettings.defaultGeminiModelID
-        case .openAI:
-            VoiceSettings.defaultOpenAIModelID
-        }
+    private var grammarModelBinding: Binding<LLMModelSelection?> {
+        Binding(
+            get: {
+                settings.grammar.selectedModel
+            },
+            set: { newValue in
+                settings.grammar.selectedModel = newValue
+            }
+        )
+    }
+
+    private var screenTextModelBinding: Binding<LLMModelSelection?> {
+        Binding(
+            get: {
+                settings.screenText.selectedModel
+            },
+            set: { newValue in
+                settings.screenText.selectedModel = newValue
+            }
+        )
+    }
+
+    private var voiceModelBinding: Binding<LLMModelSelection?> {
+        Binding(
+            get: {
+                settings.voice.selectedModel
+            },
+            set: { newValue in
+                settings.voice.selectedModel = newValue
+            }
+        )
     }
 }

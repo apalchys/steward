@@ -11,7 +11,7 @@ Steward is a macOS menu bar app that helps you be more productive with four feat
 - Extract text from a screen region
 - Keep a searchable clipboard history
 
-It uses OpenAI or Gemini as the LLM backend, configurable per feature.
+It uses a curated set of OpenAI and Gemini models. You unlock providers in Preferences > General and then pick a compatible model for each feature.
 
 <img height="250" alt="image" src="https://github.com/user-attachments/assets/06395f67-1ad1-4b72-88df-ed6e7faa3e23" />
 <img height="250" alt="image" src="https://github.com/user-attachments/assets/de00d44b-bd28-4fcf-9b9b-2698fbb376cd" />
@@ -60,14 +60,14 @@ First launch:
 3. Grant Microphone permission (needed for voice dictation).
 4. Grant Screen Recording permission (needed for screenshot OCR).
 4. Open Preferences from the menu bar icon.
-5. For each feature, pick a provider, enter an API key, and optionally set a model or custom instructions.
-6. In Preferences > Voice, choose Gemini or OpenAI for dictation. Gemini is the default.
+5. Open Preferences > General and add an API key for each provider you want to unlock.
+6. In Preferences > Grammar, Screen Text, and Voice, pick a compatible model from the curated list and optionally add custom instructions.
 
 ## Voice Dictation Notes
 
 - Shortcut: configurable in Preferences > Voice. Default: `Command+Shift+D`
 - Requires Microphone permission
-- Voice settings are configured separately in Preferences > Voice
+- Voice settings are configured in Preferences > Voice
 - Global dictation uses push-to-talk: hold to record, release to transcribe
 - The menu item remains available as a manual toggle fallback
 - Dictation can preserve mixed-language speech and apply punctuation and paragraph formatting
@@ -93,8 +93,8 @@ open Steward.app
 - Settings and API keys are stored locally via UserDefaults.
 - Clipboard history is stored locally at `~/Library/Application Support/Steward/clipboard-history.jsonl`.
 - Clipboard history is on by default. New entries are recorded until you disable it.
-- Requests are sent only to the provider you configure for each feature.
-- Voice dictation sends recorded audio only to the configured voice provider.
+- Requests are sent only to the provider and model you select for each feature.
+- Voice dictation sends recorded audio only to the selected dictation model's provider.
 
 ## Dependencies
 

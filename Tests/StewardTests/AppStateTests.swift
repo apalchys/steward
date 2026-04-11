@@ -591,7 +591,9 @@ final class AppStateTests: XCTestCase {
     func testCheckVoiceProviderStatusUsesSelectedVoiceProviderAndUpdatesTitle() async {
         _ = NSApplication.shared
         let settingsStore = FakeAppSettingsStore()
-        settingsStore.settings.voice = VoiceSettings(providerID: .openAI)
+        let voiceSelection = LLMModelSelection(providerID: .openAI, modelID: "gpt-4o-mini-transcribe")
+        settingsStore.settings.providerSettings[.openAI] = LLMProviderSettings(apiKey: "openai-key")
+        settingsStore.settings.voice = VoiceSettings(selectedModel: voiceSelection)
         let router = FakeAppRouter()
         let appState = AppState(
             settingsStore: settingsStore,
@@ -607,7 +609,7 @@ final class AppStateTests: XCTestCase {
         appState.checkVoiceProviderStatus()
         await Task.yield()
 
-        XCTAssertEqual(router.checkedProviderIDs, [.openAI])
+        XCTAssertEqual(router.checkedSelections, [voiceSelection])
         XCTAssertEqual(appState.voiceStatusTitle, "Voice Dictation: OpenAI Ready")
     }
 }
@@ -630,15 +632,15 @@ private final class FakeClipboardMonitor: ClipboardMonitoring {
 
 @MainActor
 private final class FakeAppRouter: LLMRouting {
-    private(set) var checkedProviderIDs: [LLMProviderID] = []
+    private(set) var checkedSelections: [LLMModelSelection] = []
 
     func perform(_ request: LLMRequest) async throws -> LLMResult {
         .text("ok")
     }
 
-    func checkAccess(for providerID: LLMProviderID) async throws -> LLMProviderHealth {
-        checkedProviderIDs.append(providerID)
-        return LLMProviderHealth(providerID: providerID, state: .available, message: "Ready")
+    func checkAccess(for selection: LLMModelSelection) async throws -> LLMProviderHealth {
+        checkedSelections.append(selection)
+        return LLMProviderHealth(providerID: selection.providerID, state: .available, message: "Ready")
     }
 }
 
@@ -680,6 +682,17 @@ private final class FakeAppSettingsStore: AppSettingsProviding {
     var settings = LLMSettings.empty()
 
     init(historySettings: ClipboardHistorySettings = ClipboardHistorySettings()) {
+        settings.providerSettings[.openAI] = LLMProviderSettings(apiKey: "openai-key")
+        settings.providerSettings[.gemini] = LLMProviderSettings(apiKey: "gemini-key")
+        settings.grammar.selectedModel = LLMModelSelection(providerID: .openAI, modelID: "gpt-5.4")
+        settings.screenText.selectedModel = LLMModelSelection(
+            providerID: .gemini,
+            modelID: "gemini-3.1-flash-lite-preview"
+        )
+        settings.voice.selectedModel = LLMModelSelection(
+            providerID: .gemini,
+            modelID: "gemini-3.1-flash-lite-preview"
+        )
         settings.clipboardHistory = historySettings
     }
 

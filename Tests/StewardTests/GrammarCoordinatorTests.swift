@@ -8,10 +8,10 @@ final class GrammarCoordinatorTests: XCTestCase {
         let router = FakeRouter(result: .success(.text("corrected")))
         let textInteraction = FakeTextInteraction(selectedText: "bad")
         var settings = LLMSettings.empty()
-        settings.grammarCustomInstructions = "Use concise language"
-        settings.providerProfiles[.openAI] = LLMProviderProfile(
-            apiKey: "key",
-            modelID: "model"
+        settings.providerSettings[.openAI] = LLMProviderSettings(apiKey: "key")
+        settings.grammar = GrammarSettings(
+            selectedModel: LLMModelSelection(providerID: .openAI, modelID: "gpt-5.4"),
+            customInstructions: "Use concise language"
         )
         let settingsStore = CoordinatorSettingsStore(settings: settings)
 
@@ -30,7 +30,7 @@ final class GrammarCoordinatorTests: XCTestCase {
             return
         }
 
-        XCTAssertEqual(request.providerID, .openAI)
+        XCTAssertEqual(request.selection, LLMModelSelection(providerID: .openAI, modelID: "gpt-5.4"))
         XCTAssertEqual(text, "bad")
         XCTAssertEqual(customInstructions, "Use concise language")
     }
@@ -62,7 +62,9 @@ final class GrammarCoordinatorTests: XCTestCase {
 
         let router = FakeRouter(result: .failure(TestError.failed))
         let textInteraction = FakeTextInteraction(selectedText: "bad")
-        let settingsStore = CoordinatorSettingsStore(settings: .empty())
+        var settings = LLMSettings.empty()
+        settings.grammar.selectedModel = LLMModelSelection(providerID: .openAI, modelID: "gpt-5.4")
+        let settingsStore = CoordinatorSettingsStore(settings: settings)
 
         let coordinator = GrammarCoordinator(router: router, textInteraction: textInteraction, settingsStore: settingsStore)
 
@@ -93,8 +95,8 @@ private final class FakeRouter: LLMRouting {
         return try result.get()
     }
 
-    func checkAccess(for providerID: LLMProviderID) async throws -> LLMProviderHealth {
-        LLMProviderHealth(providerID: providerID, state: .available, message: "Ready")
+    func checkAccess(for selection: LLMModelSelection) async throws -> LLMProviderHealth {
+        LLMProviderHealth(providerID: selection.providerID, state: .available, message: "Ready")
     }
 }
 

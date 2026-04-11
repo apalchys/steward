@@ -69,8 +69,11 @@ final class ScreenOCRCoordinatorTests: XCTestCase {
         let selectionPresenter = FakeSelectionPresenter(mode: .finish(screen: screen, rect: CGRect(x: 10, y: 10, width: 120, height: 80)))
 
         var settings = LLMSettings.empty()
-        settings.providerProfiles[.gemini] = LLMProviderProfile(apiKey: "key", modelID: "model")
-        settings.screenshotCustomInstructions = "Keep table structure."
+        settings.providerSettings[.gemini] = LLMProviderSettings(apiKey: "key")
+        settings.screenText = ScreenTextSettings(
+            selectedModel: LLMModelSelection(providerID: .gemini, modelID: "model"),
+            customInstructions: "Keep table structure."
+        )
         let settingsStore = CoordinatorSettingsStore(settings: settings)
 
         let coordinator = ScreenOCRCoordinator(
@@ -93,7 +96,7 @@ final class ScreenOCRCoordinatorTests: XCTestCase {
             XCTFail("Expected OCR task")
             return
         }
-        XCTAssertEqual(request.providerID, .gemini)
+        XCTAssertEqual(request.selection, LLMModelSelection(providerID: .gemini, modelID: "model"))
         XCTAssertEqual(customInstructions, "Keep table structure.")
         XCTAssertTrue(selectionPresenter.didBeginSelection)
         XCTAssertTrue(selectionPresenter.didEndSelection)
@@ -112,7 +115,9 @@ final class ScreenOCRCoordinatorTests: XCTestCase {
         let captureService = FakeCaptureService(permissionGranted: true, imageData: Data("image".utf8)) {
             XCTAssertTrue(selectionPresenter.didEndSelection)
         }
-        let settingsStore = CoordinatorSettingsStore(settings: .empty())
+        var settings = LLMSettings.empty()
+        settings.screenText.selectedModel = LLMModelSelection(providerID: .gemini, modelID: "model")
+        let settingsStore = CoordinatorSettingsStore(settings: settings)
         let coordinator = ScreenOCRCoordinator(
             router: router,
             textInteraction: textInteraction,
@@ -168,8 +173,8 @@ private final class ScreenFakeRouter: LLMRouting {
         return try result.get()
     }
 
-    func checkAccess(for providerID: LLMProviderID) async throws -> LLMProviderHealth {
-        LLMProviderHealth(providerID: providerID, state: .available, message: "Ready")
+    func checkAccess(for selection: LLMModelSelection) async throws -> LLMProviderHealth {
+        LLMProviderHealth(providerID: selection.providerID, state: .available, message: "Ready")
     }
 }
 

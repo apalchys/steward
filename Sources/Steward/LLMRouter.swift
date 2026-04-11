@@ -4,7 +4,7 @@ import StewardCore
 @MainActor
 protocol LLMRouting: AnyObject {
     func perform(_ request: LLMRequest) async throws -> LLMResult
-    func checkAccess(for providerID: LLMProviderID) async throws -> LLMProviderHealth
+    func checkAccess(for selection: LLMModelSelection) async throws -> LLMProviderHealth
 }
 
 @MainActor
@@ -25,39 +25,44 @@ final class LLMRouter: LLMRouting {
 
     func perform(_ request: LLMRequest) async throws -> LLMResult {
         let settings = settingsStore.loadSettings()
-        let providerID = request.providerID
-        let configuration = try configuration(for: request, from: settings)
-        return try await perform(request.task, providerID: providerID, configuration: configuration)
+        let configuration = try configuration(for: request.selection, from: settings)
+        return try await perform(request.task, providerID: request.providerID, configuration: configuration)
     }
 
-    func checkAccess(for providerID: LLMProviderID) async throws -> LLMProviderHealth {
+    func checkAccess(for selection: LLMModelSelection) async throws -> LLMProviderHealth {
         let settings = settingsStore.loadSettings()
 
-        guard let configuration = settings.configuration(for: providerID) else {
+        guard let configuration = availableConfiguration(for: selection, from: settings) else {
             return LLMProviderHealth(
-                providerID: providerID,
+                providerID: selection.providerID,
                 state: .notConfigured,
-                message: "Provider \(providerID.displayName) is missing API key or model ID in Preferences."
+                message: "Provider \(selection.providerID.displayName) is missing an API key in Preferences."
             )
         }
 
-        return await healthCheck(for: providerID, configuration: configuration)
+        return await healthCheck(for: selection.providerID, configuration: configuration)
     }
 
-    private func configuration(for request: LLMRequest, from settings: LLMSettings) throws
+    private func configuration(for selection: LLMModelSelection, from settings: LLMSettings) throws
         -> LLMProviderConfiguration
     {
-        let providerID = request.providerID
-
-        guard let configuration = settings.configuration(for: providerID) else {
-            throw LLMRouterError.providerNotConfigured(providerID)
+        guard let configuration = availableConfiguration(for: selection, from: settings) else {
+            throw LLMRouterError.providerNotConfigured(selection.providerID)
         }
 
-        guard let modelIDOverride = request.modelIDOverride else {
-            return configuration
-        }
+        return configuration
+    }
 
-        return LLMProviderConfiguration(apiKey: configuration.apiKey, modelID: modelIDOverride)
+    private func availableConfiguration(for selection: LLMModelSelection, from settings: LLMSettings)
+        -> LLMProviderConfiguration?
+    {
+        let apiKey = settings.providerSettings(for: selection.providerID).apiKey.trimmed
+        let configuration = LLMProviderConfiguration(
+            apiKey: apiKey,
+            modelID: selection.modelID
+        )
+
+        return configuration.isConfigured ? configuration : nil
     }
 
     private func perform(

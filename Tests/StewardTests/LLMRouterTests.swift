@@ -30,7 +30,10 @@ final class LLMRouterTests: XCTestCase {
         let router = makeRouter(configured: [.openAI], openAISession: URLProtocolStub.makeSession())
 
         let response = try await router.perform(
-            LLMRequest(providerID: .openAI, task: .grammarCorrection(text: "bad text", customInstructions: ""))
+            LLMRequest(
+                selection: LLMModelSelection(providerID: .openAI, modelID: "model-openAI"),
+                task: .grammarCorrection(text: "bad text", customInstructions: "")
+            )
         )
 
         XCTAssertEqual(response.textValue, "good text")
@@ -55,7 +58,7 @@ final class LLMRouterTests: XCTestCase {
 
         let response = try await router.perform(
             LLMRequest(
-                providerID: .gemini,
+                selection: LLMModelSelection(providerID: .gemini, modelID: "model-gemini"),
                 task: .screenOCR(imageData: Data("image".utf8), mimeType: "image/png", customInstructions: "")
             )
         )
@@ -68,7 +71,10 @@ final class LLMRouterTests: XCTestCase {
 
         do {
             _ = try await router.perform(
-                LLMRequest(providerID: .openAI, task: .grammarCorrection(text: "text", customInstructions: ""))
+                LLMRequest(
+                    selection: LLMModelSelection(providerID: .openAI, modelID: "model-openAI"),
+                    task: .grammarCorrection(text: "text", customInstructions: "")
+                )
             )
             XCTFail("Expected configuration error")
         } catch {
@@ -81,7 +87,7 @@ final class LLMRouterTests: XCTestCase {
         }
     }
 
-    func testPerformUsesModelOverrideWhenPresent() async throws {
+    func testPerformUsesSelectedModelWhenPresent() async throws {
         URLProtocolStub.configure(handler: { request in
             let body = try XCTUnwrap(request.bodyData())
             let payload = try XCTUnwrap(try JSONSerialization.jsonObject(with: body) as? [String: Any])
@@ -98,9 +104,8 @@ final class LLMRouterTests: XCTestCase {
 
         let response = try await router.perform(
             LLMRequest(
-                providerID: .openAI,
-                task: .grammarCorrection(text: "bad text", customInstructions: ""),
-                modelIDOverride: "voice-model-openai"
+                selection: LLMModelSelection(providerID: .openAI, modelID: "voice-model-openai"),
+                task: .grammarCorrection(text: "bad text", customInstructions: "")
             )
         )
 
@@ -124,13 +129,12 @@ final class LLMRouterTests: XCTestCase {
         let router = makeRouter(configured: [.gemini], geminiSession: URLProtocolStub.makeSession())
         let response = try await router.perform(
             LLMRequest(
-                providerID: .gemini,
+                selection: LLMModelSelection(providerID: .gemini, modelID: "voice-model-gemini"),
                 task: .voiceTranscription(
                     audioData: Data("audio".utf8),
                     mimeType: "audio/wav",
                     customInstructions: ""
-                ),
-                modelIDOverride: "voice-model-gemini"
+                )
             )
         )
 
@@ -148,13 +152,12 @@ final class LLMRouterTests: XCTestCase {
         let router = makeRouter(configured: [.openAI], openAISession: URLProtocolStub.makeSession())
         let response = try await router.perform(
             LLMRequest(
-                providerID: .openAI,
+                selection: LLMModelSelection(providerID: .openAI, modelID: "voice-model-openai"),
                 task: .voiceTranscription(
                     audioData: Data("audio".utf8),
                     mimeType: "audio/wav",
                     customInstructions: ""
-                ),
-                modelIDOverride: "voice-model-openai"
+                )
             )
         )
 
@@ -171,7 +174,7 @@ final class LLMRouterTests: XCTestCase {
         })
 
         let router = makeRouter(configured: [.openAI], openAISession: URLProtocolStub.makeSession())
-        let health = try await router.checkAccess(for: .openAI)
+        let health = try await router.checkAccess(for: LLMModelSelection(providerID: .openAI, modelID: "model-openAI"))
 
         XCTAssertEqual(health.providerID, .openAI)
         XCTAssertEqual(health.state, .available)
@@ -181,7 +184,7 @@ final class LLMRouterTests: XCTestCase {
     func testCheckAccessReturnsNotConfiguredDiagnostic() async throws {
         let router = makeRouter(configured: [])
 
-        let health = try await router.checkAccess(for: .openAI)
+        let health = try await router.checkAccess(for: LLMModelSelection(providerID: .openAI, modelID: "model-openAI"))
 
         XCTAssertEqual(health.providerID, .openAI)
         XCTAssertEqual(health.state, .notConfigured)
@@ -203,10 +206,7 @@ final class LLMRouterTests: XCTestCase {
         var settings = LLMSettings.empty()
 
         for providerID in configured {
-            settings.providerProfiles[providerID] = LLMProviderProfile(
-                apiKey: "key-\(providerID.rawValue)",
-                modelID: "model-\(providerID.rawValue)"
-            )
+            settings.providerSettings[providerID] = LLMProviderSettings(apiKey: "key-\(providerID.rawValue)")
         }
 
         return settings

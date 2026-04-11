@@ -11,18 +11,18 @@ protocol ScreenOCRCoordinating: AnyObject {
 final class ScreenOCRCoordinator: ScreenOCRCoordinating {
     var onSelectionActivityChanged: ((Bool) -> Void)?
 
-    private let router: LLMRouting
-    private let textInteraction: TextInteractionPerforming
-    private let captureService: ScreenCaptureProviding
-    private let selectionPresenter: ScreenSelectionPresenting
-    private let settingsStore: AppSettingsProviding
+    private let router: any LLMRouting
+    private let textInteraction: any TextInteractionPerforming
+    private let captureService: any ScreenCaptureProviding
+    private let selectionPresenter: any ScreenSelectionPresenting
+    private let settingsStore: any AppSettingsProviding
 
     init(
-        router: LLMRouting,
-        textInteraction: TextInteractionPerforming,
-        captureService: ScreenCaptureProviding,
-        selectionPresenter: ScreenSelectionPresenting,
-        settingsStore: AppSettingsProviding
+        router: any LLMRouting,
+        textInteraction: any TextInteractionPerforming,
+        captureService: any ScreenCaptureProviding,
+        selectionPresenter: any ScreenSelectionPresenting,
+        settingsStore: any AppSettingsProviding
     ) {
         self.router = router
         self.textInteraction = textInteraction
@@ -38,9 +38,6 @@ final class ScreenOCRCoordinator: ScreenOCRCoordinating {
 
         onSelectionActivityChanged?(true)
 
-        // Local mutable state to bridge the callback-based selection presenter
-        // into structured concurrency without instance-level mutable properties.
-        // Both the callback and continuation run on @MainActor, so access is safe.
         var selectionScreen: NSScreen?
         var selectionRect: CGRect?
 
@@ -70,26 +67,30 @@ final class ScreenOCRCoordinator: ScreenOCRCoordinating {
             throw ScreenOCRCoordinatorError.couldNotCaptureImage
         }
 
-        // Extract NSScreen properties into a Sendable struct on @MainActor
-        // before crossing into the async capture method.
         guard let captureRequest = ScreenCaptureRequest(screen: screen) else {
             throw ScreenOCRCoordinatorError.couldNotCaptureImage
         }
 
         guard
             let imageData = await captureService.captureSelectionImageData(
-                request: captureRequest, selectionRect: rect)
+                request: captureRequest,
+                selectionRect: rect
+            )
         else {
             throw ScreenOCRCoordinatorError.couldNotCaptureImage
         }
 
         let settings = settingsStore.loadSettings()
+        guard let selection = settings.screenText.selectedModel else {
+            throw LLMRouterError.featureNotConfigured(LLMFeature.screenText.displayName)
+        }
+
         let request = LLMRequest(
-            providerID: LLMSettings.screenshotProvider,
+            selection: selection,
             task: .screenOCR(
                 imageData: imageData,
                 mimeType: "image/png",
-                customInstructions: settings.screenshotCustomInstructions
+                customInstructions: settings.screenText.customInstructions
             )
         )
 
