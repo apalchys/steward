@@ -30,6 +30,11 @@ final class AppState: ObservableObject {
         var id: String { providerID.id }
     }
 
+    private struct HealthCheckConfig: Equatable {
+        let selection: LLMModelSelection
+        let apiKey: String
+    }
+
     private enum FeatureKind: CaseIterable {
         case refine
         case capture
@@ -121,6 +126,7 @@ final class AppState: ObservableObject {
     private var refineHealthCheckTask: Task<Void, Never>?
     private var captureHealthCheckTask: Task<Void, Never>?
     private var dictateHealthCheckTask: Task<Void, Never>?
+    private var lastHealthCheckConfig: [FeatureKind: HealthCheckConfig] = [:]
     private var fixedShortcutRegistrationMessage: String?
     private var dictatePushToTalkShortcutRegistrationMessage: String?
     private var dictateRegularShortcutRegistrationMessage: String?
@@ -336,6 +342,7 @@ final class AppState: ObservableObject {
 
     func checkProviderStatus(for providerID: LLMProviderID) {
         for feature in features(using: providerID) {
+            lastHealthCheckConfig[feature] = nil
             checkProviderStatus(for: feature)
         }
     }
@@ -471,10 +478,18 @@ final class AppState: ObservableObject {
 
     private func checkProviderStatus(for feature: FeatureKind) {
         guard let selection = modelSelection(for: feature) else {
+            lastHealthCheckConfig[feature] = nil
             setStatus(.error(providerID: nil, message: StatusSymbolName.needsSetupMessage), for: feature)
             refreshStatusUI()
             return
         }
+
+        let apiKey = settingsStore.loadSettings().providerSettings(for: selection.providerID).apiKey
+        let config = HealthCheckConfig(selection: selection, apiKey: apiKey)
+        if lastHealthCheckConfig[feature] == config {
+            return
+        }
+        lastHealthCheckConfig[feature] = config
 
         let providerID = selection.providerID
         setStatus(.processing(providerID: providerID), for: feature)
