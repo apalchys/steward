@@ -220,6 +220,10 @@ final class AppState: ObservableObject {
         "Dictate [\(settingsStore.loadSettings().voice.activeMode.name)]"
     }
 
+    var dictateMenuShortcutDisplayValue: String {
+        settingsStore.loadSettings().voice.hotKey.readableDisplayValue
+    }
+
     var accessibilityStatusTitle: String {
         accessibilityPermissionGranted ? "Accessibility: Granted" : "Accessibility: Open Privacy Settings"
     }
@@ -362,6 +366,7 @@ final class AppState: ObservableObject {
     }
 
     func settingsDidChange() {
+        objectWillChange.send()
         applyClipboardHistorySettings()
         registerDictateHotKeys()
         registerModeSwitchHotKey()
