@@ -44,17 +44,49 @@ struct ScreenTextSettings: Equatable {
     }
 }
 
+struct DictateMode: Equatable, Identifiable, Codable {
+    static let defaultModeID = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
+
+    let id: UUID
+    var name: String
+    var customInstructions: String
+    var isDefault: Bool
+
+    static func defaultMode(customInstructions: String = "") -> DictateMode {
+        DictateMode(id: defaultModeID, name: "Default", customInstructions: customInstructions, isDefault: true)
+    }
+}
+
 struct VoiceSettings: Equatable {
     static let `default` = VoiceSettings(selectedModel: nil, hotKey: .defaultVoiceDictation)
     static let maxPreferredRecognitionLanguages = 5
 
     var selectedModel: LLMModelSelection?
-    var customInstructions: String
+    var modes: [DictateMode]
+    var activeModeID: UUID?
     var hotKey: AppHotKey
     var preferredRecognitionLanguages: [VoiceLanguage]
     var translateToLanguageEnabled: Bool
     var translationTargetLanguage: VoiceLanguage?
     private var legacyRegularModeHotKey: AppHotKey
+
+    var activeMode: DictateMode {
+        if let activeModeID, let mode = modes.first(where: { $0.id == activeModeID }) {
+            return mode
+        }
+        return modes.first ?? DictateMode.defaultMode()
+    }
+
+    var customInstructions: String {
+        get { activeMode.customInstructions }
+        set {
+            if let activeModeID, let index = modes.firstIndex(where: { $0.id == activeModeID }) {
+                modes[index].customInstructions = newValue
+            } else if let index = modes.indices.first {
+                modes[index].customInstructions = newValue
+            }
+        }
+    }
 
     init(
         selectedModel: LLMModelSelection? = nil,
@@ -63,15 +95,22 @@ struct VoiceSettings: Equatable {
         legacyRegularModeHotKey: AppHotKey = .defaultVoiceDictationRegular,
         preferredRecognitionLanguages: [VoiceLanguage] = [],
         translateToLanguageEnabled: Bool = false,
-        translationTargetLanguage: VoiceLanguage? = nil
+        translationTargetLanguage: VoiceLanguage? = nil,
+        modes: [DictateMode] = [],
+        activeModeID: UUID? = nil
     ) {
         self.selectedModel = selectedModel
-        self.customInstructions = customInstructions
         self.hotKey = hotKey
         self.preferredRecognitionLanguages = Self.sanitizedPreferredRecognitionLanguages(preferredRecognitionLanguages)
         self.translateToLanguageEnabled = translateToLanguageEnabled
         self.translationTargetLanguage = translationTargetLanguage
         self.legacyRegularModeHotKey = legacyRegularModeHotKey
+        if modes.isEmpty {
+            self.modes = [DictateMode.defaultMode(customInstructions: customInstructions)]
+        } else {
+            self.modes = modes
+        }
+        self.activeModeID = activeModeID
     }
 
     var pushToTalkHotKey: AppHotKey {
@@ -85,20 +124,29 @@ struct VoiceSettings: Equatable {
     }
 
     func sanitized() -> VoiceSettings {
-        VoiceSettings(
+        var sanitizedModes = modes
+        if !sanitizedModes.contains(where: { $0.isDefault }) {
+            sanitizedModes.insert(DictateMode.defaultMode(), at: 0)
+        }
+        let validActiveModeID = activeModeID.flatMap { id in
+            sanitizedModes.contains(where: { $0.id == id }) ? id : nil
+        }
+        return VoiceSettings(
             selectedModel: selectedModel,
-            customInstructions: customInstructions,
             hotKey: hotKey,
             legacyRegularModeHotKey: legacyRegularModeHotKey,
             preferredRecognitionLanguages: Self.sanitizedPreferredRecognitionLanguages(preferredRecognitionLanguages),
             translateToLanguageEnabled: translateToLanguageEnabled,
-            translationTargetLanguage: translationTargetLanguage
+            translationTargetLanguage: translationTargetLanguage,
+            modes: sanitizedModes,
+            activeModeID: validActiveModeID
         )
     }
 
     static func == (lhs: VoiceSettings, rhs: VoiceSettings) -> Bool {
         lhs.selectedModel == rhs.selectedModel
-            && lhs.customInstructions == rhs.customInstructions
+            && lhs.modes == rhs.modes
+            && lhs.activeModeID == rhs.activeModeID
             && lhs.hotKey == rhs.hotKey
             && lhs.preferredRecognitionLanguages == rhs.preferredRecognitionLanguages
             && lhs.translateToLanguageEnabled == rhs.translateToLanguageEnabled
