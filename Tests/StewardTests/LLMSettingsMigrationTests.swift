@@ -58,13 +58,9 @@ final class LLMSettingsMigrationTests: XCTestCase {
         settings.voice = VoiceSettings(
             selectedModel: LLMModelSelection(providerID: .openAI, modelID: "gpt-4o-mini-transcribe"),
             customInstructions: "Keep speaker intent",
-            pushToTalkHotKey: AppHotKey(
+            hotKey: AppHotKey(
                 carbonKeyCode: Key.v.carbonKeyCode,
                 carbonModifiers: NSEvent.ModifierFlags([.command, .option]).carbonFlags
-            ),
-            regularModeHotKey: AppHotKey(
-                carbonKeyCode: Key.space.carbonKeyCode,
-                carbonModifiers: NSEvent.ModifierFlags([.control, .shift]).carbonFlags
             ),
             preferredRecognitionLanguages: [.english, .spanish, .english, .french],
             translateToLanguageEnabled: true,
@@ -100,8 +96,8 @@ final class LLMSettingsMigrationTests: XCTestCase {
         XCTAssertNil(settings.refine.selectedModel)
         XCTAssertNil(settings.screenText.selectedModel)
         XCTAssertNil(settings.voice.selectedModel)
-        XCTAssertEqual(settings.voice.pushToTalkHotKey, .defaultVoiceDictation)
-        XCTAssertEqual(settings.voice.regularModeHotKey, .defaultVoiceDictationRegular)
+        XCTAssertEqual(settings.voice.hotKey, .defaultVoiceDictation)
+        XCTAssertEqual(settings.voice.hotKey.displayValue, "⌃⇧␣")
         XCTAssertEqual(settings.voice.preferredRecognitionLanguages, [])
         XCTAssertFalse(settings.voice.translateToLanguageEnabled)
         XCTAssertNil(settings.voice.translationTargetLanguage)
@@ -141,7 +137,7 @@ final class LLMSettingsMigrationTests: XCTestCase {
 
         let store = UserDefaultsLLMSettingsStore(userDefaults: defaults, secretsStore: InMemoryLLMSecretsStore())
         var settings = LLMSettings.empty()
-        settings.voice.pushToTalkHotKey = AppHotKey(
+        settings.voice.hotKey = AppHotKey(
             carbonKeyCode: Key.space.carbonKeyCode,
             carbonModifiers: NSEvent.ModifierFlags([.control, .shift]).carbonFlags
         )
@@ -149,8 +145,8 @@ final class LLMSettingsMigrationTests: XCTestCase {
         store.saveSettings(settings)
         let loaded = store.loadSettings()
 
-        XCTAssertEqual(loaded.voice.pushToTalkHotKey, settings.voice.pushToTalkHotKey)
-        XCTAssertEqual(loaded.voice.pushToTalkHotKey.displayValue, "⌃⇧␣")
+        XCTAssertEqual(loaded.voice.hotKey, settings.voice.hotKey)
+        XCTAssertEqual(loaded.voice.hotKey.displayValue, "⌃⇧␣")
     }
 
     func testVoiceSettingsMouseButtonHotKeyRoundTrips() {
@@ -163,18 +159,13 @@ final class LLMSettingsMigrationTests: XCTestCase {
 
         let store = UserDefaultsLLMSettingsStore(userDefaults: defaults, secretsStore: InMemoryLLMSecretsStore())
         var settings = LLMSettings.empty()
-        settings.voice.pushToTalkHotKey = AppHotKey(mouseButtonNumber: 4)
-        settings.voice.regularModeHotKey = AppHotKey(
-            carbonKeyCode: Key.v.carbonKeyCode,
-            carbonModifiers: NSEvent.ModifierFlags([.command, .option]).carbonFlags
-        )
+        settings.voice.hotKey = AppHotKey(mouseButtonNumber: 4)
 
         store.saveSettings(settings)
         let loaded = store.loadSettings()
 
-        XCTAssertEqual(loaded.voice.pushToTalkHotKey, settings.voice.pushToTalkHotKey)
-        XCTAssertEqual(loaded.voice.pushToTalkHotKey.readableDisplayValue, "Mouse Button 4")
-        XCTAssertEqual(loaded.voice.regularModeHotKey, settings.voice.regularModeHotKey)
+        XCTAssertEqual(loaded.voice.hotKey, settings.voice.hotKey)
+        XCTAssertEqual(loaded.voice.hotKey.readableDisplayValue, "Mouse Button 4")
     }
 
     func testVoiceSettingsPreferredLanguagesRoundTripWithDedupingAndCap() {
@@ -220,7 +211,7 @@ final class LLMSettingsMigrationTests: XCTestCase {
         XCTAssertEqual(loaded.voice.translationTargetLanguage, .japanese)
     }
 
-    func testLegacyVoiceHotKeyKeysLoadIntoPushToTalkShortcut() {
+    func testLegacyVoiceHotKeyKeysResetToNewSingleHotKeyDefault() {
         let suiteName = "LLMSettingsStoreTests.\(UUID().uuidString)"
         let defaults = try! XCTUnwrap(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
@@ -236,14 +227,50 @@ final class LLMSettingsMigrationTests: XCTestCase {
         let store = UserDefaultsLLMSettingsStore(userDefaults: defaults, secretsStore: InMemoryLLMSecretsStore())
         let loaded = store.loadSettings()
 
-        XCTAssertEqual(
-            loaded.voice.pushToTalkHotKey,
-            AppHotKey(
-                carbonKeyCode: Key.v.carbonKeyCode,
-                carbonModifiers: NSEvent.ModifierFlags([.command, .option]).carbonFlags
-            )
+        XCTAssertEqual(loaded.voice.hotKey, .defaultVoiceDictation)
+    }
+
+    func testSaveSettingsStoresCanonicalDictateKeysAndClearsLegacyKeys() {
+        let suiteName = "LLMSettingsStoreTests.\(UUID().uuidString)"
+        let defaults = try! XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defer {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+
+        defaults.set("stale", forKey: "voiceHotKeyTriggerKind")
+        defaults.set(99, forKey: "voiceHotKeyCode")
+        defaults.set(99, forKey: "voiceHotKeyModifiers")
+        defaults.set(4, forKey: "voiceHotKeyMouseButtonNumber")
+        defaults.set("stale", forKey: "voiceRegularHotKeyTriggerKind")
+        defaults.set(99, forKey: "voiceRegularHotKeyCode")
+        defaults.set(99, forKey: "voiceRegularHotKeyModifiers")
+        defaults.set(4, forKey: "voiceRegularHotKeyMouseButtonNumber")
+
+        let store = UserDefaultsLLMSettingsStore(userDefaults: defaults, secretsStore: InMemoryLLMSecretsStore())
+        var settings = LLMSettings.empty()
+        settings.voice.hotKey = AppHotKey(
+            carbonKeyCode: Key.v.carbonKeyCode,
+            carbonModifiers: NSEvent.ModifierFlags([.command, .option]).carbonFlags
         )
-        XCTAssertEqual(loaded.voice.regularModeHotKey, .defaultVoiceDictationRegular)
+
+        store.saveSettings(settings)
+
+        XCTAssertEqual(defaults.string(forKey: "voiceDictateHotKeyTriggerKind"), AppHotKey.TriggerKind.keyboard.rawValue)
+        XCTAssertEqual(defaults.integer(forKey: "voiceDictateHotKeyCode"), Int(Key.v.carbonKeyCode))
+        XCTAssertEqual(
+            defaults.integer(forKey: "voiceDictateHotKeyModifiers"),
+            Int(NSEvent.ModifierFlags([.command, .option]).carbonFlags)
+        )
+        XCTAssertEqual(defaults.integer(forKey: "voiceDictateHotKeyMouseButtonNumber"), 0)
+        XCTAssertNil(defaults.object(forKey: "voiceHotKeyTriggerKind"))
+        XCTAssertNil(defaults.object(forKey: "voiceHotKeyCode"))
+        XCTAssertNil(defaults.object(forKey: "voiceHotKeyModifiers"))
+        XCTAssertNil(defaults.object(forKey: "voiceHotKeyMouseButtonNumber"))
+        XCTAssertNil(defaults.object(forKey: "voiceRegularHotKeyTriggerKind"))
+        XCTAssertNil(defaults.object(forKey: "voiceRegularHotKeyCode"))
+        XCTAssertNil(defaults.object(forKey: "voiceRegularHotKeyModifiers"))
+        XCTAssertNil(defaults.object(forKey: "voiceRegularHotKeyMouseButtonNumber"))
     }
 
     func testClipboardHistoryDefaultMaxStoredRecordsIs1000() {

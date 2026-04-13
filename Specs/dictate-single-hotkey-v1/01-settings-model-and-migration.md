@@ -1,6 +1,6 @@
 ---
 name: Settings Model And Migration
-status: todo
+status: done
 ---
 
 # Summary
