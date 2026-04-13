@@ -173,19 +173,16 @@ struct SettingsView: View {
             SettingsListDivider()
 
             HotKeyRecorderView(
-                hotKey: $settings.voice.pushToTalkHotKey,
+                hotKey: $settings.voice.hotKey,
                 defaultHotKey: .defaultVoiceDictation,
-                title: "Push To Talk Key",
-                validate: { appState.validatePushToTalkDictateHotKey($0) }
+                title: "Dictate Key",
+                validate: { appState.validateDictateHotKey($0) }
             )
 
             SettingsListDivider()
 
-            HotKeyRecorderView(
-                hotKey: $settings.voice.regularModeHotKey,
-                defaultHotKey: .defaultVoiceDictationRegular,
-                title: "Dictate Key",
-                validate: { appState.validateRegularDictateHotKey($0) }
+            SettingsListInfoRow(
+                text: "Hold to record. Release after holding to transcribe. Quick double press latches Dictate; press once more to stop and transcribe."
             )
 
             SettingsListDivider()

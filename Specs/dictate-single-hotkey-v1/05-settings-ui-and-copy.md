@@ -1,6 +1,6 @@
 ---
 name: Settings UI And Copy
-status: todo
+status: done
 ---
 
 # Summary
