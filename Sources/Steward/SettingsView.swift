@@ -550,25 +550,21 @@ struct SettingsView: View {
     private var dictateRecognitionLanguagesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Recognition Languages")
-                .font(.body)
+                .font(.body.weight(.medium))
 
             Text("Help Dictate recognize up to 5 likely languages. Leave empty for automatic detection.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
-            if settings.voice.preferredRecognitionLanguages.isEmpty {
-                SettingsListInfoRow(text: "No preferred languages selected. Dictate will auto-detect spoken language.")
-            } else {
-                ForEach(settings.voice.preferredRecognitionLanguages.indices, id: \.self) { index in
-                    DictateLanguageSelectionRow(
-                        title: "Language \(index + 1)",
-                        selection: recognitionLanguageBinding(at: index),
-                        availableLanguages: availableLanguagesForRecognitionRow(at: index),
-                        onRemove: {
-                            removeRecognitionLanguage(at: index)
-                        }
-                    )
-                }
+            ForEach(settings.voice.preferredRecognitionLanguages.indices, id: \.self) { index in
+                DictateLanguageSelectionRow(
+                    title: "Language \(index + 1)",
+                    selection: recognitionLanguageBinding(at: index),
+                    availableLanguages: availableLanguagesForRecognitionRow(at: index),
+                    onRemove: {
+                        removeRecognitionLanguage(at: index)
+                    }
+                )
             }
 
             if canAddRecognitionLanguage {
@@ -578,9 +574,12 @@ struct SettingsView: View {
             } else if settings.voice.preferredRecognitionLanguages.count
                 >= VoiceSettings.maxPreferredRecognitionLanguages
             {
-                SettingsListInfoRow(text: "Maximum 5 preferred languages.", foregroundStyle: .secondary)
+                Text("Maximum 5 preferred languages.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 14)
     }
 
@@ -612,10 +611,9 @@ struct SettingsView: View {
                 }
 
                 if settings.voice.translationTargetLanguage == nil {
-                    SettingsListInfoRow(
-                        text: "Choose a target language to finish enabling translation.",
-                        foregroundStyle: .red
-                    )
+                    Text("Choose a target language to finish enabling translation.")
+                        .font(.subheadline)
+                        .foregroundStyle(.red)
                 }
             }
         }

@@ -13,6 +13,14 @@ struct HotKeyRecorderView: View {
     var body: some View {
         VStack(spacing: 0) {
             SettingsListRow(title: title) {
+                if hotKey != defaultHotKey {
+                    Button("Restore") {
+                        apply(defaultHotKey)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.regular)
+                }
+
                 Button(action: startRecording) {
                     HStack(spacing: 10) {
                         Text(isRecording ? "Press key or mouse" : hotKey.displayValue)
@@ -40,17 +48,6 @@ struct HotKeyRecorderView: View {
                     )
                 }
                 .buttonStyle(.plain)
-            }
-
-            if hotKey != defaultHotKey {
-                SettingsListDivider()
-                SettingsListRow(title: "Default Shortcut") {
-                    Button("Restore") {
-                        apply(defaultHotKey)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-                }
             }
 
             if let validationMessage {
