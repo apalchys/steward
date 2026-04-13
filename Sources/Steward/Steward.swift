@@ -95,15 +95,8 @@ private struct AppMenuView: View {
             }
             .keyboardShortcut("r", modifiers: [.command, .shift])
 
-            Button {
+            Button(appState.dictateMenuLabel) {
                 appState.runDictateAction()
-            } label: {
-                HStack(spacing: 12) {
-                    Text(appState.dictateMenuTitle)
-                    Spacer()
-                    Text(appState.dictateMenuShortcutDisplayValue)
-                        .foregroundStyle(.secondary)
-                }
             }
 
             Divider()
