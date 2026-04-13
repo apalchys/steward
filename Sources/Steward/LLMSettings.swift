@@ -65,6 +65,7 @@ struct VoiceSettings: Equatable {
     var modes: [DictateMode]
     var activeModeID: UUID?
     var hotKey: AppHotKey
+    var modeSwitchHotKey: AppHotKey?
     var preferredRecognitionLanguages: [VoiceLanguage]
     var translateToLanguageEnabled: Bool
     var translationTargetLanguage: VoiceLanguage?
@@ -92,6 +93,7 @@ struct VoiceSettings: Equatable {
         selectedModel: LLMModelSelection? = nil,
         customInstructions: String = "",
         hotKey: AppHotKey = .defaultVoiceDictation,
+        modeSwitchHotKey: AppHotKey? = nil,
         legacyRegularModeHotKey: AppHotKey = .defaultVoiceDictationRegular,
         preferredRecognitionLanguages: [VoiceLanguage] = [],
         translateToLanguageEnabled: Bool = false,
@@ -101,6 +103,7 @@ struct VoiceSettings: Equatable {
     ) {
         self.selectedModel = selectedModel
         self.hotKey = hotKey
+        self.modeSwitchHotKey = modeSwitchHotKey
         self.preferredRecognitionLanguages = Self.sanitizedPreferredRecognitionLanguages(preferredRecognitionLanguages)
         self.translateToLanguageEnabled = translateToLanguageEnabled
         self.translationTargetLanguage = translationTargetLanguage
@@ -134,6 +137,7 @@ struct VoiceSettings: Equatable {
         return VoiceSettings(
             selectedModel: selectedModel,
             hotKey: hotKey,
+            modeSwitchHotKey: modeSwitchHotKey,
             legacyRegularModeHotKey: legacyRegularModeHotKey,
             preferredRecognitionLanguages: Self.sanitizedPreferredRecognitionLanguages(preferredRecognitionLanguages),
             translateToLanguageEnabled: translateToLanguageEnabled,
@@ -147,6 +151,7 @@ struct VoiceSettings: Equatable {
         lhs.selectedModel == rhs.selectedModel
             && lhs.modes == rhs.modes
             && lhs.activeModeID == rhs.activeModeID
+            && lhs.modeSwitchHotKey == rhs.modeSwitchHotKey
             && lhs.hotKey == rhs.hotKey
             && lhs.preferredRecognitionLanguages == rhs.preferredRecognitionLanguages
             && lhs.translateToLanguageEnabled == rhs.translateToLanguageEnabled
@@ -430,6 +435,10 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
         let voiceDictateHotKeyCode: Defaults.Key<Int>
         let voiceDictateHotKeyModifiers: Defaults.Key<Int>
         let voiceDictateHotKeyMouseButtonNumber: Defaults.Key<Int>
+        let voiceModeSwitchHotKeyTriggerKind: Defaults.Key<String>
+        let voiceModeSwitchHotKeyCode: Defaults.Key<Int>
+        let voiceModeSwitchHotKeyModifiers: Defaults.Key<Int>
+        let voiceModeSwitchHotKeyMouseButtonNumber: Defaults.Key<Int>
         let voicePreferredRecognitionLanguageIDs: Defaults.Key<[String]>
         let voiceTranslateToLanguageEnabled: Defaults.Key<Bool>
         let voiceTranslationTargetLanguageID: Defaults.Key<String>
@@ -509,6 +518,26 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
             )
             voiceDictateHotKeyMouseButtonNumber = Defaults.Key<Int>(
                 "voiceDictateHotKeyMouseButtonNumber",
+                default: 0,
+                suite: userDefaults
+            )
+            voiceModeSwitchHotKeyTriggerKind = Defaults.Key<String>(
+                "voiceModeSwitchHotKeyTriggerKind",
+                default: "",
+                suite: userDefaults
+            )
+            voiceModeSwitchHotKeyCode = Defaults.Key<Int>(
+                "voiceModeSwitchHotKeyCode",
+                default: 0,
+                suite: userDefaults
+            )
+            voiceModeSwitchHotKeyModifiers = Defaults.Key<Int>(
+                "voiceModeSwitchHotKeyModifiers",
+                default: 0,
+                suite: userDefaults
+            )
+            voiceModeSwitchHotKeyMouseButtonNumber = Defaults.Key<Int>(
+                "voiceModeSwitchHotKeyMouseButtonNumber",
                 default: 0,
                 suite: userDefaults
             )
@@ -601,6 +630,12 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
 
         let dictateModes = loadDictateModes()
         let activeModeID = UUID(uuidString: Defaults[keys.voiceActiveModeID].trimmed)
+        let modeSwitchHotKey = readOptionalHotKey(
+            triggerKindRaw: Defaults[keys.voiceModeSwitchHotKeyTriggerKind],
+            code: Defaults[keys.voiceModeSwitchHotKeyCode],
+            modifiers: Defaults[keys.voiceModeSwitchHotKeyModifiers],
+            mouseButtonNumber: Defaults[keys.voiceModeSwitchHotKeyMouseButtonNumber]
+        )
 
         let settings = LLMSettings(
             providerSettings: providerSettings,
@@ -615,6 +650,7 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
             voice: VoiceSettings(
                 selectedModel: voiceSelection,
                 hotKey: dictateHotKey,
+                modeSwitchHotKey: modeSwitchHotKey,
                 preferredRecognitionLanguages: preferredRecognitionLanguages,
                 translateToLanguageEnabled: Defaults[keys.voiceTranslateToLanguageEnabled],
                 translationTargetLanguage: translationTargetLanguage,
@@ -663,6 +699,12 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
         Defaults[keys.voiceDictateHotKeyCode] = Int(sanitizedSettings.voice.hotKey.carbonKeyCode)
         Defaults[keys.voiceDictateHotKeyModifiers] = Int(sanitizedSettings.voice.hotKey.carbonModifiers)
         Defaults[keys.voiceDictateHotKeyMouseButtonNumber] = sanitizedSettings.voice.hotKey.mouseButtonNumber
+        saveOptionalHotKey(sanitizedSettings.voice.modeSwitchHotKey,
+            triggerKindKey: keys.voiceModeSwitchHotKeyTriggerKind,
+            codeKey: keys.voiceModeSwitchHotKeyCode,
+            modifiersKey: keys.voiceModeSwitchHotKeyModifiers,
+            mouseButtonKey: keys.voiceModeSwitchHotKeyMouseButtonNumber
+        )
         Defaults[keys.voicePreferredRecognitionLanguageIDs] = sanitizedSettings.voice.preferredRecognitionLanguages.map(
             \.rawValue)
         Defaults[keys.voiceTranslateToLanguageEnabled] = sanitizedSettings.voice.translateToLanguageEnabled
@@ -715,6 +757,43 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
     ) {
         Defaults[providerKey] = selection?.providerID.rawValue ?? ""
         Defaults[modelKey] = selection?.modelID ?? ""
+    }
+
+    private func readOptionalHotKey(
+        triggerKindRaw: String,
+        code: Int,
+        modifiers: Int,
+        mouseButtonNumber: Int
+    ) -> AppHotKey? {
+        guard let triggerKind = AppHotKey.TriggerKind(rawValue: triggerKindRaw) else {
+            return nil
+        }
+        return readHotKey(
+            triggerKind: triggerKind,
+            code: code,
+            modifiers: modifiers,
+            mouseButtonNumber: mouseButtonNumber
+        )
+    }
+
+    private func saveOptionalHotKey(
+        _ hotKey: AppHotKey?,
+        triggerKindKey: Defaults.Key<String>,
+        codeKey: Defaults.Key<Int>,
+        modifiersKey: Defaults.Key<Int>,
+        mouseButtonKey: Defaults.Key<Int>
+    ) {
+        if let hotKey {
+            Defaults[triggerKindKey] = hotKey.triggerKind.rawValue
+            Defaults[codeKey] = Int(hotKey.carbonKeyCode)
+            Defaults[modifiersKey] = Int(hotKey.carbonModifiers)
+            Defaults[mouseButtonKey] = hotKey.mouseButtonNumber
+        } else {
+            Defaults[triggerKindKey] = ""
+            Defaults[codeKey] = 0
+            Defaults[modifiersKey] = 0
+            Defaults[mouseButtonKey] = 0
+        }
     }
 
     private func loadDictateModes() -> [DictateMode] {

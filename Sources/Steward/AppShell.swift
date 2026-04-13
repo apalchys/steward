@@ -89,12 +89,15 @@ final class AppState: ObservableObject {
     private let refineCoordinator: any RefineCoordinating
     private let captureCoordinator: any CaptureCoordinating
     private let dictateCoordinator: any DictateCoordinating
+    private let modePickerPresenter: any DictateModePickerPresenting
     private let appSystemServices: AppSystemServices
 
     private var refineHotKey: HotKey?
     private var captureHotKey: HotKey?
     private var dictateHotKey: HotKey?
     private var dictateMouseButtonMonitor: (any MouseButtonShortcutMonitoring)?
+    private var modeSwitchHotKey: HotKey?
+    private var modeSwitchMouseButtonMonitor: (any MouseButtonShortcutMonitoring)?
     private var hasStarted = false
     private var initialHealthCheckTask: Task<Void, Never>?
     private var settingsHealthDebounceTask: Task<Void, Never>?
@@ -104,6 +107,7 @@ final class AppState: ObservableObject {
     private var lastHealthCheckConfig: [FeatureKind: HealthCheckConfig] = [:]
     private var fixedShortcutRegistrationMessage: String?
     private var dictateShortcutRegistrationMessage: String?
+    private var modeSwitchShortcutRegistrationMessage: String?
 
     private var isProcessing = false
     private var isScreenSelectionActive = false
@@ -120,6 +124,7 @@ final class AppState: ObservableObject {
         refineCoordinator: any RefineCoordinating,
         captureCoordinator: any CaptureCoordinating,
         dictateCoordinator: any DictateCoordinating,
+        modePickerPresenter: any DictateModePickerPresenting = DictateModePickerController(),
         appSystemServices: AppSystemServices
     ) {
         self.settingsStore = settingsStore
@@ -129,6 +134,7 @@ final class AppState: ObservableObject {
         self.refineCoordinator = refineCoordinator
         self.captureCoordinator = captureCoordinator
         self.dictateCoordinator = dictateCoordinator
+        self.modePickerPresenter = modePickerPresenter
         self.appSystemServices = appSystemServices
 
         Task { [weak self] in
@@ -257,6 +263,13 @@ final class AppState: ObservableObject {
             }
         }
 
+        modePickerPresenter.onModeSelected = { [weak self] modeID in
+            self?.handleModeSelected(modeID)
+        }
+        modePickerPresenter.onDismissed = { [weak self] in
+            self?.modePickerPresenter.hide()
+        }
+
         NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification,
             object: nil,
@@ -338,6 +351,7 @@ final class AppState: ObservableObject {
     func settingsDidChange() {
         applyClipboardHistorySettings()
         registerDictateHotKeys()
+        registerModeSwitchHotKey()
         initialHealthCheckTask?.cancel()
         settingsHealthDebounceTask?.cancel()
         settingsHealthDebounceTask = Task { @MainActor [weak self] in
@@ -442,6 +456,7 @@ final class AppState: ObservableObject {
 
         fixedShortcutRegistrationMessage = shortcutConflictMessage(for: unavailableShortcuts)
         registerDictateHotKeys()
+        registerModeSwitchHotKey()
     }
 
     private func checkProviderStatus(for feature: FeatureKind) {
@@ -901,10 +916,91 @@ final class AppState: ObservableObject {
         }
     }
 
+    func validateModeSwitchHotKey(_ hotKey: AppHotKey) -> AppHotKeyValidationError? {
+        let dictateHotKey = settingsStore.loadSettings().voice.hotKey
+        return AppHotKeyValidator.validateDictateHotKey(
+            hotKey,
+            conflictingDictateHotKeys: [(dictateHotKey, "Dictate")],
+            isShortcutAvailable: appSystemServices.isShortcutAvailable
+        )
+    }
+
+    private func registerModeSwitchHotKey() {
+        let voiceSettings = settingsStore.loadSettings().voice
+        guard let requestedHotKey = voiceSettings.modeSwitchHotKey else {
+            modeSwitchHotKey = nil
+            modeSwitchMouseButtonMonitor?.stop()
+            modeSwitchMouseButtonMonitor = nil
+            modeSwitchShortcutRegistrationMessage = nil
+            refreshShortcutRegistrationMessage()
+            return
+        }
+
+        if let error = validateModeSwitchHotKey(requestedHotKey) {
+            modeSwitchShortcutRegistrationMessage = "Shortcut unavailable: Mode Switch (\(requestedHotKey.readableDisplayValue)) — \(error.localizedDescription)"
+            refreshShortcutRegistrationMessage()
+            return
+        }
+
+        if requestedHotKey.isMouseButton {
+            let monitor = appSystemServices.makeMouseButtonMonitor(
+                requestedHotKey.mouseButtonNumber,
+                requestedHotKey.modifiers,
+                { [weak self] in self?.handleModeSwitchShortcut() },
+                { }
+            )
+            modeSwitchHotKey = nil
+            modeSwitchMouseButtonMonitor?.stop()
+            modeSwitchMouseButtonMonitor = monitor
+            modeSwitchShortcutRegistrationMessage = nil
+            refreshShortcutRegistrationMessage()
+            return
+        }
+
+        let shortcut = AppShortcut(
+            title: "Mode Switch",
+            key: requestedHotKey.key ?? .m,
+            modifiers: requestedHotKey.modifiers,
+            displayValue: requestedHotKey.readableDisplayValue
+        )
+
+        guard let hotKey = makeHotKey(for: shortcut, action: { [weak self] in
+            self?.handleModeSwitchShortcut()
+        }) else {
+            modeSwitchShortcutRegistrationMessage = "Shortcut unavailable: Mode Switch (\(requestedHotKey.readableDisplayValue)) is already in use by another app."
+            refreshShortcutRegistrationMessage()
+            return
+        }
+
+        modeSwitchMouseButtonMonitor?.stop()
+        modeSwitchMouseButtonMonitor = nil
+        modeSwitchHotKey = hotKey
+        modeSwitchShortcutRegistrationMessage = nil
+        refreshShortcutRegistrationMessage()
+    }
+
+    private func handleModeSwitchShortcut() {
+        guard dictateWorkflowState == .idle else { return }
+        let voiceSettings = settingsStore.loadSettings().voice
+        guard voiceSettings.modes.count > 1 else { return }
+        modePickerPresenter.show(
+            modes: voiceSettings.modes,
+            activeModeID: voiceSettings.activeMode.id
+        )
+    }
+
+    private func handleModeSelected(_ modeID: UUID) {
+        modePickerPresenter.hide()
+        var settings = settingsStore.loadSettings()
+        settings.voice.activeModeID = modeID
+        settingsStore.saveSettings(settings)
+    }
+
     private func refreshShortcutRegistrationMessage() {
         let messages = [
             fixedShortcutRegistrationMessage,
             dictateShortcutRegistrationMessage,
+            modeSwitchShortcutRegistrationMessage,
         ].compactMap { $0 }
         shortcutRegistrationMessage = messages.isEmpty ? nil : messages.joined(separator: "\n")
     }
