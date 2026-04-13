@@ -388,7 +388,7 @@ final class DictateCoordinator: DictateCoordinating {
                 preferredRecognitionLanguages: voiceSettings.preferredRecognitionLanguages,
                 translateToLanguageEnabled: voiceSettings.translateToLanguageEnabled,
                 translationTargetLanguage: voiceSettings.translationTargetLanguage,
-                customInstructions: voiceSettings.customInstructions
+                customInstructions: voiceSettings.activeMode.customInstructions
             )
         )
     }
