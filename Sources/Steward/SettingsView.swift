@@ -981,7 +981,7 @@ private struct SettingsInlineEditorSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title)
-                .font(.body)
+                .font(.body.weight(.medium))
 
             Text(description)
                 .font(.subheadline)
