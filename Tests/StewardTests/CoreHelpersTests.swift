@@ -22,6 +22,7 @@ final class CoreHelpersTests: XCTestCase {
         let whitespacePrompt = buildVoiceTranscriptionPrompt(customInstructions: "  \n\t")
 
         XCTAssertEqual(whitespacePrompt, defaultPrompt)
+        XCTAssertTrue(defaultPrompt.contains("If the audio has nothing to recognize, return an empty string."))
         XCTAssertTrue(defaultPrompt.contains("Preserve the original spoken language"))
         XCTAssertTrue(
             defaultPrompt.contains("unless additional instructions explicitly request another transformation"))

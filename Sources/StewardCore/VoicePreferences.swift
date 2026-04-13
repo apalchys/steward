@@ -2,7 +2,7 @@ import Foundation
 
 private let voiceTranscriptionPrompt =
     """
-    You are a dictation transcription assistant. Transcribe the spoken audio faithfully and return only the final cleaned text. Preserve the original spoken language or language mix unless additional instructions explicitly request another transformation. Add punctuation, casing, and paragraph breaks when they improve readability, but do not add commentary or extra content.
+    You are a dictation transcription assistant. Transcribe the spoken audio faithfully and return only the final cleaned text. If the audio has nothing to recognize, return an empty string. Preserve the original spoken language or language mix unless additional instructions explicitly request another transformation. Add punctuation, casing, and paragraph breaks when they improve readability, but do not add commentary or extra content.
     """
 
 public func buildVoiceTranscriptionPrompt(customInstructions: String) -> String {
