@@ -424,6 +424,8 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
         let voiceSelectedProviderID: Defaults.Key<String>
         let voiceSelectedModelID: Defaults.Key<String>
         let voiceCustomInstructions: Defaults.Key<String>
+        let voiceDictateModes: Defaults.Key<String>
+        let voiceActiveModeID: Defaults.Key<String>
         let voiceDictateHotKeyTriggerKind: Defaults.Key<String>
         let voiceDictateHotKeyCode: Defaults.Key<Int>
         let voiceDictateHotKeyModifiers: Defaults.Key<Int>
@@ -477,6 +479,16 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
             )
             voiceCustomInstructions = Defaults.Key<String>(
                 "voiceCustomInstructions",
+                default: "",
+                suite: userDefaults
+            )
+            voiceDictateModes = Defaults.Key<String>(
+                "voiceDictateModes",
+                default: "",
+                suite: userDefaults
+            )
+            voiceActiveModeID = Defaults.Key<String>(
+                "voiceActiveModeID",
                 default: "",
                 suite: userDefaults
             )
@@ -587,6 +599,9 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
             VoiceLanguage.init(rawValue:))
         let translationTargetLanguage = VoiceLanguage(rawValue: Defaults[keys.voiceTranslationTargetLanguageID].trimmed)
 
+        let dictateModes = loadDictateModes()
+        let activeModeID = UUID(uuidString: Defaults[keys.voiceActiveModeID].trimmed)
+
         let settings = LLMSettings(
             providerSettings: providerSettings,
             refine: RefineSettings(
@@ -599,11 +614,12 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
             ),
             voice: VoiceSettings(
                 selectedModel: voiceSelection,
-                customInstructions: Defaults[keys.voiceCustomInstructions],
                 hotKey: dictateHotKey,
                 preferredRecognitionLanguages: preferredRecognitionLanguages,
                 translateToLanguageEnabled: Defaults[keys.voiceTranslateToLanguageEnabled],
-                translationTargetLanguage: translationTargetLanguage
+                translationTargetLanguage: translationTargetLanguage,
+                modes: dictateModes,
+                activeModeID: activeModeID
             ),
             clipboardHistory: ClipboardHistorySettings(
                 isEnabled: Defaults[keys.clipboardHistoryEnabled],
@@ -640,7 +656,9 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
 
         Defaults[keys.customRefineInstructions] = sanitizedSettings.refine.customInstructions
         Defaults[keys.customScreenshotInstructions] = sanitizedSettings.screenText.customInstructions
-        Defaults[keys.voiceCustomInstructions] = sanitizedSettings.voice.customInstructions
+        saveDictateModes(sanitizedSettings.voice.modes)
+        Defaults[keys.voiceActiveModeID] = sanitizedSettings.voice.activeModeID?.uuidString ?? ""
+        Defaults[keys.voiceCustomInstructions] = ""
         Defaults[keys.voiceDictateHotKeyTriggerKind] = sanitizedSettings.voice.hotKey.triggerKind.rawValue
         Defaults[keys.voiceDictateHotKeyCode] = Int(sanitizedSettings.voice.hotKey.carbonKeyCode)
         Defaults[keys.voiceDictateHotKeyModifiers] = Int(sanitizedSettings.voice.hotKey.carbonModifiers)
@@ -697,6 +715,28 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
     ) {
         Defaults[providerKey] = selection?.providerID.rawValue ?? ""
         Defaults[modelKey] = selection?.modelID ?? ""
+    }
+
+    private func loadDictateModes() -> [DictateMode] {
+        let json = Defaults[keys.voiceDictateModes]
+        if !json.isEmpty,
+            let data = json.data(using: .utf8),
+            let modes = try? JSONDecoder().decode([DictateMode].self, from: data),
+            !modes.isEmpty
+        {
+            return modes
+        }
+        let legacyInstructions = Defaults[keys.voiceCustomInstructions]
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return [DictateMode.defaultMode(customInstructions: legacyInstructions)]
+    }
+
+    private func saveDictateModes(_ modes: [DictateMode]) {
+        if let data = try? JSONEncoder().encode(modes),
+            let json = String(data: data, encoding: .utf8)
+        {
+            Defaults[keys.voiceDictateModes] = json
+        }
     }
 
     private func clearLegacyVoiceHotKeyKeys() {
