@@ -920,7 +920,7 @@ final class AppState: ObservableObject {
 
         Task { @MainActor [weak self] in
             do {
-                try await self?.dictateCoordinator.handlePushToTalkKeyDown()
+                try await self?.dictateCoordinator.handleHotKeyDown()
             } catch {
                 self?.handleCoordinatorError(for: .dictate, error: error)
             }
@@ -930,7 +930,7 @@ final class AppState: ObservableObject {
     private func handleDictateShortcutUp() {
         Task { @MainActor [weak self] in
             do {
-                try await self?.dictateCoordinator.handlePushToTalkKeyUp()
+                try await self?.dictateCoordinator.handleHotKeyUp()
             } catch {
                 self?.handleCoordinatorError(for: .dictate, error: error)
             }

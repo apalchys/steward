@@ -374,8 +374,8 @@ final class AppStateTests: XCTestCase {
         appSystemServices.lastMouseMonitor?.simulateButtonUp()
         await Task.yield()
 
-        XCTAssertEqual(dictateCoordinator.handlePushToTalkKeyDownCallCount, 1)
-        XCTAssertEqual(dictateCoordinator.handlePushToTalkKeyUpCallCount, 1)
+        XCTAssertEqual(dictateCoordinator.handleHotKeyDownCallCount, 1)
+        XCTAssertEqual(dictateCoordinator.handleHotKeyUpCallCount, 1)
     }
 
     func testMouseDictateShortcutIsIgnoredWhileRefineIsRunning() async {
@@ -404,7 +404,7 @@ final class AppStateTests: XCTestCase {
         appSystemServices.lastMouseMonitor?.simulateButtonDown()
         await Task.yield()
 
-        XCTAssertEqual(dictateCoordinator.handlePushToTalkKeyDownCallCount, 0)
+        XCTAssertEqual(dictateCoordinator.handleHotKeyDownCallCount, 0)
 
         refineCoordinator.finish()
         await Task.yield()
@@ -806,24 +806,19 @@ private final class FakeDictateCoordinator: DictateCoordinating {
     var onStateChanged: ((DictateWorkflowState) -> Void)?
     var onError: ((any Error) -> Void)?
     private(set) var handleManualToggleActionCallCount = 0
-    private(set) var handleRegularHotKeyToggleActionCallCount = 0
-    private(set) var handlePushToTalkKeyDownCallCount = 0
-    private(set) var handlePushToTalkKeyUpCallCount = 0
+    private(set) var handleHotKeyDownCallCount = 0
+    private(set) var handleHotKeyUpCallCount = 0
 
     func handleManualToggleAction() async throws {
         handleManualToggleActionCallCount += 1
     }
 
-    func handleRegularHotKeyToggleAction() async throws {
-        handleRegularHotKeyToggleActionCallCount += 1
+    func handleHotKeyDown() async throws {
+        handleHotKeyDownCallCount += 1
     }
 
-    func handlePushToTalkKeyDown() async throws {
-        handlePushToTalkKeyDownCallCount += 1
-    }
-
-    func handlePushToTalkKeyUp() async throws {
-        handlePushToTalkKeyUpCallCount += 1
+    func handleHotKeyUp() async throws {
+        handleHotKeyUpCallCount += 1
     }
 }
 

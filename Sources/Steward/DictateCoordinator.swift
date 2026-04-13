@@ -36,9 +36,8 @@ protocol DictateCoordinating: AnyObject {
     var onError: ((Error) -> Void)? { get set }
 
     func handleManualToggleAction() async throws
-    func handleRegularHotKeyToggleAction() async throws
-    func handlePushToTalkKeyDown() async throws
-    func handlePushToTalkKeyUp() async throws
+    func handleHotKeyDown() async throws
+    func handleHotKeyUp() async throws
 }
 
 enum DictateCoordinatorError: LocalizedError, Equatable {
@@ -69,9 +68,9 @@ final class DictateCoordinator: DictateCoordinating {
     }
 
     private enum RecordingSource {
-        case pushToTalkHotKey
         case manualToggle
-        case regularHotKeyToggle
+        case hotKeyHold
+        case hotKeyLatched
     }
 
     var onStateChanged: ((DictateWorkflowState) -> Void)?
@@ -83,6 +82,10 @@ final class DictateCoordinator: DictateCoordinating {
     private let router: any LLMRouting
     private let textInteraction: any TextInteractionPerforming
     private let settingsStore: any AppSettingsProviding
+    private let clock: ContinuousClock
+    private let hotKeyHoldThreshold: Duration
+    private let hotKeyDoublePressWindow: Duration
+    private let sleeper: @Sendable (Duration) async -> Void
 
     private(set) var state: DictateWorkflowState = .idle {
         didSet {
@@ -91,6 +94,11 @@ final class DictateCoordinator: DictateCoordinating {
     }
     private var recordingSource: RecordingSource?
     private var pendingTranscriptionConfiguration: PendingTranscriptionConfiguration?
+    private var lastRecordingLevel: Float = 0
+    private var hotKeyPressStartedAt: ContinuousClock.Instant?
+    private var hotKeyDoublePressExpiresAt: ContinuousClock.Instant?
+    private var hotKeyDoublePressTask: Task<Void, Never>?
+    private var shouldIgnoreNextHotKeyUp = false
 
     init(
         microphoneAccess: any MicrophoneAccessProviding,
@@ -98,7 +106,13 @@ final class DictateCoordinator: DictateCoordinating {
         recordingPillPresenter: any VoiceRecordingPillPresenting,
         router: any LLMRouting,
         textInteraction: any TextInteractionPerforming,
-        settingsStore: any AppSettingsProviding
+        settingsStore: any AppSettingsProviding,
+        clock: ContinuousClock = ContinuousClock(),
+        hotKeyHoldThreshold: Duration = .milliseconds(200),
+        hotKeyDoublePressWindow: Duration = .milliseconds(250),
+        sleeper: @escaping @Sendable (Duration) async -> Void = { duration in
+            try? await Task.sleep(for: duration)
+        }
     ) {
         self.microphoneAccess = microphoneAccess
         self.audioRecordingService = audioRecordingService
@@ -106,12 +120,17 @@ final class DictateCoordinator: DictateCoordinating {
         self.router = router
         self.textInteraction = textInteraction
         self.settingsStore = settingsStore
+        self.clock = clock
+        self.hotKeyHoldThreshold = hotKeyHoldThreshold
+        self.hotKeyDoublePressWindow = hotKeyDoublePressWindow
+        self.sleeper = sleeper
 
         audioRecordingService.onLevelChanged = { [weak self] level in
             guard let self, self.state == .recording else {
                 return
             }
 
+            self.lastRecordingLevel = level
             self.showRecordingPill(level: level)
         }
         audioRecordingService.onMaximumDurationReached = { [weak self] in
@@ -162,35 +181,63 @@ final class DictateCoordinator: DictateCoordinating {
         }
     }
 
-    func handleRegularHotKeyToggleAction() async throws {
+    func handleHotKeyDown() async throws {
         switch state {
         case .idle:
-            try await startRecording(triggeredBy: .regularHotKeyToggle)
+            try await startRecording(triggeredBy: .hotKeyHold)
+            hotKeyPressStartedAt = clock.now
         case .recording:
-            guard recordingSource == .regularHotKeyToggle else {
+            guard isHotKeyRecording else {
                 return
             }
 
-            try await stopAndTranscribeRecording()
+            if recordingSource == .hotKeyLatched {
+                shouldIgnoreNextHotKeyUp = true
+                hotKeyPressStartedAt = nil
+                cancelPendingHotKeyDoublePressWindow()
+                try await stopAndTranscribeRecording()
+                return
+            }
+
+            guard
+                let hotKeyDoublePressExpiresAt,
+                clock.now <= hotKeyDoublePressExpiresAt
+            else {
+                return
+            }
+
+            cancelPendingHotKeyDoublePressWindow()
+            hotKeyPressStartedAt = nil
+            shouldIgnoreNextHotKeyUp = true
+            recordingSource = .hotKeyLatched
+            showRecordingPill(level: lastRecordingLevel)
         case .transcribing:
             return
         }
     }
 
-    func handlePushToTalkKeyDown() async throws {
-        guard state == .idle else {
+    func handleHotKeyUp() async throws {
+        guard state == .recording, isHotKeyRecording else {
             return
         }
 
-        try await startRecording(triggeredBy: .pushToTalkHotKey)
-    }
-
-    func handlePushToTalkKeyUp() async throws {
-        guard state == .recording, recordingSource == .pushToTalkHotKey else {
+        if shouldIgnoreNextHotKeyUp {
+            shouldIgnoreNextHotKeyUp = false
             return
         }
 
-        try await stopAndTranscribeRecording()
+        guard recordingSource == .hotKeyHold, let hotKeyPressStartedAt else {
+            return
+        }
+
+        self.hotKeyPressStartedAt = nil
+        if hotKeyPressStartedAt.duration(to: clock.now) >= hotKeyHoldThreshold {
+            cancelPendingHotKeyDoublePressWindow()
+            try await stopAndTranscribeRecording()
+            return
+        }
+
+        armHotKeyDoublePressWindow()
     }
 
     private func startRecording(triggeredBy source: RecordingSource) async throws {
@@ -203,6 +250,7 @@ final class DictateCoordinator: DictateCoordinating {
         try audioRecordingService.startRecording()
         pendingTranscriptionConfiguration = configuration
         recordingSource = source
+        lastRecordingLevel = 0
         transition(to: .recording)
         showRecordingPill(level: 0)
     }
@@ -255,6 +303,7 @@ final class DictateCoordinator: DictateCoordinating {
     }
 
     private func finishWorkflow() {
+        clearHotKeyGestureState()
         recordingSource = nil
         pendingTranscriptionConfiguration = nil
         recordingPillPresenter.hide()
@@ -263,13 +312,60 @@ final class DictateCoordinator: DictateCoordinating {
 
     private func showRecordingPill(level: Float) {
         switch recordingSource {
-        case .pushToTalkHotKey:
+        case .hotKeyHold:
             recordingPillPresenter.showPassiveRecording(level: level)
-        case .manualToggle, .regularHotKeyToggle:
+        case .manualToggle, .hotKeyLatched:
             recordingPillPresenter.showInteractiveRecording(level: level)
         case nil:
             recordingPillPresenter.showInteractiveRecording(level: level)
         }
+    }
+
+    private var isHotKeyRecording: Bool {
+        switch recordingSource {
+        case .hotKeyHold, .hotKeyLatched:
+            return true
+        case .manualToggle, nil:
+            return false
+        }
+    }
+
+    private func armHotKeyDoublePressWindow() {
+        cancelPendingHotKeyDoublePressWindow()
+
+        let hotKeyDoublePressExpiresAt = clock.now.advanced(by: hotKeyDoublePressWindow)
+        self.hotKeyDoublePressExpiresAt = hotKeyDoublePressExpiresAt
+        hotKeyDoublePressTask = Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+
+            await self.sleeper(self.hotKeyDoublePressWindow)
+            guard
+                !Task.isCancelled,
+                self.state == .recording,
+                self.recordingSource == .hotKeyHold,
+                self.hotKeyDoublePressExpiresAt == hotKeyDoublePressExpiresAt
+            else {
+                return
+            }
+
+            self.hotKeyDoublePressTask = nil
+            self.hotKeyDoublePressExpiresAt = nil
+            await self.cancelRecording()
+        }
+    }
+
+    private func cancelPendingHotKeyDoublePressWindow() {
+        hotKeyDoublePressTask?.cancel()
+        hotKeyDoublePressTask = nil
+        hotKeyDoublePressExpiresAt = nil
+    }
+
+    private func clearHotKeyGestureState() {
+        hotKeyPressStartedAt = nil
+        shouldIgnoreNextHotKeyUp = false
+        cancelPendingHotKeyDoublePressWindow()
     }
 
     private func transition(to newState: DictateWorkflowState) {

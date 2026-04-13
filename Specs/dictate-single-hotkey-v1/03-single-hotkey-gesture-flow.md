@@ -1,6 +1,6 @@
 ---
 name: Single Hotkey Gesture Flow
-status: todo
+status: done
 ---
 
 # Summary
