@@ -868,6 +868,7 @@ private final class FakeAppSettingsStore: AppSettingsProviding {
             providerID: .gemini,
             modelID: "gemini-3.1-flash-lite-preview"
         )
+        settings.voice.modeSwitchHotKey = nil
         settings.clipboardHistory = historySettings
     }
 

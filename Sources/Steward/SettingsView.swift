@@ -186,7 +186,7 @@ struct SettingsView: View {
 
             HotKeyRecorderView(
                 hotKey: modeSwitchHotKeyBinding,
-                defaultHotKey: .defaultVoiceDictation,
+                defaultHotKey: .defaultModeSwitchHotKey,
                 title: "Mode Switch Key",
                 validate: { appState.validateModeSwitchHotKey($0) }
             )
@@ -306,7 +306,7 @@ struct SettingsView: View {
 
     private var modeSwitchHotKeyBinding: Binding<AppHotKey> {
         Binding(
-            get: { settings.voice.modeSwitchHotKey ?? .defaultVoiceDictation },
+            get: { settings.voice.modeSwitchHotKey ?? .defaultModeSwitchHotKey },
             set: { settings.voice.modeSwitchHotKey = $0 }
         )
     }

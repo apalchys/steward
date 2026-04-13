@@ -93,7 +93,7 @@ struct VoiceSettings: Equatable {
         selectedModel: LLMModelSelection? = nil,
         customInstructions: String = "",
         hotKey: AppHotKey = .defaultVoiceDictation,
-        modeSwitchHotKey: AppHotKey? = nil,
+        modeSwitchHotKey: AppHotKey? = .defaultModeSwitchHotKey,
         legacyRegularModeHotKey: AppHotKey = .defaultVoiceDictationRegular,
         preferredRecognitionLanguages: [VoiceLanguage] = [],
         translateToLanguageEnabled: Bool = false,
@@ -196,6 +196,10 @@ struct AppHotKey: Equatable, Hashable {
     static let defaultVoiceDictationRegular = AppHotKey(
         carbonKeyCode: Key.d.carbonKeyCode,
         carbonModifiers: NSEvent.ModifierFlags([.command, .option]).carbonFlags
+    )
+    static let defaultModeSwitchHotKey = AppHotKey(
+        carbonKeyCode: Key.m.carbonKeyCode,
+        carbonModifiers: NSEvent.ModifierFlags([.control, .shift]).carbonFlags
     )
 
     var triggerKind: TriggerKind
@@ -523,17 +527,17 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
             )
             voiceModeSwitchHotKeyTriggerKind = Defaults.Key<String>(
                 "voiceModeSwitchHotKeyTriggerKind",
-                default: "",
+                default: AppHotKey.TriggerKind.keyboard.rawValue,
                 suite: userDefaults
             )
             voiceModeSwitchHotKeyCode = Defaults.Key<Int>(
                 "voiceModeSwitchHotKeyCode",
-                default: 0,
+                default: Int(AppHotKey.defaultModeSwitchHotKey.carbonKeyCode),
                 suite: userDefaults
             )
             voiceModeSwitchHotKeyModifiers = Defaults.Key<Int>(
                 "voiceModeSwitchHotKeyModifiers",
-                default: 0,
+                default: Int(AppHotKey.defaultModeSwitchHotKey.carbonModifiers),
                 suite: userDefaults
             )
             voiceModeSwitchHotKeyMouseButtonNumber = Defaults.Key<Int>(
