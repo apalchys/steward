@@ -11,11 +11,11 @@ enum AppHotKeyValidationError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .requiresModifier:
-            return "Dictate shortcuts must include at least one modifier key."
+            return "Dictate shortcut must include at least one modifier key."
         case .requiresNonModifierKey:
-            return "Dictate shortcuts must include a non-modifier key."
+            return "Dictate shortcut must include a non-modifier key."
         case .requiresMouseButton:
-            return "Dictate mouse shortcuts must use an extra mouse button."
+            return "Dictate mouse shortcut must use an extra mouse button."
         case .conflictsWithFeature(let featureName):
             return "Dictate shortcut conflicts with \(featureName)."
         case .unavailable:
