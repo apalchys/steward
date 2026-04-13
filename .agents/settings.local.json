@@ -1,10 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(swift build:*)",
-      "Bash(swift test:*)",
+      "Bash(swift:*)",
       "Bash(make:*)",
-      "Bash(git:*)"
+      "Bash(git:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)"
     ]
   }
 }
