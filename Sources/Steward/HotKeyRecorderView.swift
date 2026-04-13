@@ -4,6 +4,7 @@ import SwiftUI
 struct HotKeyRecorderView: View {
     @Binding var hotKey: AppHotKey
     let defaultHotKey: AppHotKey
+    let title: String
     let validate: (AppHotKey) -> AppHotKeyValidationError?
 
     @State private var isRecording = false
@@ -11,7 +12,7 @@ struct HotKeyRecorderView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            SettingsListRow(title: "Hot Key") {
+            SettingsListRow(title: title) {
                 Button(action: startRecording) {
                     HStack(spacing: 10) {
                         Text(isRecording ? "Press key or mouse" : hotKey.displayValue)

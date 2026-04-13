@@ -175,6 +175,7 @@ struct SettingsView: View {
             HotKeyRecorderView(
                 hotKey: $settings.voice.pushToTalkHotKey,
                 defaultHotKey: .defaultVoiceDictation,
+                title: "Push To Talk Key",
                 validate: { appState.validatePushToTalkDictateHotKey($0) }
             )
 
@@ -183,6 +184,7 @@ struct SettingsView: View {
             HotKeyRecorderView(
                 hotKey: $settings.voice.regularModeHotKey,
                 defaultHotKey: .defaultVoiceDictationRegular,
+                title: "Dictate Key",
                 validate: { appState.validateRegularDictateHotKey($0) }
             )
 
