@@ -1040,6 +1040,7 @@ final class AppState: ObservableObject {
         var settings = settingsStore.loadSettings()
         settings.voice.activeModeID = modeID
         settingsStore.saveSettings(settings)
+        objectWillChange.send()
     }
 
     private func refreshShortcutRegistrationMessage() {

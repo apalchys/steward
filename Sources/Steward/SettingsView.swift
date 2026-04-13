@@ -201,23 +201,16 @@ struct SettingsView: View {
 
     private var dictateModesCard: some View {
         SettingsListCard {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Modes")
-                        .font(.body.weight(.medium))
-
-                    Text("Create modes with custom instructions for different tasks.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
+            SettingsCardHeader(
+                title: "Modes",
+                description: "Create modes with custom instructions for different tasks."
+            ) {
                 Button("Create Mode") {
                     addDictateMode()
                 }
+                .controlSize(.regular)
             }
-            .padding(.vertical, 10)
+            .padding(.vertical, 14)
 
             ForEach(settings.voice.modes.indices, id: \.self) { index in
                 SettingsListDivider()
@@ -281,24 +274,12 @@ struct SettingsView: View {
             .padding(.vertical, 10)
 
             if isExpanded {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Instructions")
-                        .font(.subheadline.weight(.medium))
-
-                    TextEditor(text: dictateModeInstructionsBinding(at: index))
-                        .font(.system(.body, design: .monospaced))
-                        .scrollContentBackground(.hidden)
-                        .padding(10)
-                        .frame(minHeight: 160)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color(NSColor.textBackgroundColor))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(Color(NSColor.separatorColor), lineWidth: 1)
-                        )
-                }
+                SettingsInlineEditorSection(
+                    title: "Instructions",
+                    description: "Optional guidance applied when this mode is active.",
+                    text: dictateModeInstructionsBinding(at: index),
+                    minHeight: 160
+                )
                 .padding(.bottom, 10)
             }
         }
@@ -471,73 +452,63 @@ struct SettingsView: View {
         let providerSettings = settings.providerSettings(for: providerID)
         let models = LLMModelCatalog.entries(for: providerID)
 
-        return SettingsSectionCard {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(providerID.displayName)
-                        .font(.title3.weight(.semibold))
-
-                    Text(
-                        "Add an API key to unlock curated \(providerID.displayName) models across Refine, Capture, and Dictate."
-                    )
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                }
-
-                Spacer(minLength: 12)
-
-                Text(providerSettings.isEnabled ? "Unlocked" : "Locked")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(providerSettings.isEnabled ? .green : .secondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(
-                        Capsule(style: .continuous)
-                            .fill(
-                                providerSettings.isEnabled ? Color.green.opacity(0.12) : Color.secondary.opacity(0.12))
-                    )
+        return SettingsListCard {
+            SettingsCardHeader(
+                title: providerID.displayName,
+                description:
+                    "Add an API key to unlock curated \(providerID.displayName) models across Refine, Capture, and Dictate."
+            ) {
+                SettingsStatusBadge(
+                    title: providerSettings.isEnabled ? "Unlocked" : "Locked",
+                    isActive: providerSettings.isEnabled
+                )
             }
+            .padding(.vertical, 14)
 
-            Divider()
+            SettingsListDivider()
 
-            VStack(alignment: .leading, spacing: 10) {
-                Text("API key")
-                    .font(.subheadline.weight(.medium))
-
+            SettingsStackSection(
+                title: "API Key",
+                description: "Stored locally and used to unlock \(providerID.displayName) models across settings."
+            ) {
                 ContinuousSecureField(
                     placeholder: "\(providerID.displayName) API Key",
                     text: providerAPIKeyBinding(for: providerID)
                 )
                 .frame(height: 22)
             }
+            .padding(.vertical, 14)
 
-            Divider()
+            SettingsListDivider()
 
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Available models")
-                    .font(.subheadline.weight(.medium))
+            SettingsStackSection(
+                title: "Available Models",
+                description: "Curated models available for supported Steward workflows."
+            ) {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(models) { entry in
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                                Text(entry.modelID)
+                                    .font(.system(.body, design: .monospaced))
 
-                ForEach(models) { entry in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(alignment: .firstTextBaseline, spacing: 12) {
-                            Text(entry.modelID)
-                                .font(.system(.body, design: .monospaced))
+                                Spacer(minLength: 12)
 
-                            Spacer(minLength: 12)
+                                Text(entry.capabilitySummary)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .multilineTextAlignment(.trailing)
+                            }
 
-                            Text(entry.capabilitySummary)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .multilineTextAlignment(.trailing)
-                        }
-
-                        if entry.id != models.last?.id {
-                            Divider()
-                                .padding(.top, 8)
+                            if entry.id != models.last?.id {
+                                Divider()
+                                    .padding(.top, 8)
+                            }
                         }
                     }
                 }
             }
+            .padding(.vertical, 14)
         }
     }
 
@@ -902,6 +873,42 @@ struct SettingsListCard<Content: View>: View {
     }
 }
 
+private struct SettingsCardHeader<Accessory: View>: View {
+    let title: String
+    let description: String?
+    let accessory: Accessory
+
+    init(
+        title: String,
+        description: String? = nil,
+        @ViewBuilder accessory: () -> Accessory
+    ) {
+        self.title = title
+        self.description = description
+        self.accessory = accessory()
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.headline)
+
+                if let description {
+                    Text(description)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Spacer(minLength: 12)
+
+            accessory
+        }
+    }
+}
+
 private struct SettingsSidebarRow: View {
     let pane: SettingsPane
 
@@ -986,7 +993,7 @@ struct SettingsListRow<Accessory: View>: View {
         HStack(alignment: .center, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.body)
+                    .font(.body.weight(.medium))
 
                 if let description {
                     Text(description)
@@ -1001,6 +1008,38 @@ struct SettingsListRow<Accessory: View>: View {
             accessory
         }
         .frame(minHeight: 58)
+    }
+}
+
+private struct SettingsStackSection<Content: View>: View {
+    let title: String
+    let description: String?
+    let content: Content
+
+    init(
+        title: String,
+        description: String? = nil,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.description = description
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.body.weight(.medium))
+
+            if let description {
+                Text(description)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            content
+        }
     }
 }
 
@@ -1066,6 +1105,44 @@ private struct SettingsButtonRow: View {
     }
 }
 
+private struct SettingsStatusBadge: View {
+    let title: String
+    let isActive: Bool
+
+    var body: some View {
+        Text(title)
+            .font(.caption.weight(.medium))
+            .foregroundStyle(isActive ? .green : .secondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(isActive ? Color.green.opacity(0.12) : Color.secondary.opacity(0.12))
+            )
+    }
+}
+
+private struct SettingsTextEditor: View {
+    @Binding var text: String
+    var minHeight: CGFloat = 220
+
+    var body: some View {
+        TextEditor(text: $text)
+            .font(.system(.body, design: .monospaced))
+            .scrollContentBackground(.hidden)
+            .padding(10)
+            .frame(minHeight: minHeight)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color(NSColor.textBackgroundColor))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+            )
+    }
+}
+
 private struct SettingsEditorCard: View {
     let title: String
     let description: String
@@ -1073,19 +1150,7 @@ private struct SettingsEditorCard: View {
 
     var body: some View {
         SettingsSectionCard(title: title, description: description) {
-            TextEditor(text: $text)
-                .font(.system(.body, design: .monospaced))
-                .scrollContentBackground(.hidden)
-                .padding(10)
-                .frame(minHeight: 220)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color(NSColor.textBackgroundColor))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color(NSColor.separatorColor), lineWidth: 1)
-                )
+            SettingsTextEditor(text: $text)
         }
     }
 }
@@ -1094,29 +1159,11 @@ private struct SettingsInlineEditorSection: View {
     let title: String
     let description: String
     @Binding var text: String
+    var minHeight: CGFloat = 220
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(.body.weight(.medium))
-
-            Text(description)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
-            TextEditor(text: $text)
-                .font(.system(.body, design: .monospaced))
-                .scrollContentBackground(.hidden)
-                .padding(10)
-                .frame(minHeight: 220)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color(NSColor.textBackgroundColor))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color(NSColor.separatorColor), lineWidth: 1)
-                )
+        SettingsStackSection(title: title, description: description) {
+            SettingsTextEditor(text: $text, minHeight: minHeight)
         }
         .padding(.vertical, 14)
     }
@@ -1129,9 +1176,9 @@ private struct DictateLanguageSelectionRow: View {
     let onRemove: () -> Void
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .center, spacing: 16) {
             Text(title)
-                .font(.body)
+                .font(.body.weight(.medium))
 
             Spacer(minLength: 16)
 
@@ -1148,7 +1195,7 @@ private struct DictateLanguageSelectionRow: View {
 
             Button("Remove", action: onRemove)
         }
-        .frame(minHeight: 36)
+        .padding(.vertical, 4)
     }
 }
 

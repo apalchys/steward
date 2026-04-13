@@ -1,4 +1,5 @@
-import AppKit
+@preconcurrency import AppKit
+@preconcurrency import ApplicationServices
 import SwiftUI
 
 @MainActor
@@ -84,7 +85,9 @@ final class DictateModePickerController: DictateModePickerPresenting {
     private let windowFactory: () -> any DictateModePickerWindowing
     private let screenProvider: () -> NSScreen?
     private var pickerWindow: (any DictateModePickerWindowing)?
-    private var keyMonitor: Any?
+    private var localKeyMonitor: Any?
+    private var keyEventTap: CFMachPort?
+    private var keyEventTapSource: CFRunLoopSource?
 
     init(
         windowFactory: (() -> any DictateModePickerWindowing)? = nil,
@@ -133,17 +136,86 @@ final class DictateModePickerController: DictateModePickerPresenting {
 
     private func installKeyMonitor() {
         removeKeyMonitor()
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+
+        if installGlobalKeyEventTap() {
+            return
+        }
+
+        localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
             return self.handleKeyEvent(event) ? nil : event
         }
     }
 
     private func removeKeyMonitor() {
-        if let keyMonitor {
-            NSEvent.removeMonitor(keyMonitor)
+        if let localKeyMonitor {
+            NSEvent.removeMonitor(localKeyMonitor)
+            self.localKeyMonitor = nil
         }
-        keyMonitor = nil
+
+        if let keyEventTapSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), keyEventTapSource, .commonModes)
+            self.keyEventTapSource = nil
+        }
+
+        if let keyEventTap {
+            CFMachPortInvalidate(keyEventTap)
+            self.keyEventTap = nil
+        }
+    }
+
+    private func installGlobalKeyEventTap() -> Bool {
+        let eventMask = CGEventMask(1) << CGEventType.keyDown.rawValue
+
+        guard
+            let keyEventTap = CGEvent.tapCreate(
+                tap: .cgSessionEventTap,
+                place: .headInsertEventTap,
+                options: .defaultTap,
+                eventsOfInterest: eventMask,
+                callback: { _, type, event, userInfo in
+                    guard let userInfo else {
+                        return Unmanaged.passUnretained(event)
+                    }
+
+                    let controller = Unmanaged<DictateModePickerController>.fromOpaque(userInfo).takeUnretainedValue()
+                    return MainActor.assumeIsolated {
+                        controller.handleKeyEventTap(type: type, event: event)
+                    }
+                },
+                userInfo: Unmanaged.passUnretained(self).toOpaque()
+            )
+        else {
+            return false
+        }
+
+        guard let keyEventTapSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, keyEventTap, 0) else {
+            CFMachPortInvalidate(keyEventTap)
+            return false
+        }
+
+        self.keyEventTap = keyEventTap
+        self.keyEventTapSource = keyEventTapSource
+        CFRunLoopAddSource(CFRunLoopGetMain(), keyEventTapSource, .commonModes)
+        CGEvent.tapEnable(tap: keyEventTap, enable: true)
+        return true
+    }
+
+    private func handleKeyEventTap(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+        switch type {
+        case .keyDown:
+            guard let nsEvent = NSEvent(cgEvent: event) else {
+                return Unmanaged.passUnretained(event)
+            }
+            return handleKeyEvent(nsEvent) ? nil : Unmanaged.passUnretained(event)
+        case .tapDisabledByTimeout, .tapDisabledByUserInput:
+            if let keyEventTap {
+                CGEvent.tapEnable(tap: keyEventTap, enable: true)
+            }
+            return Unmanaged.passUnretained(event)
+        default:
+            return Unmanaged.passUnretained(event)
+        }
     }
 
     private func handleKeyEvent(_ event: NSEvent) -> Bool {
@@ -161,10 +233,7 @@ final class DictateModePickerController: DictateModePickerPresenting {
             viewModel.dismiss()
             return true
         default:
-            if let characters = event.charactersIgnoringModifiers,
-                let digit = characters.first?.wholeNumberValue,
-                digit >= 1, digit <= 9
-            {
+            if let digit = DictateModePickerShortcut.modeNumber(for: event) {
                 viewModel.selectByNumber(digit)
                 return true
             }
@@ -187,6 +256,46 @@ final class DictateModePickerController: DictateModePickerPresenting {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         panel.isMovable = false
         return panel
+    }
+}
+
+enum DictateModePickerShortcut {
+    private static let numberRowDigits: [Int: Int] = [
+        18: 1,
+        19: 2,
+        20: 3,
+        21: 4,
+        23: 5,
+        22: 6,
+        26: 7,
+        28: 8,
+        25: 9,
+    ]
+
+    private static let keypadDigits: [Int: Int] = [
+        83: 1,
+        84: 2,
+        85: 3,
+        86: 4,
+        87: 5,
+        88: 6,
+        89: 7,
+        91: 8,
+        92: 9,
+    ]
+
+    static func modeNumber(for event: NSEvent) -> Int? {
+        if let digit = numberRowDigits[Int(event.keyCode)] ?? keypadDigits[Int(event.keyCode)] {
+            return digit
+        }
+
+        for characters in [event.charactersIgnoringModifiers, event.characters] {
+            if let digit = characters?.first?.wholeNumberValue, (1...9).contains(digit) {
+                return digit
+            }
+        }
+
+        return nil
     }
 }
 
