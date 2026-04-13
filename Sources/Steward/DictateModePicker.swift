@@ -148,16 +148,16 @@ final class DictateModePickerController: DictateModePickerPresenting {
 
     private func handleKeyEvent(_ event: NSEvent) -> Bool {
         switch Int(event.keyCode) {
-        case 126: // arrow up
+        case 126:  // arrow up
             viewModel.moveUp()
             return true
-        case 125: // arrow down
+        case 125:  // arrow down
             viewModel.moveDown()
             return true
-        case 36, 76: // return, numpad enter
+        case 36, 76:  // return, numpad enter
             viewModel.selectHighlighted()
             return true
-        case 53: // escape
+        case 53:  // escape
             viewModel.dismiss()
             return true
         default:

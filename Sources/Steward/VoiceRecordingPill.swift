@@ -12,6 +12,7 @@ protocol VoiceRecordingPillPresenting: AnyObject {
     var onCancel: (() -> Void)? { get set }
     var onConfirm: (() -> Void)? { get set }
 
+    func setModeName(_ name: String?)
     func showInteractiveRecording(level: Float)
     func showPassiveRecording(level: Float)
     func showTranscribing()
@@ -49,6 +50,7 @@ private final class TransparentHostingView<Content: View>: NSHostingView<Content
 @MainActor
 final class VoiceRecordingPillViewModel: ObservableObject {
     @Published private(set) var state: VoiceRecordingPillState = .interactiveRecording(level: 0)
+    @Published var modeName: String?
 
     var onCancel: (() -> Void)?
     var onConfirm: (() -> Void)?
@@ -100,6 +102,10 @@ final class VoiceRecordingPillController: VoiceRecordingPillPresenting {
     ) {
         self.windowFactory = windowFactory ?? { Self.makeWindow() }
         self.screenProvider = screenProvider ?? { NSScreen.main ?? NSScreen.screens.first }
+    }
+
+    func setModeName(_ name: String?) {
+        viewModel.modeName = name
     }
 
     func showInteractiveRecording(level: Float) {
@@ -174,6 +180,11 @@ final class VoiceRecordingPillController: VoiceRecordingPillPresenting {
 private struct VoiceRecordingPillView: View {
     @ObservedObject var model: VoiceRecordingPillViewModel
 
+    private var displayModeName: String? {
+        guard let name = model.modeName, name != "Default" else { return nil }
+        return name
+    }
+
     var body: some View {
         ZStack {
             Capsule(style: .continuous)
@@ -183,16 +194,25 @@ private struct VoiceRecordingPillView: View {
                         .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
                 )
 
-            Group {
-                switch model.state {
-                case .interactiveRecording:
-                    interactiveBody
-                case .passiveRecording, .transcribing:
-                    passiveBody
+            VStack(spacing: 2) {
+                if let displayModeName {
+                    Text(displayModeName)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.6))
+                        .lineLimit(1)
+                }
+
+                Group {
+                    switch model.state {
+                    case .interactiveRecording:
+                        interactiveBody
+                    case .passiveRecording, .transcribing:
+                        passiveBody
+                    }
                 }
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.vertical, displayModeName != nil ? 6 : 10)
         }
         .frame(width: 220, height: 66)
     }

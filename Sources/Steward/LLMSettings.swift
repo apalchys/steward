@@ -699,7 +699,8 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
         Defaults[keys.voiceDictateHotKeyCode] = Int(sanitizedSettings.voice.hotKey.carbonKeyCode)
         Defaults[keys.voiceDictateHotKeyModifiers] = Int(sanitizedSettings.voice.hotKey.carbonModifiers)
         Defaults[keys.voiceDictateHotKeyMouseButtonNumber] = sanitizedSettings.voice.hotKey.mouseButtonNumber
-        saveOptionalHotKey(sanitizedSettings.voice.modeSwitchHotKey,
+        saveOptionalHotKey(
+            sanitizedSettings.voice.modeSwitchHotKey,
             triggerKindKey: keys.voiceModeSwitchHotKeyTriggerKind,
             codeKey: keys.voiceModeSwitchHotKeyCode,
             modifiersKey: keys.voiceModeSwitchHotKeyModifiers,

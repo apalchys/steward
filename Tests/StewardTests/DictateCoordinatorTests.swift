@@ -519,6 +519,11 @@ private final class FakeVoiceRecordingPillPresenter: VoiceRecordingPillPresentin
     private(set) var recordingStates: [VoiceRecordingPillState] = []
     private(set) var showTranscribingCallCount = 0
     private(set) var hideCallCount = 0
+    private(set) var lastModeName: String?
+
+    func setModeName(_ name: String?) {
+        lastModeName = name
+    }
 
     func showInteractiveRecording(level: Float) {
         recordingStates.append(.interactiveRecording(level: level))

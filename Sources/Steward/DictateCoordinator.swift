@@ -251,6 +251,7 @@ final class DictateCoordinator: DictateCoordinating {
         pendingTranscriptionConfiguration = configuration
         recordingSource = source
         lastRecordingLevel = 0
+        recordingPillPresenter.setModeName(settingsStore.loadSettings().voice.activeMode.name)
         transition(to: .recording)
         showRecordingPill(level: 0)
     }

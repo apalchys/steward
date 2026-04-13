@@ -162,10 +162,10 @@ final class AppState: ObservableObject {
                 return "Status: Select an area..."
             }
             if dictateWorkflowState == .recording {
-                return "Status: Listening..."
+                return dictateStatusText("Listening")
             }
             if dictateWorkflowState == .transcribing {
-                return "Status: Transcribing..."
+                return dictateStatusText("Transcribing")
             }
             return "Status: Processing..."
         case .error:
@@ -174,6 +174,14 @@ final class AppState: ObservableObject {
             }
             return "Status: Provider configuration required"
         }
+    }
+
+    private func dictateStatusText(_ action: String) -> String {
+        let modeName = settingsStore.loadSettings().voice.activeMode.name
+        if modeName != "Default" {
+            return "Status: \(action) (\(modeName))..."
+        }
+        return "Status: \(action)..."
     }
 
     var shouldShowActivityStatusTitle: Bool {
@@ -937,7 +945,8 @@ final class AppState: ObservableObject {
         }
 
         if let error = validateModeSwitchHotKey(requestedHotKey) {
-            modeSwitchShortcutRegistrationMessage = "Shortcut unavailable: Mode Switch (\(requestedHotKey.readableDisplayValue)) — \(error.localizedDescription)"
+            modeSwitchShortcutRegistrationMessage =
+                "Shortcut unavailable: Mode Switch (\(requestedHotKey.readableDisplayValue)) — \(error.localizedDescription)"
             refreshShortcutRegistrationMessage()
             return
         }
@@ -947,7 +956,7 @@ final class AppState: ObservableObject {
                 requestedHotKey.mouseButtonNumber,
                 requestedHotKey.modifiers,
                 { [weak self] in self?.handleModeSwitchShortcut() },
-                { }
+                {}
             )
             modeSwitchHotKey = nil
             modeSwitchMouseButtonMonitor?.stop()
@@ -964,10 +973,15 @@ final class AppState: ObservableObject {
             displayValue: requestedHotKey.readableDisplayValue
         )
 
-        guard let hotKey = makeHotKey(for: shortcut, action: { [weak self] in
-            self?.handleModeSwitchShortcut()
-        }) else {
-            modeSwitchShortcutRegistrationMessage = "Shortcut unavailable: Mode Switch (\(requestedHotKey.readableDisplayValue)) is already in use by another app."
+        guard
+            let hotKey = makeHotKey(
+                for: shortcut,
+                action: { [weak self] in
+                    self?.handleModeSwitchShortcut()
+                })
+        else {
+            modeSwitchShortcutRegistrationMessage =
+                "Shortcut unavailable: Mode Switch (\(requestedHotKey.readableDisplayValue)) is already in use by another app."
             refreshShortcutRegistrationMessage()
             return
         }

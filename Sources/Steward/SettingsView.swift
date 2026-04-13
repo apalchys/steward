@@ -159,7 +159,10 @@ struct SettingsView: View {
     }
 
     private var dictatePane: some View {
-        dictateControlsCard
+        VStack(alignment: .leading, spacing: 20) {
+            dictateControlsCard
+            dictateModesCard
+        }
     }
 
     private var dictateControlsCard: some View {
@@ -181,8 +184,18 @@ struct SettingsView: View {
 
             SettingsListDivider()
 
+            HotKeyRecorderView(
+                hotKey: modeSwitchHotKeyBinding,
+                defaultHotKey: .defaultVoiceDictation,
+                title: "Mode Switch Key",
+                validate: { appState.validateModeSwitchHotKey($0) }
+            )
+
+            SettingsListDivider()
+
             SettingsListInfoRow(
-                text: "Hold to record. Release after holding to transcribe. Quick double press latches Dictate; press once more to stop and transcribe."
+                text:
+                    "Hold to record. Release after holding to transcribe. Quick double press latches Dictate; press once more to stop and transcribe."
             )
 
             SettingsListDivider()
@@ -192,15 +205,157 @@ struct SettingsView: View {
             SettingsListDivider()
 
             dictateTranslationSection
-
-            SettingsListDivider()
-
-            SettingsInlineEditorSection(
-                title: "Custom Instructions",
-                description: "Optional guidance applied after speech is transcribed.",
-                text: $settings.voice.customInstructions
-            )
         }
+    }
+
+    private var dictateModesCard: some View {
+        SettingsListCard {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Modes")
+                        .font(.body.weight(.medium))
+
+                    Text("Create modes with custom instructions for different tasks.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Button("Create Mode") {
+                    addDictateMode()
+                }
+                .controlSize(.small)
+            }
+            .padding(.vertical, 10)
+
+            ForEach(settings.voice.modes.indices, id: \.self) { index in
+                SettingsListDivider()
+                dictateModeRow(at: index)
+            }
+        }
+    }
+
+    @State private var expandedModeID: UUID?
+
+    private func dictateModeRow(at index: Int) -> some View {
+        let mode = settings.voice.modes[index]
+        let isActive = mode.id == settings.voice.activeMode.id
+        let isExpanded = expandedModeID == mode.id
+
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 10) {
+                Circle()
+                    .fill(isActive ? Color.green : Color(NSColor.separatorColor))
+                    .frame(width: 8, height: 8)
+
+                TextField("Mode name", text: dictateModeNameBinding(at: index))
+                    .textFieldStyle(.plain)
+                    .font(.body.weight(.medium))
+
+                Spacer()
+
+                if !isActive {
+                    Button("Activate") {
+                        settings.voice.activeModeID = mode.id
+                    }
+                    .controlSize(.small)
+                    .buttonStyle(.bordered)
+                }
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        expandedModeID = isExpanded ? nil : mode.id
+                    }
+                } label: {
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+
+                if !mode.isDefault {
+                    Button {
+                        deleteDictateMode(at: index)
+                    } label: {
+                        Image(systemName: "trash")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.vertical, 10)
+
+            if isExpanded {
+                TextEditor(text: dictateModeInstructionsBinding(at: index))
+                    .font(.system(.body, design: .monospaced))
+                    .scrollContentBackground(.hidden)
+                    .padding(10)
+                    .frame(minHeight: 160)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color(NSColor.textBackgroundColor))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                    )
+                    .padding(.bottom, 10)
+            }
+        }
+    }
+
+    private var modeSwitchHotKeyBinding: Binding<AppHotKey> {
+        Binding(
+            get: { settings.voice.modeSwitchHotKey ?? .defaultVoiceDictation },
+            set: { settings.voice.modeSwitchHotKey = $0 }
+        )
+    }
+
+    private func dictateModeNameBinding(at index: Int) -> Binding<String> {
+        Binding(
+            get: {
+                guard settings.voice.modes.indices.contains(index) else { return "" }
+                return settings.voice.modes[index].name
+            },
+            set: { newValue in
+                guard settings.voice.modes.indices.contains(index) else { return }
+                settings.voice.modes[index].name = newValue
+            }
+        )
+    }
+
+    private func dictateModeInstructionsBinding(at index: Int) -> Binding<String> {
+        Binding(
+            get: {
+                guard settings.voice.modes.indices.contains(index) else { return "" }
+                return settings.voice.modes[index].customInstructions
+            },
+            set: { newValue in
+                guard settings.voice.modes.indices.contains(index) else { return }
+                settings.voice.modes[index].customInstructions = newValue
+            }
+        )
+    }
+
+    private func addDictateMode() {
+        let newMode = DictateMode(
+            id: UUID(),
+            name: "Mode \(settings.voice.modes.count + 1)",
+            customInstructions: "",
+            isDefault: false
+        )
+        settings.voice.modes.append(newMode)
+        expandedModeID = newMode.id
+    }
+
+    private func deleteDictateMode(at index: Int) {
+        guard settings.voice.modes.indices.contains(index) else { return }
+        let mode = settings.voice.modes[index]
+        guard !mode.isDefault else { return }
+        if settings.voice.activeModeID == mode.id {
+            settings.voice.activeModeID = nil
+        }
+        settings.voice.modes.remove(at: index)
     }
 
     private var clipboardPane: some View {
