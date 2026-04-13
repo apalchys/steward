@@ -180,7 +180,7 @@ struct SettingsView: View {
                 defaultHotKey: .defaultVoiceDictation,
                 title: "Dictate Key",
                 description:
-                    "Hold to record",
+                    "Press to start/end recording, or hold for Push-to-Talk",
                 validate: { appState.validateDictateHotKey($0) }
             )
 
