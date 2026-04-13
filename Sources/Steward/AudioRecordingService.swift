@@ -265,8 +265,10 @@ final class SystemAudioRecordingService: AudioRecordingProviding {
             return 0
         }
 
-        let clampedPower = max(averagePower, -60)
-        return pow(10, clampedPower / 20)
+        let minDb: Float = -50
+        let maxDb: Float = -10
+        let clampedPower = min(max(averagePower, minDb), maxDb)
+        return (clampedPower - minDb) / (maxDb - minDb)
     }
 
     nonisolated private static func makeTemporaryRecordingURL() throws -> URL {

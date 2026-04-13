@@ -249,18 +249,18 @@ private struct VoiceRecordingLevelMeter: View {
     let level: Float
 
     var body: some View {
-        HStack(alignment: .center, spacing: 5) {
+        HStack(alignment: .center, spacing: 3) {
             ForEach(Array(barHeights.enumerated()), id: \.offset) { index, height in
-                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
                     .fill(Color.white.opacity(opacity(for: index)))
-                    .frame(width: 6, height: height)
+                    .frame(width: 4, height: height)
             }
         }
         .frame(width: 72, height: 40)
     }
 
     private var barHeights: [CGFloat] {
-        [12, 18, 28, 36, 28, 18, 12]
+        [10, 14, 18, 24, 30, 36, 30, 24, 18, 14, 10]
     }
 
     private func opacity(for index: Int) -> Double {
