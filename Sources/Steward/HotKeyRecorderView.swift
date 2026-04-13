@@ -5,6 +5,7 @@ struct HotKeyRecorderView: View {
     @Binding var hotKey: AppHotKey
     let defaultHotKey: AppHotKey
     let title: String
+    var description: String?
     let validate: (AppHotKey) -> AppHotKeyValidationError?
 
     @State private var isRecording = false
@@ -12,7 +13,7 @@ struct HotKeyRecorderView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            SettingsListRow(title: title) {
+            SettingsListRow(title: title, description: description) {
                 if hotKey != defaultHotKey {
                     Button("Restore") {
                         apply(defaultHotKey)

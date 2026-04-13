@@ -127,7 +127,15 @@ struct VoiceSettings: Equatable {
     }
 
     func sanitized() -> VoiceSettings {
-        var sanitizedModes = modes
+        var sanitizedModes = modes.map { mode in
+            guard mode.isDefault else {
+                return mode
+            }
+
+            var sanitizedMode = mode
+            sanitizedMode.name = DictateMode.defaultMode().name
+            return sanitizedMode
+        }
         if !sanitizedModes.contains(where: { $0.isDefault }) {
             sanitizedModes.insert(DictateMode.defaultMode(), at: 0)
         }

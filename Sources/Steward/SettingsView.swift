@@ -179,6 +179,8 @@ struct SettingsView: View {
                 hotKey: $settings.voice.hotKey,
                 defaultHotKey: .defaultVoiceDictation,
                 title: "Dictate Key",
+                description:
+                    "Hold to record",
                 validate: { appState.validateDictateHotKey($0) }
             )
 
@@ -189,13 +191,6 @@ struct SettingsView: View {
                 defaultHotKey: .defaultModeSwitchHotKey,
                 title: "Mode Switch Key",
                 validate: { appState.validateModeSwitchHotKey($0) }
-            )
-
-            SettingsListDivider()
-
-            SettingsListInfoRow(
-                text:
-                    "Hold to record. Release after holding to transcribe. Quick double press latches Dictate; press once more to stop and transcribe."
             )
 
             SettingsListDivider()
@@ -225,7 +220,6 @@ struct SettingsView: View {
                 Button("Create Mode") {
                     addDictateMode()
                 }
-                .controlSize(.small)
             }
             .padding(.vertical, 10)
 
@@ -249,9 +243,14 @@ struct SettingsView: View {
                     .fill(isActive ? Color.green : Color(NSColor.separatorColor))
                     .frame(width: 8, height: 8)
 
-                TextField("Mode name", text: dictateModeNameBinding(at: index))
-                    .textFieldStyle(.plain)
-                    .font(.body.weight(.medium))
+                if mode.isDefault {
+                    Text(mode.name)
+                        .font(.body.weight(.medium))
+                } else {
+                    TextField("Mode name", text: dictateModeNameBinding(at: index))
+                        .textFieldStyle(.plain)
+                        .font(.body.weight(.medium))
+                }
 
                 Spacer()
 
@@ -286,20 +285,25 @@ struct SettingsView: View {
             .padding(.vertical, 10)
 
             if isExpanded {
-                TextEditor(text: dictateModeInstructionsBinding(at: index))
-                    .font(.system(.body, design: .monospaced))
-                    .scrollContentBackground(.hidden)
-                    .padding(10)
-                    .frame(minHeight: 160)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color(NSColor.textBackgroundColor))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(Color(NSColor.separatorColor), lineWidth: 1)
-                    )
-                    .padding(.bottom, 10)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Instructions")
+                        .font(.subheadline.weight(.medium))
+
+                    TextEditor(text: dictateModeInstructionsBinding(at: index))
+                        .font(.system(.body, design: .monospaced))
+                        .scrollContentBackground(.hidden)
+                        .padding(10)
+                        .frame(minHeight: 160)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color(NSColor.textBackgroundColor))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                        )
+                }
+                .padding(.bottom, 10)
             }
         }
     }
@@ -319,6 +323,7 @@ struct SettingsView: View {
             },
             set: { newValue in
                 guard settings.voice.modes.indices.contains(index) else { return }
+                guard !settings.voice.modes[index].isDefault else { return }
                 settings.voice.modes[index].name = newValue
             }
         )
@@ -1016,20 +1021,32 @@ private struct SettingsRow<Accessory: View>: View {
 
 struct SettingsListRow<Accessory: View>: View {
     let title: String
+    let description: String?
     @ViewBuilder let accessory: Accessory
 
     init(
         title: String,
+        description: String? = nil,
         @ViewBuilder accessory: () -> Accessory
     ) {
         self.title = title
+        self.description = description
         self.accessory = accessory()
     }
 
     var body: some View {
         HStack(alignment: .center, spacing: 16) {
-            Text(title)
-                .font(.body)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.body)
+
+                if let description {
+                    Text(description)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
 
             Spacer(minLength: 16)
 

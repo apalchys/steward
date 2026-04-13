@@ -11,15 +11,15 @@ enum AppHotKeyValidationError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .requiresModifier:
-            return "Dictate shortcut must include at least one modifier key."
+            return "Shortcut must include at least one modifier key."
         case .requiresNonModifierKey:
-            return "Dictate shortcut must include a non-modifier key."
+            return "Shortcut must include a non-modifier key."
         case .requiresMouseButton:
-            return "Dictate mouse shortcut must use an extra mouse button."
+            return "Mouse shortcut must use an extra mouse button."
         case .conflictsWithFeature(let featureName):
-            return "Dictate shortcut conflicts with \(featureName)."
+            return "Shortcut conflicts with \(featureName)."
         case .unavailable:
-            return "Dictate shortcut is already in use by another app."
+            return "Shortcut is already in use by another app."
         }
     }
 }

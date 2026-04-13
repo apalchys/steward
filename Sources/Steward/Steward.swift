@@ -95,7 +95,7 @@ private struct AppMenuView: View {
             }
             .keyboardShortcut("r", modifiers: [.command, .shift])
 
-            Button("Dictate") {
+            Button(appState.dictateMenuTitle) {
                 appState.runDictateAction()
             }
 

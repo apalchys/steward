@@ -211,6 +211,32 @@ final class LLMSettingsMigrationTests: XCTestCase {
         XCTAssertEqual(loaded.voice.translationTargetLanguage, .japanese)
     }
 
+    func testSaveSettingsRestoresCanonicalDefaultModeName() {
+        let suiteName = "LLMSettingsStoreTests.\(UUID().uuidString)"
+        let defaults = try! XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defer {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let store = UserDefaultsLLMSettingsStore(userDefaults: defaults, secretsStore: InMemoryLLMSecretsStore())
+        var settings = LLMSettings.empty()
+        settings.voice.modes = [
+            DictateMode(
+                id: DictateMode.defaultModeID,
+                name: "Renamed",
+                customInstructions: "Keep speaker intent",
+                isDefault: true
+            )
+        ]
+
+        store.saveSettings(settings)
+        let loaded = store.loadSettings()
+
+        XCTAssertEqual(loaded.voice.modes.first?.name, "Default")
+        XCTAssertEqual(loaded.voice.modes.first?.customInstructions, "Keep speaker intent")
+    }
+
     func testLegacyVoiceHotKeyKeysResetToNewSingleHotKeyDefault() {
         let suiteName = "LLMSettingsStoreTests.\(UUID().uuidString)"
         let defaults = try! XCTUnwrap(UserDefaults(suiteName: suiteName))

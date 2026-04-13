@@ -244,6 +244,75 @@ final class AppStateTests: XCTestCase {
         XCTAssertNil(appState.shortcutRegistrationMessage)
     }
 
+    func testSettingsDidChangeDoesNotFlagActiveModeSwitchShortcutUnavailableWhenOnlyModelChanges() async {
+        _ = NSApplication.shared
+        let settingsStore = FakeAppSettingsStore()
+        settingsStore.settings.voice.modeSwitchHotKey = AppHotKey(
+            carbonKeyCode: Key.m.carbonKeyCode,
+            carbonModifiers: NSEvent.ModifierFlags([.shift, .control]).carbonFlags
+        )
+        let appSystemServices = FakeAppSystemServices()
+        let appState = AppState(
+            settingsStore: settingsStore,
+            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
+            clipboardMonitor: FakeClipboardMonitor(),
+            llmRouter: FakeAppRouter(),
+            refineCoordinator: FakeRefineCoordinator(),
+            captureCoordinator: FakeCaptureCoordinator(),
+            dictateCoordinator: FakeDictateCoordinator(),
+            appSystemServices: appSystemServices.services
+        )
+
+        appState.start()
+        await Task.yield()
+        appSystemServices.resetCheckedHotKeys()
+        appSystemServices.unavailableHotKeys.insert(settingsStore.settings.voice.modeSwitchHotKey!)
+        settingsStore.settings.voice.selectedModel = LLMModelSelection(
+            providerID: .openAI,
+            modelID: "gpt-4o-mini-transcribe"
+        )
+
+        appState.settingsDidChange()
+        await Task.yield()
+
+        XCTAssertTrue(appSystemServices.checkedHotKeys.isEmpty)
+        XCTAssertNil(appState.shortcutRegistrationMessage)
+    }
+
+    func testSettingsDidChangeShowsModeSwitchSpecificUnavailableMessage() async {
+        _ = NSApplication.shared
+        let settingsStore = FakeAppSettingsStore()
+        let unavailableHotKey = AppHotKey(
+            carbonKeyCode: Key.m.carbonKeyCode,
+            carbonModifiers: NSEvent.ModifierFlags([.shift, .control]).carbonFlags
+        )
+        let appSystemServices = FakeAppSystemServices()
+        let appState = AppState(
+            settingsStore: settingsStore,
+            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
+            clipboardMonitor: FakeClipboardMonitor(),
+            llmRouter: FakeAppRouter(),
+            refineCoordinator: FakeRefineCoordinator(),
+            captureCoordinator: FakeCaptureCoordinator(),
+            dictateCoordinator: FakeDictateCoordinator(),
+            appSystemServices: appSystemServices.services
+        )
+
+        appState.start()
+        await Task.yield()
+        appSystemServices.resetCheckedHotKeys()
+        appSystemServices.unavailableHotKeys.insert(unavailableHotKey)
+        settingsStore.settings.voice.modeSwitchHotKey = unavailableHotKey
+
+        appState.settingsDidChange()
+        await Task.yield()
+
+        XCTAssertEqual(
+            appState.shortcutRegistrationMessage,
+            "Shortcut unavailable: Mode Switch (Shift-Control-M) is already in use by another app."
+        )
+    }
+
     func testSettingsDidChangeRejectsVoiceShortcutThatConflictsWithRefine() async {
         _ = NSApplication.shared
         let settingsStore = FakeAppSettingsStore()
@@ -680,6 +749,28 @@ final class AppStateTests: XCTestCase {
         await Task.yield()
 
         XCTAssertEqual(refineCoordinator.handleHotKeyPressCallCount, 1)
+    }
+
+    func testDictateMenuTitleShowsActiveModeName() {
+        _ = NSApplication.shared
+        let settingsStore = FakeAppSettingsStore()
+        settingsStore.settings.voice.modes = [
+            DictateMode.defaultMode(),
+            DictateMode(id: UUID(), name: "Meeting", customInstructions: "Meeting mode", isDefault: false)
+        ]
+        settingsStore.settings.voice.activeModeID = settingsStore.settings.voice.modes[1].id
+        let appState = AppState(
+            settingsStore: settingsStore,
+            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
+            clipboardMonitor: FakeClipboardMonitor(),
+            llmRouter: FakeAppRouter(),
+            refineCoordinator: FakeRefineCoordinator(),
+            captureCoordinator: FakeCaptureCoordinator(),
+            dictateCoordinator: FakeDictateCoordinator(),
+            appSystemServices: FakeAppSystemServices().services
+        )
+
+        XCTAssertEqual(appState.dictateMenuTitle, "Dictate [Meeting]")
     }
 
     func testCheckDictateProviderStatusUsesSelectedProviderAndUpdatesTitle() async {

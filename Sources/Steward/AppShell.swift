@@ -115,6 +115,7 @@ final class AppState: ObservableObject {
     private var activeFeature: FeatureKind?
     private var dictateWorkflowState: DictateWorkflowState = .idle
     private var activeDictateHotKey = AppHotKey.defaultVoiceDictation
+    private var activeModeSwitchHotKey: AppHotKey?
 
     init(
         settingsStore: any AppSettingsProviding,
@@ -213,6 +214,10 @@ final class AppState: ObservableObject {
 
     var dictateStatusTitle: String {
         featureStatusTitle(prefix: FeatureKind.dictate.statusPrefix, status: dictateStatus)
+    }
+
+    var dictateMenuTitle: String {
+        "Dictate [\(settingsStore.loadSettings().voice.activeMode.name)]"
     }
 
     var accessibilityStatusTitle: String {
@@ -913,6 +918,14 @@ final class AppState: ObservableObject {
         return dictateHotKey != nil
     }
 
+    private func hasRegisteredModeSwitchShortcut(for hotKey: AppHotKey) -> Bool {
+        if hotKey.isMouseButton {
+            return modeSwitchMouseButtonMonitor != nil
+        }
+
+        return modeSwitchHotKey != nil
+    }
+
     private func dictateShortcutMessage(for hotKey: AppHotKey, error: AppHotKeyValidationError) -> String {
         switch error {
         case .conflictsWithFeature(let featureName):
@@ -939,14 +952,20 @@ final class AppState: ObservableObject {
             modeSwitchHotKey = nil
             modeSwitchMouseButtonMonitor?.stop()
             modeSwitchMouseButtonMonitor = nil
+            activeModeSwitchHotKey = nil
+            modeSwitchShortcutRegistrationMessage = nil
+            refreshShortcutRegistrationMessage()
+            return
+        }
+
+        guard requestedHotKey != activeModeSwitchHotKey || !hasRegisteredModeSwitchShortcut(for: requestedHotKey) else {
             modeSwitchShortcutRegistrationMessage = nil
             refreshShortcutRegistrationMessage()
             return
         }
 
         if let error = validateModeSwitchHotKey(requestedHotKey) {
-            modeSwitchShortcutRegistrationMessage =
-                "Shortcut unavailable: Mode Switch (\(requestedHotKey.readableDisplayValue)) — \(error.localizedDescription)"
+            modeSwitchShortcutRegistrationMessage = modeSwitchShortcutMessage(for: requestedHotKey, error: error)
             refreshShortcutRegistrationMessage()
             return
         }
@@ -961,6 +980,7 @@ final class AppState: ObservableObject {
             modeSwitchHotKey = nil
             modeSwitchMouseButtonMonitor?.stop()
             modeSwitchMouseButtonMonitor = monitor
+            activeModeSwitchHotKey = requestedHotKey
             modeSwitchShortcutRegistrationMessage = nil
             refreshShortcutRegistrationMessage()
             return
@@ -980,8 +1000,7 @@ final class AppState: ObservableObject {
                     self?.handleModeSwitchShortcut()
                 })
         else {
-            modeSwitchShortcutRegistrationMessage =
-                "Shortcut unavailable: Mode Switch (\(requestedHotKey.readableDisplayValue)) is already in use by another app."
+            modeSwitchShortcutRegistrationMessage = modeSwitchShortcutMessage(for: requestedHotKey, error: .unavailable)
             refreshShortcutRegistrationMessage()
             return
         }
@@ -989,8 +1008,21 @@ final class AppState: ObservableObject {
         modeSwitchMouseButtonMonitor?.stop()
         modeSwitchMouseButtonMonitor = nil
         modeSwitchHotKey = hotKey
+        activeModeSwitchHotKey = requestedHotKey
         modeSwitchShortcutRegistrationMessage = nil
         refreshShortcutRegistrationMessage()
+    }
+
+    private func modeSwitchShortcutMessage(for hotKey: AppHotKey, error: AppHotKeyValidationError) -> String {
+        switch error {
+        case .conflictsWithFeature(let featureName):
+            return "Shortcut unavailable: Mode Switch (\(hotKey.readableDisplayValue)) conflicts with \(featureName)."
+        case .unavailable:
+            return
+                "Shortcut unavailable: Mode Switch (\(hotKey.readableDisplayValue)) is already in use by another app."
+        case .requiresModifier, .requiresNonModifierKey, .requiresMouseButton:
+            return error.localizedDescription
+        }
     }
 
     private func handleModeSwitchShortcut() {
