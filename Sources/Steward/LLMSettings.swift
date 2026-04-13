@@ -672,4 +672,5 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
         Defaults[providerKey] = selection?.providerID.rawValue ?? ""
         Defaults[modelKey] = selection?.modelID ?? ""
     }
+
 }

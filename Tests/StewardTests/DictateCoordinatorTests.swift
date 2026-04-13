@@ -35,7 +35,7 @@ final class DictateCoordinatorTests: XCTestCase {
         let textInteraction = VoiceDictationFakeTextInteraction()
         let settingsStore = VoiceDictationSettingsStore()
         settingsStore.settings.voice = VoiceSettings(
-            selectedModel: LLMModelSelection(providerID: .gemini, modelID: "voice-model-gemini"),
+            selectedModel: LLMModelSelection(providerID: .gemini, modelID: "gemini-3.1-flash-lite-preview"),
             customInstructions: "Keep mixed languages",
             preferredRecognitionLanguages: [.english, .spanish],
             translateToLanguageEnabled: true,
@@ -60,7 +60,10 @@ final class DictateCoordinatorTests: XCTestCase {
         guard let request = router.lastRequest else {
             return XCTFail("Expected routed voice request")
         }
-        XCTAssertEqual(request.selection, LLMModelSelection(providerID: .gemini, modelID: "voice-model-gemini"))
+        XCTAssertEqual(
+            request.selection,
+            LLMModelSelection(providerID: .gemini, modelID: "gemini-3.1-flash-lite-preview")
+        )
         guard case let .voiceTranscription(_, _, options) = request.task else {
             return XCTFail("Expected voice transcription task")
         }
@@ -137,6 +140,68 @@ final class DictateCoordinatorTests: XCTestCase {
         } catch {
             XCTAssertEqual(error as? DictateCoordinatorError, .permissionDenied)
             XCTAssertEqual(audioRecordingService.startRecordingCallCount, 0)
+        }
+    }
+
+    func testMissingVoiceModelFailsBeforeRecordingStarts() async {
+        let audioRecordingService = FakeAudioRecordingService()
+        let router = VoiceDictationFakeRouter(result: .success(.text("ignored")))
+        let settingsStore = VoiceDictationSettingsStore()
+        settingsStore.settings.voice.selectedModel = nil
+        let coordinator = DictateCoordinator(
+            microphoneAccess: FakeMicrophoneAccessProvider(result: true),
+            audioRecordingService: audioRecordingService,
+            recordingPillPresenter: FakeVoiceRecordingPillPresenter(),
+            router: router,
+            textInteraction: VoiceDictationFakeTextInteraction(),
+            settingsStore: settingsStore
+        )
+
+        do {
+            try await coordinator.handleManualToggleAction()
+            XCTFail("Expected Dictate setup error")
+        } catch {
+            guard case LLMRouterError.featureNotConfigured(let featureName) = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+
+            XCTAssertEqual(featureName, LLMFeature.voice.displayName)
+            XCTAssertEqual(audioRecordingService.startRecordingCallCount, 0)
+            XCTAssertTrue(router.checkedSelections.isEmpty)
+        }
+    }
+
+    func testUnavailableProviderFailsBeforeRecordingStarts() async {
+        let audioRecordingService = FakeAudioRecordingService()
+        let router = VoiceDictationFakeRouter(
+            result: .success(.text("ignored")),
+            healthResult: .success(
+                LLMProviderHealth(
+                    providerID: .gemini,
+                    state: .invalidCredentials,
+                    message: "Gemini API key is invalid."
+                )
+            )
+        )
+        let coordinator = DictateCoordinator(
+            microphoneAccess: FakeMicrophoneAccessProvider(result: true),
+            audioRecordingService: audioRecordingService,
+            recordingPillPresenter: FakeVoiceRecordingPillPresenter(),
+            router: router,
+            textInteraction: VoiceDictationFakeTextInteraction(),
+            settingsStore: VoiceDictationSettingsStore()
+        )
+
+        do {
+            try await coordinator.handleManualToggleAction()
+            XCTFail("Expected provider readiness error")
+        } catch {
+            XCTAssertEqual(
+                error as? DictateCoordinatorError,
+                .providerUnavailable("Gemini API key is invalid.")
+            )
+            XCTAssertEqual(audioRecordingService.startRecordingCallCount, 0)
+            XCTAssertEqual(router.checkedSelections.count, 1)
         }
     }
 
@@ -376,10 +441,16 @@ private final class FakeVoiceRecordingPillPresenter: VoiceRecordingPillPresentin
 @MainActor
 private final class VoiceDictationFakeRouter: LLMRouting {
     let result: Result<LLMResult, Error>
+    let healthResult: Result<LLMProviderHealth, Error>?
     private(set) var lastRequest: LLMRequest?
+    private(set) var checkedSelections: [LLMModelSelection] = []
 
-    init(result: Result<LLMResult, Error>) {
+    init(
+        result: Result<LLMResult, Error>,
+        healthResult: Result<LLMProviderHealth, Error>? = nil
+    ) {
         self.result = result
+        self.healthResult = healthResult
     }
 
     func perform(_ request: LLMRequest) async throws -> LLMResult {
@@ -388,7 +459,12 @@ private final class VoiceDictationFakeRouter: LLMRouting {
     }
 
     func checkAccess(for selection: LLMModelSelection) async throws -> LLMProviderHealth {
-        LLMProviderHealth(providerID: selection.providerID, state: .available, message: "Ready")
+        checkedSelections.append(selection)
+        if let healthResult {
+            return try healthResult.get()
+        }
+
+        return LLMProviderHealth(providerID: selection.providerID, state: .available, message: "Ready")
     }
 }
 
@@ -421,7 +497,10 @@ private final class VoiceDictationFakeTextInteraction: TextInteractionPerforming
 private final class VoiceDictationSettingsStore: AppSettingsProviding {
     var settings: LLMSettings = {
         var settings = LLMSettings.empty()
-        settings.voice.selectedModel = LLMModelSelection(providerID: .gemini, modelID: "voice-model-gemini")
+        settings.voice.selectedModel = LLMModelSelection(
+            providerID: .gemini,
+            modelID: "gemini-3.1-flash-lite-preview"
+        )
         return settings
     }()
 

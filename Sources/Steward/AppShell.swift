@@ -507,16 +507,9 @@ final class AppState: ObservableObject {
     }
 
     private func handleHotKeyPress(for feature: FeatureKind) {
-        guard canRun(feature: feature) else {
+        guard beginOperation(for: feature) else {
             return
         }
-
-        lastOperationFailed = false
-        isProcessing = true
-        activeFeature = feature
-
-        setStatus(.processing(providerID: modelSelection(for: feature)?.providerID), for: feature)
-        refreshStatusUI()
 
         Task {
             do {
@@ -539,6 +532,19 @@ final class AppState: ObservableObject {
             }
             self.refreshStatusUI()
         }
+    }
+
+    private func beginOperation(for feature: FeatureKind) -> Bool {
+        guard canRun(feature: feature) else {
+            return false
+        }
+
+        lastOperationFailed = false
+        isProcessing = true
+        activeFeature = feature
+        setStatus(.processing(providerID: modelSelection(for: feature)?.providerID), for: feature)
+        refreshStatusUI()
+        return true
     }
 
     private func markStatusFromCurrentConfiguration(for feature: FeatureKind, asError: Bool, message: String?) {
@@ -952,6 +958,14 @@ final class AppState: ObservableObject {
     }
 
     private func handleDictateShortcutDown(kind: DictateShortcutKind) {
+        if dictateWorkflowState == .idle {
+            guard beginOperation(for: .dictate) else {
+                return
+            }
+        } else if !canRun(feature: .dictate) {
+            return
+        }
+
         Task { @MainActor [weak self] in
             do {
                 switch kind {

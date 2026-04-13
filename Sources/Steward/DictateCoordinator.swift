@@ -43,6 +43,7 @@ protocol DictateCoordinating: AnyObject {
 
 enum DictateCoordinatorError: LocalizedError, Equatable {
     case permissionDenied
+    case providerUnavailable(String)
     case invalidProviderResponse
     case insertionFailedCopiedToClipboard
 
@@ -50,6 +51,8 @@ enum DictateCoordinatorError: LocalizedError, Equatable {
         switch self {
         case .permissionDenied:
             return "Microphone permission is required for Dictate."
+        case .providerUnavailable(let message):
+            return message
         case .invalidProviderResponse:
             return "Provider returned an invalid Dictate response."
         case .insertionFailedCopiedToClipboard:
@@ -60,6 +63,11 @@ enum DictateCoordinatorError: LocalizedError, Equatable {
 
 @MainActor
 final class DictateCoordinator: DictateCoordinating {
+    private struct PendingTranscriptionConfiguration {
+        let selection: LLMModelSelection
+        let options: VoiceTranscriptionOptions
+    }
+
     private enum RecordingSource {
         case pushToTalkHotKey
         case manualToggle
@@ -82,6 +90,7 @@ final class DictateCoordinator: DictateCoordinating {
         }
     }
     private var recordingSource: RecordingSource?
+    private var pendingTranscriptionConfiguration: PendingTranscriptionConfiguration?
 
     init(
         microphoneAccess: any MicrophoneAccessProviding,
@@ -185,11 +194,14 @@ final class DictateCoordinator: DictateCoordinating {
     }
 
     private func startRecording(triggeredBy source: RecordingSource) async throws {
+        let configuration = try voiceTranscriptionConfiguration()
+        try await ensureProviderReady(for: configuration.selection)
         guard await microphoneAccess.ensureAccess() else {
             throw DictateCoordinatorError.permissionDenied
         }
 
         try audioRecordingService.startRecording()
+        pendingTranscriptionConfiguration = configuration
         recordingSource = source
         transition(to: .recording)
         showRecordingPill(level: 0)
@@ -205,22 +217,15 @@ final class DictateCoordinator: DictateCoordinating {
 
         do {
             let payload = try await audioRecordingService.stopRecording()
-            let settings = settingsStore.loadSettings()
-            let voiceSettings = settings.voice
-            guard let selection = voiceSettings.selectedModel else {
+            guard let configuration = pendingTranscriptionConfiguration else {
                 throw LLMRouterError.featureNotConfigured(LLMFeature.voice.displayName)
             }
             let request = LLMRequest(
-                selection: selection,
+                selection: configuration.selection,
                 task: .voiceTranscription(
                     audioData: payload.data,
                     mimeType: payload.mimeType,
-                    options: VoiceTranscriptionOptions(
-                        preferredRecognitionLanguages: voiceSettings.preferredRecognitionLanguages,
-                        translateToLanguageEnabled: voiceSettings.translateToLanguageEnabled,
-                        translationTargetLanguage: voiceSettings.translationTargetLanguage,
-                        customInstructions: voiceSettings.customInstructions
-                    )
+                    options: configuration.options
                 )
             )
 
@@ -251,6 +256,7 @@ final class DictateCoordinator: DictateCoordinating {
 
     private func finishWorkflow() {
         recordingSource = nil
+        pendingTranscriptionConfiguration = nil
         recordingPillPresenter.hide()
         transition(to: .idle)
     }
@@ -272,5 +278,34 @@ final class DictateCoordinator: DictateCoordinating {
         }
 
         state = newState
+    }
+
+    private func voiceTranscriptionConfiguration() throws -> PendingTranscriptionConfiguration {
+        let voiceSettings = settingsStore.loadSettings().voice
+        guard let selection = voiceSettings.selectedModel, LLMModelCatalog.supports(selection, feature: .voice) else {
+            throw LLMRouterError.featureNotConfigured(LLMFeature.voice.displayName)
+        }
+
+        return PendingTranscriptionConfiguration(
+            selection: selection,
+            options: VoiceTranscriptionOptions(
+                preferredRecognitionLanguages: voiceSettings.preferredRecognitionLanguages,
+                translateToLanguageEnabled: voiceSettings.translateToLanguageEnabled,
+                translationTargetLanguage: voiceSettings.translationTargetLanguage,
+                customInstructions: voiceSettings.customInstructions
+            )
+        )
+    }
+
+    private func ensureProviderReady(for selection: LLMModelSelection) async throws {
+        let health = try await router.checkAccess(for: selection)
+        guard health.hasAccess else {
+            switch health.state {
+            case .notConfigured:
+                throw LLMRouterError.providerNotConfigured(selection.providerID)
+            default:
+                throw DictateCoordinatorError.providerUnavailable(health.message)
+            }
+        }
     }
 }

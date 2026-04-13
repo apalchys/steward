@@ -416,6 +416,38 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(dictateCoordinator.handlePushToTalkKeyUpCallCount, 0)
     }
 
+    func testMouseRegularDictateShortcutIsIgnoredWhileRefineIsRunning() async {
+        _ = NSApplication.shared
+        let settingsStore = FakeAppSettingsStore()
+        settingsStore.settings.voice.regularModeHotKey = AppHotKey(mouseButtonNumber: 4)
+        let refineCoordinator = BlockingRefineCoordinator()
+        let dictateCoordinator = FakeDictateCoordinator()
+        let appSystemServices = FakeAppSystemServices()
+        let appState = AppState(
+            settingsStore: settingsStore,
+            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
+            clipboardMonitor: FakeClipboardMonitor(),
+            llmRouter: FakeAppRouter(),
+            refineCoordinator: refineCoordinator,
+            captureCoordinator: FakeCaptureCoordinator(),
+            dictateCoordinator: dictateCoordinator,
+            appSystemServices: appSystemServices.services
+        )
+
+        appState.start()
+        await Task.yield()
+        appState.runRefineAction()
+        await refineCoordinator.waitUntilStarted()
+
+        appSystemServices.lastMouseMonitor?.simulateButtonDown()
+        await Task.yield()
+
+        XCTAssertEqual(dictateCoordinator.handleRegularHotKeyToggleActionCallCount, 0)
+
+        refineCoordinator.finish()
+        await Task.yield()
+    }
+
     func testStartRefreshesLaunchAtLoginStatus() async {
         _ = NSApplication.shared
         let appSystemServices = FakeAppSystemServices(launchAtLoginStatus: .enabled)
@@ -767,6 +799,38 @@ private final class FakeRefineCoordinator: RefineCoordinating {
 
     func handleHotKeyPress() async throws {
         handleHotKeyPressCallCount += 1
+    }
+}
+
+@MainActor
+private final class BlockingRefineCoordinator: RefineCoordinating {
+    private(set) var handleHotKeyPressCallCount = 0
+    private var startedContinuation: CheckedContinuation<Void, Never>?
+    private var finishContinuation: CheckedContinuation<Void, Never>?
+
+    func handleHotKeyPress() async throws {
+        handleHotKeyPressCallCount += 1
+        startedContinuation?.resume()
+        startedContinuation = nil
+
+        await withCheckedContinuation { continuation in
+            finishContinuation = continuation
+        }
+    }
+
+    func waitUntilStarted() async {
+        guard handleHotKeyPressCallCount == 0 else {
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            startedContinuation = continuation
+        }
+    }
+
+    func finish() {
+        finishContinuation?.resume()
+        finishContinuation = nil
     }
 }
 
