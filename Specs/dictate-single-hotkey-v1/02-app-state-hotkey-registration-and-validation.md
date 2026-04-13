@@ -1,6 +1,6 @@
 ---
 name: App State Hotkey Registration And Validation
-status: todo
+status: done
 ---
 
 # Summary

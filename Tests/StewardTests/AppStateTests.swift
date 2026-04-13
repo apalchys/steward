@@ -132,7 +132,7 @@ final class AppStateTests: XCTestCase {
 
     func testStartPublishesDictateShortcutConflictMessageWhenShortcutIsUnavailable() async {
         _ = NSApplication.shared
-        let appSystemServices = FakeAppSystemServices(unavailableKeyCodes: [Key.d.carbonKeyCode])
+        let appSystemServices = FakeAppSystemServices(unavailableKeyCodes: [Key.space.carbonKeyCode])
         let appState = AppState(
             settingsStore: FakeAppSettingsStore(),
             clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
@@ -149,10 +149,7 @@ final class AppStateTests: XCTestCase {
 
         XCTAssertEqual(
             appState.shortcutRegistrationMessage,
-            """
-            Shortcut unavailable: Dictate Push-to-Talk (Command-Shift-D) is already in use by another app.
-            Shortcut unavailable: Dictate Regular (Command-Option-D) is already in use by another app.
-            """
+            "Shortcut unavailable: Dictate (Shift-Control-Space) is already in use by another app."
         )
     }
 
@@ -212,7 +209,7 @@ final class AppStateTests: XCTestCase {
         await Task.yield()
 
         XCTAssertEqual(appSystemServices.registeredMouseHotKeys, [settingsStore.settings.voice.hotKey])
-        XCTAssertEqual(appSystemServices.checkedHotKeys, [settingsStore.settings.voice.regularModeHotKey])
+        XCTAssertTrue(appSystemServices.checkedHotKeys.isEmpty)
         XCTAssertNil(appState.shortcutRegistrationMessage)
     }
 
@@ -240,14 +237,14 @@ final class AppStateTests: XCTestCase {
         appState.settingsDidChange()
         await Task.yield()
 
-        XCTAssertEqual(appSystemServices.checkedHotKeys, [settingsStore.settings.voice.regularModeHotKey])
+        XCTAssertTrue(appSystemServices.checkedHotKeys.isEmpty)
         XCTAssertEqual(
             appState.shortcutRegistrationMessage,
-            "Shortcut unavailable: Dictate Push-to-Talk (Command-Shift-F) conflicts with Refine."
+            "Shortcut unavailable: Dictate (Command-Shift-F) conflicts with Refine."
         )
     }
 
-    func testSettingsDidChangeRejectsRegularShortcutThatConflictsWithPushToTalk() async {
+    func testSettingsDidChangeIgnoresLegacyRegularShortcutValue() async {
         _ = NSApplication.shared
         let settingsStore = FakeAppSettingsStore()
         let appSystemServices = FakeAppSystemServices()
@@ -266,19 +263,14 @@ final class AppStateTests: XCTestCase {
         await Task.yield()
         appSystemServices.resetCheckedHotKeys()
 
-        settingsStore.settings.voice.regularModeHotKey = settingsStore.settings.voice.pushToTalkHotKey
+        settingsStore.settings.voice.regularModeHotKey = AppHotKey(mouseButtonNumber: 4)
 
         appState.settingsDidChange()
         await Task.yield()
 
-        XCTAssertTrue(appSystemServices.checkedHotKeys.isEmpty)
-        XCTAssertEqual(
-            appState.shortcutRegistrationMessage,
-            """
-            Shortcut unavailable: Dictate Push-to-Talk (Command-Shift-D) conflicts with Dictate Regular.
-            Shortcut unavailable: Dictate Regular (Command-Shift-D) conflicts with Dictate Push-to-Talk.
-            """
-        )
+        XCTAssertEqual(appSystemServices.checkedHotKeys, [settingsStore.settings.voice.hotKey])
+        XCTAssertTrue(appSystemServices.registeredMouseHotKeys.isEmpty)
+        XCTAssertNil(appState.shortcutRegistrationMessage)
     }
 
     func testValidateDictateHotKeyRejectsRefineConflict() {
@@ -338,7 +330,7 @@ final class AppStateTests: XCTestCase {
         XCTAssertNil(appState.validateDictateHotKey(AppHotKey(mouseButtonNumber: 4)))
     }
 
-    func testValidateRegularDictateHotKeyRejectsPushToTalkConflict() {
+    func testValidateRegularDictateHotKeyUsesSingleDictateValidation() {
         _ = NSApplication.shared
         let appState = AppState(
             settingsStore: FakeAppSettingsStore(),
@@ -352,8 +344,8 @@ final class AppStateTests: XCTestCase {
         )
 
         XCTAssertEqual(
-            appState.validateRegularDictateHotKey(.defaultVoiceDictation),
-            .conflictsWithFeature("Dictate Push-to-Talk")
+            appState.validateRegularDictateHotKey(.refine),
+            .conflictsWithFeature("Refine")
         )
     }
 
@@ -386,40 +378,10 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(dictateCoordinator.handlePushToTalkKeyUpCallCount, 1)
     }
 
-    func testMouseRegularDictateShortcutInvokesToggleHandler() async {
+    func testMouseDictateShortcutIsIgnoredWhileRefineIsRunning() async {
         _ = NSApplication.shared
         let settingsStore = FakeAppSettingsStore()
-        settingsStore.settings.voice.regularModeHotKey = AppHotKey(mouseButtonNumber: 4)
-        let dictateCoordinator = FakeDictateCoordinator()
-        let appSystemServices = FakeAppSystemServices()
-        let appState = AppState(
-            settingsStore: settingsStore,
-            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
-            clipboardMonitor: FakeClipboardMonitor(),
-            llmRouter: FakeAppRouter(),
-            refineCoordinator: FakeRefineCoordinator(),
-            captureCoordinator: FakeCaptureCoordinator(),
-            dictateCoordinator: dictateCoordinator,
-            appSystemServices: appSystemServices.services
-        )
-
-        appState.start()
-        await Task.yield()
-
-        appSystemServices.lastMouseMonitor?.simulateButtonDown()
-        await Task.yield()
-        appSystemServices.lastMouseMonitor?.simulateButtonUp()
-        await Task.yield()
-
-        XCTAssertEqual(dictateCoordinator.handleRegularHotKeyToggleActionCallCount, 1)
-        XCTAssertEqual(dictateCoordinator.handlePushToTalkKeyDownCallCount, 0)
-        XCTAssertEqual(dictateCoordinator.handlePushToTalkKeyUpCallCount, 0)
-    }
-
-    func testMouseRegularDictateShortcutIsIgnoredWhileRefineIsRunning() async {
-        _ = NSApplication.shared
-        let settingsStore = FakeAppSettingsStore()
-        settingsStore.settings.voice.regularModeHotKey = AppHotKey(mouseButtonNumber: 4)
+        settingsStore.settings.voice.hotKey = AppHotKey(mouseButtonNumber: 4)
         let refineCoordinator = BlockingRefineCoordinator()
         let dictateCoordinator = FakeDictateCoordinator()
         let appSystemServices = FakeAppSystemServices()
@@ -442,7 +404,7 @@ final class AppStateTests: XCTestCase {
         appSystemServices.lastMouseMonitor?.simulateButtonDown()
         await Task.yield()
 
-        XCTAssertEqual(dictateCoordinator.handleRegularHotKeyToggleActionCallCount, 0)
+        XCTAssertEqual(dictateCoordinator.handlePushToTalkKeyDownCallCount, 0)
 
         refineCoordinator.finish()
         await Task.yield()
