@@ -3,7 +3,8 @@
     "allow": [
       "Bash(swift build:*)",
       "Bash(swift test:*)",
-      "Bash(git commit:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)"
     ]
   }
 }
