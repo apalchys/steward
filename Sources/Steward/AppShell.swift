@@ -818,14 +818,14 @@ final class AppState: ObservableObject {
     }
 
     private func registerDictateHotKey(using requestedHotKey: AppHotKey) {
-        if let validationError = validateDictateHotKey(requestedHotKey) {
-            dictateShortcutRegistrationMessage = dictateShortcutMessage(for: requestedHotKey, error: validationError)
+        guard requestedHotKey != activeDictateHotKey || !hasRegisteredDictateShortcut(for: requestedHotKey) else {
+            dictateShortcutRegistrationMessage = nil
             refreshShortcutRegistrationMessage()
             return
         }
 
-        guard requestedHotKey != activeDictateHotKey || !hasRegisteredDictateShortcut(for: requestedHotKey) else {
-            dictateShortcutRegistrationMessage = nil
+        if let validationError = validateDictateHotKey(requestedHotKey) {
+            dictateShortcutRegistrationMessage = dictateShortcutMessage(for: requestedHotKey, error: validationError)
             refreshShortcutRegistrationMessage()
             return
         }

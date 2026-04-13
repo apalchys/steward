@@ -213,6 +213,37 @@ final class AppStateTests: XCTestCase {
         XCTAssertNil(appState.shortcutRegistrationMessage)
     }
 
+    func testSettingsDidChangeDoesNotFlagActiveDictateShortcutUnavailableWhenOnlyModelChanges() async {
+        _ = NSApplication.shared
+        let settingsStore = FakeAppSettingsStore()
+        let appSystemServices = FakeAppSystemServices()
+        let appState = AppState(
+            settingsStore: settingsStore,
+            clipboardHistoryStore: ClipboardHistoryStore(autoLoad: false),
+            clipboardMonitor: FakeClipboardMonitor(),
+            llmRouter: FakeAppRouter(),
+            refineCoordinator: FakeRefineCoordinator(),
+            captureCoordinator: FakeCaptureCoordinator(),
+            dictateCoordinator: FakeDictateCoordinator(),
+            appSystemServices: appSystemServices.services
+        )
+
+        appState.start()
+        await Task.yield()
+        appSystemServices.resetCheckedHotKeys()
+        appSystemServices.unavailableHotKeys.insert(.defaultVoiceDictation)
+        settingsStore.settings.voice.selectedModel = LLMModelSelection(
+            providerID: .gemini,
+            modelID: "gemini-3.1-flash-lite-preview"
+        )
+
+        appState.settingsDidChange()
+        await Task.yield()
+
+        XCTAssertTrue(appSystemServices.checkedHotKeys.isEmpty)
+        XCTAssertNil(appState.shortcutRegistrationMessage)
+    }
+
     func testSettingsDidChangeRejectsVoiceShortcutThatConflictsWithRefine() async {
         _ = NSApplication.shared
         let settingsStore = FakeAppSettingsStore()
@@ -268,7 +299,7 @@ final class AppStateTests: XCTestCase {
         appState.settingsDidChange()
         await Task.yield()
 
-        XCTAssertEqual(appSystemServices.checkedHotKeys, [settingsStore.settings.voice.hotKey])
+        XCTAssertTrue(appSystemServices.checkedHotKeys.isEmpty)
         XCTAssertTrue(appSystemServices.registeredMouseHotKeys.isEmpty)
         XCTAssertNil(appState.shortcutRegistrationMessage)
     }
