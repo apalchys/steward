@@ -95,9 +95,10 @@ private struct AppMenuView: View {
             }
             .keyboardShortcut("r", modifiers: [.command, .shift])
 
-            Button(appState.dictateMenuLabel) {
+            Button(appState.dictateMenuTitle) {
                 appState.runDictateAction()
             }
+            .keyboardShortcut(appState.dictateMenuShortcut)
 
             Divider()
 
@@ -165,6 +166,80 @@ private struct AppMenuView: View {
         }
         .onAppear {
             appState.refreshPermissionStatuses()
+        }
+    }
+}
+
+extension AppHotKey {
+    var swiftUIKeyboardShortcut: KeyboardShortcut? {
+        guard let keyEquivalent = swiftUIKeyEquivalent else {
+            return nil
+        }
+
+        return KeyboardShortcut(keyEquivalent, modifiers: swiftUIModifiers)
+    }
+
+    var swiftUIModifiers: EventModifiers {
+        var result: EventModifiers = []
+
+        if modifiers.contains(.command) {
+            result.insert(.command)
+        }
+        if modifiers.contains(.shift) {
+            result.insert(.shift)
+        }
+        if modifiers.contains(.option) {
+            result.insert(.option)
+        }
+        if modifiers.contains(.control) {
+            result.insert(.control)
+        }
+
+        return result
+    }
+
+    var swiftUIKeyEquivalent: KeyEquivalent? {
+        guard let key else {
+            return nil
+        }
+
+        switch key {
+        case .upArrow:
+            return .upArrow
+        case .downArrow:
+            return .downArrow
+        case .leftArrow:
+            return .leftArrow
+        case .rightArrow:
+            return .rightArrow
+        case .escape:
+            return .escape
+        case .delete:
+            return .delete
+        case .forwardDelete:
+            return .deleteForward
+        case .home:
+            return .home
+        case .end:
+            return .end
+        case .pageUp:
+            return .pageUp
+        case .pageDown:
+            return .pageDown
+        case .keypadClear:
+            return .clear
+        case .tab:
+            return .tab
+        case .space:
+            return .space
+        case .return, .keypadEnter:
+            return .return
+        default:
+            guard key.description.count == 1, let character = key.description.lowercased().first else {
+                return nil
+            }
+
+            return KeyEquivalent(character)
         }
     }
 }

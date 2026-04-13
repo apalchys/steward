@@ -220,8 +220,8 @@ final class AppState: ObservableObject {
         "Dictate [\(settingsStore.loadSettings().voice.activeMode.name)]"
     }
 
-    var dictateMenuLabel: String {
-        "\(dictateMenuTitle)\t\(settingsStore.loadSettings().voice.hotKey.displayValue)"
+    var dictateMenuShortcut: KeyboardShortcut? {
+        settingsStore.loadSettings().voice.hotKey.swiftUIKeyboardShortcut
     }
 
     var accessibilityStatusTitle: String {
