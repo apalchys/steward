@@ -35,7 +35,6 @@ Steward uses curated OpenAI and Gemini model lists. Providers are unlocked in `P
 3. While latched, press the shortcut once more to stop and transcribe.
 4. If Dictate is started from the menu bar item, Steward uses the manual toggle flow with `Cancel` and `OK`.
 5. Steward can bias recognition toward up to 5 preferred languages, or auto-detect when none are selected.
-6. Optional translate mode inserts only the translated output in the configured target language.
 
 Dictate preserves the spoken language by default, applies punctuation and paragraph formatting, and falls back to the clipboard if direct insertion fails.
 

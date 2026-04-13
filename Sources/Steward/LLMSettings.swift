@@ -67,8 +67,6 @@ struct VoiceSettings: Equatable {
     var hotKey: AppHotKey
     var modeSwitchHotKey: AppHotKey?
     var preferredRecognitionLanguages: [VoiceLanguage]
-    var translateToLanguageEnabled: Bool
-    var translationTargetLanguage: VoiceLanguage?
     private var legacyRegularModeHotKey: AppHotKey
 
     var activeMode: DictateMode {
@@ -96,8 +94,6 @@ struct VoiceSettings: Equatable {
         modeSwitchHotKey: AppHotKey? = .defaultModeSwitchHotKey,
         legacyRegularModeHotKey: AppHotKey = .defaultVoiceDictationRegular,
         preferredRecognitionLanguages: [VoiceLanguage] = [],
-        translateToLanguageEnabled: Bool = false,
-        translationTargetLanguage: VoiceLanguage? = nil,
         modes: [DictateMode] = [],
         activeModeID: UUID? = nil
     ) {
@@ -105,8 +101,6 @@ struct VoiceSettings: Equatable {
         self.hotKey = hotKey
         self.modeSwitchHotKey = modeSwitchHotKey
         self.preferredRecognitionLanguages = Self.sanitizedPreferredRecognitionLanguages(preferredRecognitionLanguages)
-        self.translateToLanguageEnabled = translateToLanguageEnabled
-        self.translationTargetLanguage = translationTargetLanguage
         self.legacyRegularModeHotKey = legacyRegularModeHotKey
         if modes.isEmpty {
             self.modes = [DictateMode.defaultMode(customInstructions: customInstructions)]
@@ -148,8 +142,6 @@ struct VoiceSettings: Equatable {
             modeSwitchHotKey: modeSwitchHotKey,
             legacyRegularModeHotKey: legacyRegularModeHotKey,
             preferredRecognitionLanguages: Self.sanitizedPreferredRecognitionLanguages(preferredRecognitionLanguages),
-            translateToLanguageEnabled: translateToLanguageEnabled,
-            translationTargetLanguage: translationTargetLanguage,
             modes: sanitizedModes,
             activeModeID: validActiveModeID
         )
@@ -162,8 +154,6 @@ struct VoiceSettings: Equatable {
             && lhs.modeSwitchHotKey == rhs.modeSwitchHotKey
             && lhs.hotKey == rhs.hotKey
             && lhs.preferredRecognitionLanguages == rhs.preferredRecognitionLanguages
-            && lhs.translateToLanguageEnabled == rhs.translateToLanguageEnabled
-            && lhs.translationTargetLanguage == rhs.translationTargetLanguage
     }
 
     private static func sanitizedPreferredRecognitionLanguages(_ languages: [VoiceLanguage]) -> [VoiceLanguage] {
@@ -452,8 +442,6 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
         let voiceModeSwitchHotKeyModifiers: Defaults.Key<Int>
         let voiceModeSwitchHotKeyMouseButtonNumber: Defaults.Key<Int>
         let voicePreferredRecognitionLanguageIDs: Defaults.Key<[String]>
-        let voiceTranslateToLanguageEnabled: Defaults.Key<Bool>
-        let voiceTranslationTargetLanguageID: Defaults.Key<String>
         let clipboardHistoryEnabled: Defaults.Key<Bool>
         let clipboardHistoryMaxStoredRecords: Defaults.Key<Int>
 
@@ -558,16 +546,6 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
                 default: [],
                 suite: userDefaults
             )
-            voiceTranslateToLanguageEnabled = Defaults.Key<Bool>(
-                "voiceTranslateToLanguageEnabled",
-                default: false,
-                suite: userDefaults
-            )
-            voiceTranslationTargetLanguageID = Defaults.Key<String>(
-                "voiceTranslationTargetLanguageID",
-                default: "",
-                suite: userDefaults
-            )
             clipboardHistoryEnabled = Defaults.Key<Bool>(
                 "clipboardHistoryEnabled",
                 default: ClipboardHistorySettings.default.isEnabled,
@@ -594,6 +572,11 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
         static let regularCode = "voiceRegularHotKeyCode"
         static let regularModifiers = "voiceRegularHotKeyModifiers"
         static let regularMouseButtonNumber = "voiceRegularHotKeyMouseButtonNumber"
+    }
+
+    private enum RemovedVoiceSettingKey {
+        static let translateToLanguageEnabled = "voiceTranslateToLanguageEnabled"
+        static let translationTargetLanguageID = "voiceTranslationTargetLanguageID"
     }
 
     init(
@@ -638,7 +621,6 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
 
         let preferredRecognitionLanguages = Defaults[keys.voicePreferredRecognitionLanguageIDs].compactMap(
             VoiceLanguage.init(rawValue:))
-        let translationTargetLanguage = VoiceLanguage(rawValue: Defaults[keys.voiceTranslationTargetLanguageID].trimmed)
 
         let dictateModes = loadDictateModes()
         let activeModeID = UUID(uuidString: Defaults[keys.voiceActiveModeID].trimmed)
@@ -664,8 +646,6 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
                 hotKey: dictateHotKey,
                 modeSwitchHotKey: modeSwitchHotKey,
                 preferredRecognitionLanguages: preferredRecognitionLanguages,
-                translateToLanguageEnabled: Defaults[keys.voiceTranslateToLanguageEnabled],
-                translationTargetLanguage: translationTargetLanguage,
                 modes: dictateModes,
                 activeModeID: activeModeID
             ),
@@ -720,12 +700,10 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
         )
         Defaults[keys.voicePreferredRecognitionLanguageIDs] = sanitizedSettings.voice.preferredRecognitionLanguages.map(
             \.rawValue)
-        Defaults[keys.voiceTranslateToLanguageEnabled] = sanitizedSettings.voice.translateToLanguageEnabled
-        Defaults[keys.voiceTranslationTargetLanguageID] =
-            sanitizedSettings.voice.translationTargetLanguage?.rawValue ?? ""
         Defaults[keys.clipboardHistoryEnabled] = sanitizedSettings.clipboardHistory.isEnabled
         Defaults[keys.clipboardHistoryMaxStoredRecords] = sanitizedSettings.clipboardHistory.maxStoredRecords
         clearLegacyVoiceHotKeyKeys()
+        clearRemovedVoiceSettingKeys()
     }
 
     private func readHotKey(
@@ -840,6 +818,11 @@ final class UserDefaultsLLMSettingsStore: AppSettingsProviding {
         userDefaults.removeObject(forKey: LegacyVoiceHotKeyKey.regularCode)
         userDefaults.removeObject(forKey: LegacyVoiceHotKeyKey.regularModifiers)
         userDefaults.removeObject(forKey: LegacyVoiceHotKeyKey.regularMouseButtonNumber)
+    }
+
+    private func clearRemovedVoiceSettingKeys() {
+        userDefaults.removeObject(forKey: RemovedVoiceSettingKey.translateToLanguageEnabled)
+        userDefaults.removeObject(forKey: RemovedVoiceSettingKey.translationTargetLanguageID)
     }
 
 }

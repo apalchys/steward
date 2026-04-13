@@ -16,7 +16,8 @@ final class GeminiClientTests: XCTestCase {
                 "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview?key=test-key"
             )
 
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, nil)
         })
 
@@ -32,7 +33,8 @@ final class GeminiClientTests: XCTestCase {
 
     func testCheckAccessStatusReturnsInvalidCredentials() async {
         URLProtocolStub.configure(handler: { request in
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 401, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url), statusCode: 401, httpVersion: nil, headerFields: nil)!
             return (response, nil)
         })
 
@@ -58,7 +60,9 @@ final class GeminiClientTests: XCTestCase {
 
             let systemInstruction = try XCTUnwrap(payload["system_instruction"] as? [String: Any])
             let systemParts = try XCTUnwrap(systemInstruction["parts"] as? [[String: Any]])
-            XCTAssertEqual(systemParts.first?["text"] as? String, """
+            XCTAssertEqual(
+                systemParts.first?["text"] as? String,
+                """
                 You are an Capture assistant. Extract all visible text from the provided image and return only the extracted text in Markdown.
                 Preserve headings, paragraphs, lists, tables, and code blocks when they are visually clear.
                 Do not add explanations, summaries, or commentary.
@@ -78,7 +82,8 @@ final class GeminiClientTests: XCTestCase {
             let data = """
                 {"candidates":[{"content":{"parts":[{"text":" Heading"},{"text":"Body text "}]}}]}
                 """.data(using: .utf8)
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, data)
         })
 
@@ -98,7 +103,8 @@ final class GeminiClientTests: XCTestCase {
             let data = """
                 {"error":{"message":"Quota exceeded."}}
                 """.data(using: .utf8)
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 429, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url), statusCode: 429, httpVersion: nil, headerFields: nil)!
             return (response, data)
         })
 
@@ -118,7 +124,8 @@ final class GeminiClientTests: XCTestCase {
             let data = """
                 {"error":{"message":"Malformed inline_data payload."}}
                 """.data(using: .utf8)
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 400, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url), statusCode: 400, httpVersion: nil, headerFields: nil)!
             return (response, data)
         })
 
@@ -135,7 +142,8 @@ final class GeminiClientTests: XCTestCase {
 
     func testExtractMarkdownTextReturnsServiceMessageForTemporaryFailure() async {
         URLProtocolStub.configure(handler: { request in
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 500, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url), statusCode: 500, httpVersion: nil, headerFields: nil)!
             return (response, nil)
         })
 
@@ -152,7 +160,8 @@ final class GeminiClientTests: XCTestCase {
 
     func testExtractMarkdownTextReturnsEmptyResponseErrorWhenDataIsMissing() async {
         URLProtocolStub.configure(handler: { request in
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, nil)
         })
 
@@ -172,7 +181,8 @@ final class GeminiClientTests: XCTestCase {
             let data = """
                 {"candidates":[{"content":{"parts":[{"text":"   "} ]}}]}
                 """.data(using: .utf8)
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, data)
         })
 
@@ -222,7 +232,8 @@ final class GeminiClientTests: XCTestCase {
             let data = """
                 {"candidates":[{"content":{"parts":[{"text":"good text"}]}}]}
                 """.data(using: .utf8)
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, data)
         })
 
@@ -241,8 +252,7 @@ final class GeminiClientTests: XCTestCase {
         let audioData = Data("audio-bytes".utf8)
         let options = VoiceTranscriptionOptions(
             preferredRecognitionLanguages: [.english, .french],
-            translateToLanguageEnabled: true,
-            translationTargetLanguage: .japanese
+            customInstructions: "Keep speaker slang."
         )
 
         URLProtocolStub.configure(handler: { request in
@@ -258,9 +268,8 @@ final class GeminiClientTests: XCTestCase {
             let systemInstruction = try XCTUnwrap(payload["system_instruction"] as? [String: Any])
             let systemParts = try XCTUnwrap(systemInstruction["parts"] as? [[String: Any]])
             let systemPrompt = systemParts.first?["text"] as? String
-            XCTAssertTrue(systemPrompt?.contains("Japanese") == true)
-            XCTAssertTrue(systemPrompt?.contains("translate the final result into Japanese") == true)
             XCTAssertTrue(systemPrompt?.contains("English, French") == true)
+            XCTAssertTrue(systemPrompt?.contains("Keep speaker slang.") == true)
 
             let contents = try XCTUnwrap(payload["contents"] as? [[String: Any]])
             let parts = try XCTUnwrap(contents.first?["parts"] as? [[String: Any]])
@@ -273,7 +282,8 @@ final class GeminiClientTests: XCTestCase {
             let data = """
                 {"candidates":[{"content":{"parts":[{"text":"Hello world."}]}}]}
                 """.data(using: .utf8)
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, data)
         })
 
@@ -294,7 +304,8 @@ final class GeminiClientTests: XCTestCase {
             let data = """
                 {"candidates":[{"content":{"parts":[{"text":"   "} ]}}]}
                 """.data(using: .utf8)
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, data)
         })
 

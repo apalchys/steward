@@ -14,7 +14,8 @@ final class OpenAIClientTests: XCTestCase {
             XCTAssertEqual(request.url?.absoluteString, "https://api.openai.com/v1/models/gpt-5.4")
             XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer sk-test")
 
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, nil)
         })
 
@@ -27,7 +28,8 @@ final class OpenAIClientTests: XCTestCase {
 
     func testCheckAccessStatusReturnsInvalidCredentials() async {
         URLProtocolStub.configure(handler: { request in
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 401, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url), statusCode: 401, httpVersion: nil, headerFields: nil)!
             return (response, nil)
         })
 
@@ -56,7 +58,8 @@ final class OpenAIClientTests: XCTestCase {
             let data = """
                 {"output":[{"type":"message","content":[{"type":"output_text","text":"This is awkward."}]}]}
                 """.data(using: .utf8)
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, data)
         })
 
@@ -80,7 +83,8 @@ final class OpenAIClientTests: XCTestCase {
             let data = """
                 {"output":[{"type":"message","content":[{"type":"output_text","text":"ok"}]}]}
                 """.data(using: .utf8)
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, data)
         })
 
@@ -100,7 +104,8 @@ final class OpenAIClientTests: XCTestCase {
             let data = """
                 {"error":{"message":"Invalid API key."}}
                 """.data(using: .utf8)
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 401, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url), statusCode: 401, httpVersion: nil, headerFields: nil)!
             return (response, data)
         })
 
@@ -120,7 +125,8 @@ final class OpenAIClientTests: XCTestCase {
             let data = """
                 {"error":{"message":"Unsupported response format."}}
                 """.data(using: .utf8)
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 400, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url), statusCode: 400, httpVersion: nil, headerFields: nil)!
             return (response, data)
         })
 
@@ -137,7 +143,8 @@ final class OpenAIClientTests: XCTestCase {
 
     func testRefineTextReturnsServiceMessageForTemporaryFailure() async {
         URLProtocolStub.configure(handler: { request in
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 503, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url), statusCode: 503, httpVersion: nil, headerFields: nil)!
             return (response, nil)
         })
 
@@ -154,7 +161,8 @@ final class OpenAIClientTests: XCTestCase {
 
     func testRefineTextReturnsEmptyResponseErrorWhenDataIsMissing() async {
         URLProtocolStub.configure(handler: { request in
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, nil)
         })
 
@@ -174,7 +182,8 @@ final class OpenAIClientTests: XCTestCase {
             let data = """
                 {"output":[{"type":"message","content":[{"type":"input_text","text":"ignored"}]}]}
                 """.data(using: .utf8)
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, data)
         })
 
@@ -230,7 +239,8 @@ final class OpenAIClientTests: XCTestCase {
             let data = """
                 {"output":[{"type":"message","content":[{"type":"output_text","text":"Extracted text"}]}]}
                 """.data(using: .utf8)
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, data)
         })
 
@@ -250,8 +260,7 @@ final class OpenAIClientTests: XCTestCase {
         let audioData = Data("audio-bytes".utf8)
         let options = VoiceTranscriptionOptions(
             preferredRecognitionLanguages: [.english, .spanish],
-            translateToLanguageEnabled: true,
-            translationTargetLanguage: .german
+            customInstructions: "Keep speaker slang."
         )
 
         URLProtocolStub.configure(handler: { request in
@@ -265,14 +274,15 @@ final class OpenAIClientTests: XCTestCase {
             XCTAssertTrue(body.contains("gpt-4o-mini-transcribe"))
             XCTAssertTrue(body.contains("name=\"prompt\""))
             XCTAssertTrue(body.contains("English, Spanish"))
-            XCTAssertTrue(body.contains("translate the final result into German"))
+            XCTAssertTrue(body.contains("Keep speaker slang."))
             XCTAssertTrue(body.contains("name=\"response_format\""))
             XCTAssertTrue(body.contains("text"))
             XCTAssertTrue(body.contains("name=\"file\"; filename=\"dictation.wav\""))
             XCTAssertTrue(body.contains("Content-Type: audio/wav"))
             XCTAssertTrue(body.contains("audio-bytes"))
 
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, Data("Hello from OpenAI.".utf8))
         })
 
@@ -290,7 +300,8 @@ final class OpenAIClientTests: XCTestCase {
 
     func testTranscribeAudioReturnsEmptyTranscriptErrorWhenBodyIsBlank() async {
         URLProtocolStub.configure(handler: { request in
-            let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, Data("   ".utf8))
         })
 

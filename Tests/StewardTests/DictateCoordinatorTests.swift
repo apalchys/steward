@@ -29,7 +29,8 @@ final class DictateCoordinatorTests: XCTestCase {
 
     func testSecondManualToggleStopsRecordingRoutesTranscriptAndReplacesText() async throws {
         let microphoneAccess = FakeMicrophoneAccessProvider(result: true)
-        let audioRecordingService = FakeAudioRecordingService(payload: RecordedAudioPayload(data: Data("audio".utf8), mimeType: "audio/wav"))
+        let audioRecordingService = FakeAudioRecordingService(
+            payload: RecordedAudioPayload(data: Data("audio".utf8), mimeType: "audio/wav"))
         let pillPresenter = FakeVoiceRecordingPillPresenter()
         let router = VoiceDictationFakeRouter(result: .success(.text("Dictated text")))
         let textInteraction = VoiceDictationFakeTextInteraction()
@@ -37,9 +38,7 @@ final class DictateCoordinatorTests: XCTestCase {
         settingsStore.settings.voice = VoiceSettings(
             selectedModel: LLMModelSelection(providerID: .gemini, modelID: "gemini-3.1-flash-lite-preview"),
             customInstructions: "Keep mixed languages",
-            preferredRecognitionLanguages: [.english, .spanish],
-            translateToLanguageEnabled: true,
-            translationTargetLanguage: .german
+            preferredRecognitionLanguages: [.english, .spanish]
         )
         let coordinator = DictateCoordinator(
             microphoneAccess: microphoneAccess,
@@ -68,8 +67,6 @@ final class DictateCoordinatorTests: XCTestCase {
             return XCTFail("Expected voice transcription task")
         }
         XCTAssertEqual(options.preferredRecognitionLanguages, [.english, .spanish])
-        XCTAssertTrue(options.translateToLanguageEnabled)
-        XCTAssertEqual(options.translationTargetLanguage, .german)
         XCTAssertEqual(options.customInstructions, "Keep mixed languages")
     }
 
@@ -98,10 +95,12 @@ final class DictateCoordinatorTests: XCTestCase {
 
     func testInsertionFailureCopiesTranscriptToClipboard() async throws {
         let microphoneAccess = FakeMicrophoneAccessProvider(result: true)
-        let audioRecordingService = FakeAudioRecordingService(payload: RecordedAudioPayload(data: Data("audio".utf8), mimeType: "audio/wav"))
+        let audioRecordingService = FakeAudioRecordingService(
+            payload: RecordedAudioPayload(data: Data("audio".utf8), mimeType: "audio/wav"))
         let pillPresenter = FakeVoiceRecordingPillPresenter()
         let router = VoiceDictationFakeRouter(result: .success(.text("Dictated text")))
-        let textInteraction = VoiceDictationFakeTextInteraction(replaceError: TextInteractionError.couldNotReplaceSelectedText)
+        let textInteraction = VoiceDictationFakeTextInteraction(
+            replaceError: TextInteractionError.couldNotReplaceSelectedText)
         let coordinator = DictateCoordinator(
             microphoneAccess: microphoneAccess,
             audioRecordingService: audioRecordingService,
@@ -207,7 +206,8 @@ final class DictateCoordinatorTests: XCTestCase {
 
     func testMaximumDurationAutomaticallyTranscribesAndForwardsErrors() async throws {
         let microphoneAccess = FakeMicrophoneAccessProvider(result: true)
-        let audioRecordingService = FakeAudioRecordingService(payload: RecordedAudioPayload(data: Data("audio".utf8), mimeType: "audio/wav"))
+        let audioRecordingService = FakeAudioRecordingService(
+            payload: RecordedAudioPayload(data: Data("audio".utf8), mimeType: "audio/wav"))
         let pillPresenter = FakeVoiceRecordingPillPresenter()
         let router = VoiceDictationFakeRouter(result: .failure(VoiceDictationTestError.failed))
         let coordinator = DictateCoordinator(
@@ -232,7 +232,8 @@ final class DictateCoordinatorTests: XCTestCase {
 
     func testBlankTranscriptIsRejectedAsInvalidProviderResponse() async throws {
         let microphoneAccess = FakeMicrophoneAccessProvider(result: true)
-        let audioRecordingService = FakeAudioRecordingService(payload: RecordedAudioPayload(data: Data("audio".utf8), mimeType: "audio/wav"))
+        let audioRecordingService = FakeAudioRecordingService(
+            payload: RecordedAudioPayload(data: Data("audio".utf8), mimeType: "audio/wav"))
         let coordinator = DictateCoordinator(
             microphoneAccess: microphoneAccess,
             audioRecordingService: audioRecordingService,
@@ -272,7 +273,8 @@ final class DictateCoordinatorTests: XCTestCase {
     }
 
     func testHotKeyUpAfterHoldStopsRecordingAndTranscribes() async throws {
-        let audioRecordingService = FakeAudioRecordingService(payload: RecordedAudioPayload(data: Data("audio".utf8), mimeType: "audio/wav"))
+        let audioRecordingService = FakeAudioRecordingService(
+            payload: RecordedAudioPayload(data: Data("audio".utf8), mimeType: "audio/wav"))
         let textInteraction = VoiceDictationFakeTextInteraction()
         let coordinator = DictateCoordinator(
             microphoneAccess: FakeMicrophoneAccessProvider(result: true),
@@ -369,7 +371,8 @@ final class DictateCoordinatorTests: XCTestCase {
     }
 
     func testLatchedHotKeySessionStopsOnNextKeyDown() async throws {
-        let audioRecordingService = FakeAudioRecordingService(payload: RecordedAudioPayload(data: Data("audio".utf8), mimeType: "audio/wav"))
+        let audioRecordingService = FakeAudioRecordingService(
+            payload: RecordedAudioPayload(data: Data("audio".utf8), mimeType: "audio/wav"))
         let textInteraction = VoiceDictationFakeTextInteraction()
         let coordinator = DictateCoordinator(
             microphoneAccess: FakeMicrophoneAccessProvider(result: true),
@@ -401,7 +404,8 @@ final class DictateCoordinatorTests: XCTestCase {
         let pillPresenter = FakeVoiceRecordingPillPresenter()
         let coordinator = DictateCoordinator(
             microphoneAccess: FakeMicrophoneAccessProvider(result: true),
-            audioRecordingService: FakeAudioRecordingService(payload: RecordedAudioPayload(data: Data("audio".utf8), mimeType: "audio/wav")),
+            audioRecordingService: FakeAudioRecordingService(
+                payload: RecordedAudioPayload(data: Data("audio".utf8), mimeType: "audio/wav")),
             recordingPillPresenter: pillPresenter,
             router: VoiceDictationFakeRouter(result: .success(.text("Latched transcript"))),
             textInteraction: VoiceDictationFakeTextInteraction(),

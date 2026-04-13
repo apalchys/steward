@@ -196,10 +196,6 @@ struct SettingsView: View {
             SettingsListDivider()
 
             dictateRecognitionLanguagesSection
-
-            SettingsListDivider()
-
-            dictateTranslationSection
         }
     }
 
@@ -684,17 +680,6 @@ struct SettingsView: View {
         )
     }
 
-    private var dictateTranslationTargetBinding: Binding<VoiceLanguage?> {
-        Binding(
-            get: {
-                settings.voice.translationTargetLanguage
-            },
-            set: { newValue in
-                settings.voice.translationTargetLanguage = newValue
-            }
-        )
-    }
-
     private var availableRecognitionLanguagesToAdd: [VoiceLanguage] {
         VoiceLanguage.allCases.filter { !settings.voice.preferredRecognitionLanguages.contains($0) }
     }
@@ -737,43 +722,6 @@ struct SettingsView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 14)
-    }
-
-    private var dictateTranslationSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SettingsRow(
-                title: "Translate Output",
-                description: "Translate recognized text automatically before insertion."
-            ) {
-                Toggle("", isOn: $settings.voice.translateToLanguageEnabled)
-                    .labelsHidden()
-            }
-
-            if settings.voice.translateToLanguageEnabled {
-                SettingsListRow(title: "Target Language") {
-                    Picker("Target Language", selection: dictateTranslationTargetBinding) {
-                        Text("Select language")
-                            .tag(Optional<VoiceLanguage>.none)
-
-                        ForEach(VoiceLanguage.allCases) { language in
-                            Text(language.displayName)
-                                .tag(Optional(language))
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                    .controlSize(.large)
-                    .frame(minWidth: 280, alignment: .trailing)
-                }
-
-                if settings.voice.translationTargetLanguage == nil {
-                    Text("Choose a target language to finish enabling translation.")
-                        .font(.subheadline)
-                        .foregroundStyle(.red)
-                }
-            }
-        }
         .padding(.vertical, 14)
     }
 

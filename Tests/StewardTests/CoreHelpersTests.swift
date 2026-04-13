@@ -22,8 +22,9 @@ final class CoreHelpersTests: XCTestCase {
         let whitespacePrompt = buildVoiceTranscriptionPrompt(customInstructions: "  \n\t")
 
         XCTAssertEqual(whitespacePrompt, defaultPrompt)
-        XCTAssertTrue(defaultPrompt.contains("preserve the original spoken language"))
-        XCTAssertTrue(defaultPrompt.contains("do not translate"))
+        XCTAssertTrue(defaultPrompt.contains("Preserve the original spoken language"))
+        XCTAssertTrue(
+            defaultPrompt.contains("unless additional instructions explicitly request another transformation"))
     }
 
     func testBuildVoiceTranscriptionPromptIncludesRecognitionLanguageHints() {
@@ -38,18 +39,16 @@ final class CoreHelpersTests: XCTestCase {
         XCTAssertTrue(prompt.contains("transcribe what was actually said"))
     }
 
-    func testBuildVoiceTranscriptionPromptIncludesTranslationInstructions() {
+    func testBuildVoiceTranscriptionPromptAllowsCustomInstructionsToOverrideDefaultOutputShape() {
         let prompt = buildVoiceTranscriptionPrompt(
             options: VoiceTranscriptionOptions(
                 preferredRecognitionLanguages: [.english, .spanish],
-                translateToLanguageEnabled: true,
-                translationTargetLanguage: .german
+                customInstructions: "Translate final text to German."
             )
         )
 
-        XCTAssertTrue(prompt.contains("translate the final result into German"))
-        XCTAssertTrue(prompt.contains("Return only the translated final text in German"))
         XCTAssertTrue(prompt.contains("English, Spanish"))
+        XCTAssertTrue(prompt.contains("Translate final text to German."))
         XCTAssertFalse(prompt.contains("do not translate"))
     }
 

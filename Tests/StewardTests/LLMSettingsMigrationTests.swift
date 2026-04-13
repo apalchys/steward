@@ -62,9 +62,7 @@ final class LLMSettingsMigrationTests: XCTestCase {
                 carbonKeyCode: Key.v.carbonKeyCode,
                 carbonModifiers: NSEvent.ModifierFlags([.command, .option]).carbonFlags
             ),
-            preferredRecognitionLanguages: [.english, .spanish, .english, .french],
-            translateToLanguageEnabled: true,
-            translationTargetLanguage: .german
+            preferredRecognitionLanguages: [.english, .spanish, .english, .french]
         )
         settings.clipboardHistory = ClipboardHistorySettings(isEnabled: true, maxStoredRecords: 250)
 
@@ -99,8 +97,6 @@ final class LLMSettingsMigrationTests: XCTestCase {
         XCTAssertEqual(settings.voice.hotKey, .defaultVoiceDictation)
         XCTAssertEqual(settings.voice.hotKey.displayValue, "⌃⇧␣")
         XCTAssertEqual(settings.voice.preferredRecognitionLanguages, [])
-        XCTAssertFalse(settings.voice.translateToLanguageEnabled)
-        XCTAssertNil(settings.voice.translationTargetLanguage)
         XCTAssertEqual(settings.clipboardHistory, .default)
     }
 
@@ -179,7 +175,7 @@ final class LLMSettingsMigrationTests: XCTestCase {
         let store = UserDefaultsLLMSettingsStore(userDefaults: defaults, secretsStore: InMemoryLLMSecretsStore())
         var settings = LLMSettings.empty()
         settings.voice.preferredRecognitionLanguages = [
-            .english, .spanish, .english, .french, .german, .italian, .japanese
+            .english, .spanish, .english, .french, .german, .italian, .japanese,
         ]
 
         store.saveSettings(settings)
@@ -191,7 +187,7 @@ final class LLMSettingsMigrationTests: XCTestCase {
         )
     }
 
-    func testVoiceSettingsTranslateModeRoundTrips() {
+    func testSaveSettingsClearsRemovedVoiceTranslationKeys() {
         let suiteName = "LLMSettingsStoreTests.\(UUID().uuidString)"
         let defaults = try! XCTUnwrap(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
@@ -199,16 +195,14 @@ final class LLMSettingsMigrationTests: XCTestCase {
             defaults.removePersistentDomain(forName: suiteName)
         }
 
+        defaults.set(true, forKey: "voiceTranslateToLanguageEnabled")
+        defaults.set("ja", forKey: "voiceTranslationTargetLanguageID")
+
         let store = UserDefaultsLLMSettingsStore(userDefaults: defaults, secretsStore: InMemoryLLMSecretsStore())
-        var settings = LLMSettings.empty()
-        settings.voice.translateToLanguageEnabled = true
-        settings.voice.translationTargetLanguage = .japanese
+        store.saveSettings(.empty())
 
-        store.saveSettings(settings)
-        let loaded = store.loadSettings()
-
-        XCTAssertTrue(loaded.voice.translateToLanguageEnabled)
-        XCTAssertEqual(loaded.voice.translationTargetLanguage, .japanese)
+        XCTAssertNil(defaults.object(forKey: "voiceTranslateToLanguageEnabled"))
+        XCTAssertNil(defaults.object(forKey: "voiceTranslationTargetLanguageID"))
     }
 
     func testSaveSettingsRestoresCanonicalDefaultModeName() {
@@ -282,7 +276,8 @@ final class LLMSettingsMigrationTests: XCTestCase {
 
         store.saveSettings(settings)
 
-        XCTAssertEqual(defaults.string(forKey: "voiceDictateHotKeyTriggerKind"), AppHotKey.TriggerKind.keyboard.rawValue)
+        XCTAssertEqual(
+            defaults.string(forKey: "voiceDictateHotKeyTriggerKind"), AppHotKey.TriggerKind.keyboard.rawValue)
         XCTAssertEqual(defaults.integer(forKey: "voiceDictateHotKeyCode"), Int(Key.v.carbonKeyCode))
         XCTAssertEqual(
             defaults.integer(forKey: "voiceDictateHotKeyModifiers"),

@@ -2,14 +2,8 @@ import Foundation
 
 private let voiceTranscriptionPrompt =
     """
-    You are a dictation transcription assistant. Transcribe the spoken audio faithfully, preserve the original spoken language or language mix, do not translate, and return only the final cleaned text. Add punctuation, casing, and paragraph breaks when they improve readability, but do not add commentary or extra content.
+    You are a dictation transcription assistant. Transcribe the spoken audio faithfully and return only the final cleaned text. Preserve the original spoken language or language mix unless additional instructions explicitly request another transformation. Add punctuation, casing, and paragraph breaks when they improve readability, but do not add commentary or extra content.
     """
-
-private func translationPrompt(for language: VoiceLanguage) -> String {
-    """
-    You are a dictation transcription assistant. Transcribe the spoken audio faithfully, then translate the final result into \(language.displayName). Return only the translated final text in \(language.displayName). Do not include the source transcript, commentary, labels, or extra content. Add punctuation, casing, and paragraph breaks when they improve readability.
-    """
-}
 
 public func buildVoiceTranscriptionPrompt(customInstructions: String) -> String {
     buildVoiceTranscriptionPrompt(
@@ -18,13 +12,7 @@ public func buildVoiceTranscriptionPrompt(customInstructions: String) -> String 
 }
 
 public func buildVoiceTranscriptionPrompt(options: VoiceTranscriptionOptions) -> String {
-    var sections: [String] = []
-
-    if options.translateToLanguageEnabled, let translationTargetLanguage = options.translationTargetLanguage {
-        sections.append(translationPrompt(for: translationTargetLanguage))
-    } else {
-        sections.append(voiceTranscriptionPrompt)
-    }
+    var sections: [String] = [voiceTranscriptionPrompt]
 
     if !options.preferredRecognitionLanguages.isEmpty {
         let languageList = options.preferredRecognitionLanguages.map(\.displayName).joined(separator: ", ")
