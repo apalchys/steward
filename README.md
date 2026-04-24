@@ -11,8 +11,7 @@ Steward is a macOS menu bar app for four text workflows:
 
 Steward uses curated OpenAI and Gemini model lists. Providers are unlocked in `Preferences > Providers`, and each feature picks its own compatible model in `Refine`, `Capture`, or `Dictate`.
 
-<img height="250" alt="Steward settings" src="https://github.com/user-attachments/assets/06395f67-1ad1-4b72-88df-ed6e7faa3e23" />
-<img height="250" alt="Steward menu bar UI" src="https://github.com/user-attachments/assets/de00d44b-bd28-4fcf-9b9b-2698fbb376cd" />
+<img height="250" alt="Steward menu bar UI" src="https://github.com/user-attachments/assets/6a43ca16-aaff-4a21-b79f-0d681456f586" />
 
 ## Features
 
@@ -28,6 +27,9 @@ Steward uses curated OpenAI and Gemini model lists. Providers are unlocked in `P
 2. Drag to select a screen region.
 3. Steward extracts Markdown and copies it to the clipboard.
 
+<img height="250" alt="Capture UI" src="https://github.com/user-attachments/assets/de00d44b-bd28-4fcf-9b9b-2698fbb376cd" />
+
+
 ### Dictate
 
 1. Hold the Dictate shortcut to record. Default: `Control+Shift+Space`.
@@ -37,6 +39,8 @@ Steward uses curated OpenAI and Gemini model lists. Providers are unlocked in `P
 5. Steward can bias recognition toward up to 5 preferred languages, or auto-detect when none are selected.
 
 Dictate preserves the spoken language by default, applies punctuation and paragraph formatting, and falls back to the clipboard if direct insertion fails.
+
+<img height="100" alt="Dictate UI" src="https://github.com/user-attachments/assets/7d73cdd4-02d7-43b6-be00-50d39c38d635" />
 
 ### Clipboard History
 
